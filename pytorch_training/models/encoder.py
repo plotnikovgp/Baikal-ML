@@ -25,14 +25,15 @@ class Encoder(nn.Module):
         out_size,
         dropout_p,
         use_batch_norm=False,
-        aggregator=None,
         second_head_out_size=None,
         use_cls_token=False,
         return_only_cls_token=False,
+        return_hidden=False,
         **kwargs
     ):
         super().__init__()
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.hidden_size = hidden_size
         self.first_layer = nn.Linear(in_features, hidden_size)
         if not use_batch_norm:
             enc_layer = nn.TransformerEncoderLayer(
@@ -43,7 +44,7 @@ class Encoder(nn.Module):
                 hidden_size, n_heads, dim_feedforward_size, dropout_p, batch_first=True
             )
         self.enc = nn.TransformerEncoder(enc_layer, num_layers)
-        self.head = nn.Linear(hidden_size, out_size)
+        self.head = nn.Linear(hidden_size, out_size, bias=False)
 
         self.class_token = (
             nn.Parameter(
@@ -59,7 +60,7 @@ class Encoder(nn.Module):
             if second_head_out_size is not None
             else None
         )
-        self.aggregator = aggregator
+        self.return_hidden = return_hidden
 
     def forward(self, x, mask):
         mask = (~mask).float()  # bool mask makes encoder predict nans sometimes
@@ -71,12 +72,11 @@ class Encoder(nn.Module):
                 dim=1,
             )
         x = self.enc(x, src_key_padding_mask=mask)
-        y = self.head(x)
-        if self.aggregator is not None:
-            return self.aggregator(x)
+        res = self.head(x)
+
         if self.second_head is not None:
             z = self.second_head(x)
-            return torch.cat([y, z], dim=-1)
+            res = torch.cat([y, z], dim=-1)
         if self.class_token is not None and self.return_only_cls_token:
-            return y[:, 0, :]
-        return y
+            res = res.mean(1) # [:, 0, :]
+        return res if not self.return_hidden else (res, x)
