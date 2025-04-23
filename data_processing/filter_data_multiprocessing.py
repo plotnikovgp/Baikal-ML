@@ -25,6 +25,7 @@ config = {
     "Q_low_limit": 0,
     "apply_hi_Q_filter": False,
     "Q_hi_limit": 100,
+    "min_track_length": 100,
     # NN filtering
     "take_NN_filt_hits": False,
     "h5_nn_preds": '/home/ivkhar/Baikal/data/baikal_preds_mu-nu-sep_small-test.h5',
@@ -63,6 +64,15 @@ with open(f"{config['h5_out'][:-3]}.config",'w') as f:
 
 # constants
 CHANNELS_PER_STRING = 36
+
+
+def calc_track_length(coords, is_track_mask):
+    if is_track_mask.sum() < 2:
+        return 0
+    coords = coords[is_track_mask]    
+    distances = pdist(coords, 'euclidean')
+    return np.max(distances)
+
 
 # aplly reconstruction-based cuts
 def reco_cut(gl_reco: np.ndarray) -> np.ndarray:
@@ -109,6 +119,28 @@ def make_masks(hf: h5.File, part: str, particle: str, ev_starts: np.ndarray, ev_
     # cut on number of strings
     if config['cut_on_strings'] >= 1:
         mask_evs &= num_un_strings >= config['cut_on_strings']
+
+    from scipy.spatial.distance import pdist
+
+
+    def calc_track_length(coords, is_track_mask):
+        selected_coords = coords[is_track_mask]
+        if selected_coords.shape[0] < 2:
+            return 0
+        return np.max(pdist(selected_coords, 'euclidean'))
+    
+    # ...
+
+    if "min_track_length" in config and config["min_track_length"] > 0:
+        event_ranges = list(zip(ev_starts[:-1], ev_starts[1:]))
+        is_track_hit = hf[f"{particle}/raw/labels/{part}/data"][()] < 0
+        coords = np.array(hf[f"{particle}/raw/data/{part}/data"][..., 2:5], dtype=np.float32)
+
+        track_lengths = np.array([
+            calc_track_length(coords[start:end], is_track_hit[start:end])
+            for start, end in event_ranges
+        ])
+        mask_evs &= (track_lengths > config["min_track_length"])
     # mask hits
     mask_evs_to_hits = np.repeat(mask_evs, ev_lens_init)
     mask_hits &= mask_evs_to_hits

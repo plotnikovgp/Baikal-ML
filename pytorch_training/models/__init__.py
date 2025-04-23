@@ -1,8 +1,10 @@
 from .encoder import Encoder
+from .encoder_domain_adaptation import EncoderDomainAdaptation
 from .graphnet import GraphnetDynedge, GraphnetAndEncoderStack
 from .lstm import LSTM
 from .gat import GAT
 from .gincn import GINCN
+from .uncertainty_predictor import UncertaintyPredictor, uncertainty_loss
 import torch.nn as nn
 import typing as tp
 
@@ -10,6 +12,8 @@ import typing as tp
 def load_model(model_type: str, model_kwargs: dict[str, tp.Any]) -> nn.Module:
     if model_type == "encoder":
         return Encoder(**model_kwargs)
+    elif model_type == "encoder_domain_adaptation":
+        return EncoderDomainAdaptation(**model_kwargs)
     elif model_type == "graphnet":
         return GraphnetDynedge(**model_kwargs)
     elif model_type == "graphnet_and_encoder_stack":
@@ -20,6 +24,8 @@ def load_model(model_type: str, model_kwargs: dict[str, tp.Any]) -> nn.Module:
         return GAT(**model_kwargs)
     elif model_type == "gin":
         return GINCN(**model_kwargs)
+    elif model_type == "uncertainty_predictor":
+        return UncertaintyPredictor(**model_kwargs)
     else:
         raise NotImplementedError
     # elif model

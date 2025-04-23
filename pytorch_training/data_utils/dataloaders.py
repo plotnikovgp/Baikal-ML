@@ -1,38 +1,363 @@
 from torch.nn.utils.rnn import pad_sequence
 from .readers import BaikalDataset, Dataset
-from torch.utils.data import Dataset, Subset, DataLoader
+from torch.utils.data import Dataset, Subset, DataLoader, IterableDataset
 from torch_geometric.loader import DataLoader as GraphDataLoader
 import typing as tp
-
+import logging
+import torch
+import numpy as np
+import random
 
 SPLIT_TYPES = ["train", "val", "test"]
-VAL_SUBSET_CUT = 100
 
 
 def create_datasets(
     path_to_data: str,
     use_val_subset: bool = True,
     DatasetType: tp.Type[Dataset] = BaikalDataset,
+    batch_size: int = 128,
+    is_graph: bool = False,
+    val_subset_cut: int = 3,
     **kwargs
 ):
     datasets = {}
     for split_type in SPLIT_TYPES:
-        datasets[split_type] = DatasetType(path_to_data, split_type, **kwargs)
+        datasets[split_type] = DatasetType(
+            path_to_data, split_type, batch_size=batch_size, is_graph=is_graph, **kwargs)
     if use_val_subset:
         datasets["val_subset"] = Subset(
-            datasets["val"], list(range(0, len(datasets["val"]), VAL_SUBSET_CUT))
+            datasets["val"], list(range(0, len(datasets["val"]), val_subset_cut))
         )
     return datasets
 
 
-def create_infnite_loader_generator(loader: tp.Iterable):
+def create_infnite_loader_generator(loader: tp.Iterable, buffer_size=2):
+    """
+    Create an infinite generator from a data loader.
+    
+    Args:
+        loader: DataLoader to create an infinite generator from
+        buffer_size: Number of batches to prefetch (improves performance)
+        
+    Yields:
+        Batches from the loader, restarting when exhausted
+    """
+    buffer = []
     loader_iter = iter(loader)
+    
     while True:
+        # Refill buffer if needed
+        while len(buffer) < buffer_size:
+            try:
+                item = next(loader_iter)
+                buffer.append(item)
+            except StopIteration:
+                # Reset iterator if exhausted
+                loader_iter = iter(loader)
+                if not buffer:  # Only fetch next item if buffer is empty
+                    buffer.append(next(loader_iter))
+                break
+                
+        # Yield the oldest item in the buffer
+        if buffer:
+            yield buffer.pop(0)
+
+
+class MultiDatasetSampler(IterableDataset):
+    """
+    A dataset wrapper that samples from multiple datasets with specified probabilities.
+    Optimized for performance with prefetching and efficient iterator management.
+    
+    Args:
+        datasets (list): List of datasets to sample from.
+        probabilities (list, optional): Sampling probabilities for each dataset. 
+                                     If None, datasets will be sampled uniformly.
+        seed (int, optional): Random seed for reproducibility.
+        prefetch_size (int, optional): Number of batches to prefetch per dataset in background
+                                      to improve performance.
+    """
+    def __init__(
+        self, 
+        datasets: list,
+        probabilities: list = None,
+        seed: int = 42,
+        prefetch_size: int = 2
+    ):
+        self.datasets = datasets
+        if probabilities is None:
+            self.probabilities = [1.0 / len(datasets)] * len(datasets)
+        else:
+            total = sum(probabilities)
+            self.probabilities = [p / total for p in probabilities]  # Normalize probabilities
+        
+        self.random_gen = random.Random(seed)
+        self.prefetch_size = prefetch_size
+        self._prefetch_buffers = [[] for _ in datasets]  # Buffer for each dataset
+        self._iterators = None  # Will be initialized lazily
+    
+    def _get_iterator(self, dataset_idx):
+        """Get or create an iterator for the specified dataset."""
+        if self._iterators is None:
+            self._iterators = [None] * len(self.datasets)
+            
+        if self._iterators[dataset_idx] is None:
+            self._iterators[dataset_idx] = iter(self.datasets[dataset_idx])
+            
+        return self._iterators[dataset_idx]
+    
+    def _prefetch_from_dataset(self, dataset_idx):
+        """Prefetch items from a dataset to fill the buffer."""
+        buffer = self._prefetch_buffers[dataset_idx]
+        iterator = self._get_iterator(dataset_idx)
+        
         try:
-            yield next(loader_iter)
+            while len(buffer) < self.prefetch_size:
+                buffer.append(next(iterator))
         except StopIteration:
-            loader_iter = iter(loader)
-            yield next(loader_iter)
+            # Reset the iterator if we've exhausted it
+            self._iterators[dataset_idx] = iter(self.datasets[dataset_idx])
+            
+            # Try again if the buffer is still empty
+            if not buffer:
+                iterator = self._iterators[dataset_idx]
+                buffer.append(next(iterator))
+    
+    def _get_sample_from_dataset(self, dataset_idx):
+        """Get a sample from the specified dataset."""
+        buffer = self._prefetch_buffers[dataset_idx]
+        
+        # Fill the buffer if it's empty
+        if not buffer:
+            self._prefetch_from_dataset(dataset_idx)
+        
+        # Return and remove the first item from the buffer
+        return buffer.pop(0)
+    
+    def __iter__(self):
+        # Initialize buffers and iterators on first use
+        if self._iterators is None:
+            self._iterators = [None] * len(self.datasets)
+            self._prefetch_buffers = [[] for _ in self.datasets]
+            
+            # Prefetch initial items for all datasets
+            for i in range(len(self.datasets)):
+                self._prefetch_from_dataset(i)
+        
+        while True:
+            # Sample a dataset according to the probabilities
+            dataset_idx = self.random_gen.choices(
+                range(len(self.datasets)), 
+                weights=self.probabilities, 
+                k=1
+            )[0]
+            
+            try:
+                # Get a sample from the dataset
+                yield self._get_sample_from_dataset(dataset_idx)
+                
+                # Refill the buffer after yielding
+                if len(self._prefetch_buffers[dataset_idx]) < self.prefetch_size:
+                    self._prefetch_from_dataset(dataset_idx)
+                    
+            except Exception as e:
+                logging.error(f"Error sampling from dataset {dataset_idx}: {e}")
+                raise e
+
+
+def create_multi_dataset_dataloader(
+    dataset_configs: list,
+    probabilities: list = None,
+    batch_size: int = 128,
+    num_workers: int = 1,
+    return_datasets: bool = False,
+    set_tres_stats: bool = False,
+    prefetch_factor: int = 2,
+    persistent_workers: bool = True,
+    pin_memory: bool = True,
+    cache_datasets: bool = False,
+    **kwargs
+):
+    """
+    Create a dataloader that samples from multiple datasets with specified probabilities.
+    Optimized for performance with improved worker utilization.
+    
+    Args:
+        dataset_configs (list): List of dataset configurations. Each config should have:
+                                - path_to_data: path to the dataset
+                                - DatasetType: type of dataset to create
+                                - is_graph: whether the dataset is a graph dataset
+                                - preprocessor: dataset-specific preprocessor
+                                - Additional kwargs specific to the dataset
+        probabilities (list, optional): Sampling probabilities for each dataset.
+                                      If None, datasets will be sampled uniformly.
+        batch_size (int, optional): Batch size for the dataloaders.
+        num_workers (int, optional): Number of workers for the dataloaders.
+        return_datasets (bool, optional): Whether to return the datasets in the result.
+        set_tres_stats (bool, optional): Global flag for setting t_res statistics.
+                                        Can be overridden by individual dataset configs.
+        prefetch_factor (int, optional): Number of batches to prefetch per worker.
+        persistent_workers (bool, optional): Keep worker processes alive after dataset exhaustion.
+        pin_memory (bool, optional): Pin memory for faster GPU transfer.
+        cache_datasets (bool, optional): Whether to cache datasets in memory (speeds up training
+                                        at the cost of memory usage).
+        **kwargs: Additional arguments to pass to all datasets.
+        
+    Returns:
+        dict: Dictionary with train, val, and test dataloaders, and optionally the datasets.
+    """
+    train_datasets = []
+    val_datasets = []
+    test_datasets = []
+    
+    # Create datasets for each config
+    for config in dataset_configs:
+        path_to_data = config["path_to_data"]
+        DatasetType = config.get("DatasetType", BaikalDataset)
+        is_graph = config.get("is_graph", False)
+        use_val_subset = config.get("use_val_subset", True)
+        val_subset_cut = config.get("val_subset_cut", 3)
+        
+        # Handle dataset-specific preprocessor
+        preprocessor = config.get("preprocessor")
+                
+        # Create datasets for this config
+        datasets = create_datasets(
+            path_to_data=path_to_data,
+            use_val_subset=use_val_subset,
+            DatasetType=DatasetType,
+            batch_size=batch_size,
+            is_graph=is_graph,
+            val_subset_cut=val_subset_cut,
+            preprocessor=preprocessor,
+            **kwargs
+        )
+        
+        # Apply caching if requested (wrap datasets in memory-caching dataset wrapper)
+        if cache_datasets:
+            train_ds = CachingDatasetWrapper(datasets["train"])
+            if use_val_subset:
+                val_ds = CachingDatasetWrapper(datasets["val_subset"])
+            else:
+                val_ds = CachingDatasetWrapper(datasets["val"])
+            test_ds = CachingDatasetWrapper(datasets["test"])
+            
+            train_datasets.append(train_ds)
+            val_datasets.append(val_ds)
+            test_datasets.append(test_ds)
+        else:
+            train_datasets.append(datasets["train"])
+            if use_val_subset:
+                val_datasets.append(datasets["val_subset"])
+            else:
+                val_datasets.append(datasets["val"])
+            test_datasets.append(datasets["test"])
+    
+    # Create multi-dataset sampler for training
+    train_sampler = MultiDatasetSampler(train_datasets, probabilities, prefetch_size=prefetch_factor)
+    
+    # Determine if using graph data
+    using_graph_data = any(config.get("is_graph", False) for config in dataset_configs)
+    
+    dataloader_common_args = {
+        'num_workers': num_workers,
+        'pin_memory': pin_memory
+    }
+    
+    # Add persistent workers for PyTorch >= 1.8
+    if persistent_workers and num_workers > 0:
+        dataloader_common_args['persistent_workers'] = True
+    
+    # Add prefetch factor for PyTorch >= 1.7
+    if prefetch_factor > 2 and num_workers > 0:
+        dataloader_common_args['prefetch_factor'] = prefetch_factor
+    
+    # Create dataloaders
+    if not using_graph_data:
+        train_loader = create_infnite_loader_generator(
+            DataLoader(
+                train_sampler,
+                batch_size=None,
+                shuffle=False,
+                **dataloader_common_args
+            ),
+            buffer_size=prefetch_factor
+        )
+        
+        # For validation and test, we use separate dataloaders for each dataset
+        val_loaders = [
+            DataLoader(
+                dataset,
+                batch_size=None,
+                **dataloader_common_args
+            ) for dataset in val_datasets
+        ]
+        
+        test_loaders = [
+            DataLoader(
+                dataset,
+                batch_size=batch_size,
+                **dataloader_common_args
+            ) for dataset in test_datasets
+        ]
+    else:
+        # If any dataset is a graph dataset, use GraphDataLoader
+        train_loader = create_infnite_loader_generator(
+            GraphDataLoader(
+                train_sampler,
+                batch_size=batch_size,
+                **dataloader_common_args
+            ),
+            buffer_size=prefetch_factor
+        )
+        
+        val_loaders = [
+            GraphDataLoader(
+                dataset,
+                batch_size=batch_size,
+                **dataloader_common_args
+            ) for dataset in val_datasets
+        ]
+        
+        test_loaders = [
+            GraphDataLoader(
+                dataset,
+                batch_size=batch_size,
+                **dataloader_common_args
+            ) for dataset in test_datasets
+        ]
+    
+    res = {
+        "train": train_loader,
+        "val": val_loaders,
+        "test": test_loaders
+    }
+    
+    if return_datasets:
+        res["train_datasets"] = train_datasets
+        res["val_datasets"] = val_datasets
+        res["test_datasets"] = test_datasets
+    
+    return res
+
+
+class CachingDatasetWrapper(Dataset):
+    """
+    A wrapper for datasets that caches items in memory for faster access.
+    
+    Args:
+        dataset: The dataset to wrap
+    """
+    def __init__(self, dataset):
+        self.dataset = dataset
+        self.cache = {}
+        
+    def __len__(self):
+        return len(self.dataset)
+    
+    def __getitem__(self, idx):
+        if idx not in self.cache:
+            self.cache[idx] = self.dataset[idx]
+        return self.cache[idx]
 
 
 def create_dataloaders(
@@ -44,72 +369,86 @@ def create_dataloaders(
     DatasetType: tp.Type[Dataset] = BaikalDataset,
     is_classification: bool = False,
     is_angle_and_track_cascade: bool = False,
+    return_datasets: bool = True,
+    prefetch_factor: int = 2,
+    persistent_workers: bool = True,
+    pin_memory: bool = True,
+    cache_datasets: bool = False,
     **kwargs
 ):
-    datasets = create_datasets(path_to_data, use_val_subset, DatasetType, **kwargs)
+    datasets = create_datasets(path_to_data, use_val_subset, DatasetType, is_graph=is_graph, batch_size=batch_size, **kwargs)
+    
+    # Apply caching if requested
+    if cache_datasets:
+        train_dataset = CachingDatasetWrapper(datasets["train"])
+        val_dataset = CachingDatasetWrapper(datasets["val_subset" if use_val_subset else "val"])
+        test_dataset = CachingDatasetWrapper(datasets["test"])
+    else:
+        train_dataset = datasets["train"]
+        val_dataset = datasets["val_subset" if use_val_subset else "val"]
+        test_dataset = datasets["test"]
+    
+    # Common dataloader arguments
+    dataloader_common_args = {
+        'num_workers': num_workers,
+        'pin_memory': pin_memory
+    }
+    
+    # Add persistent workers for PyTorch >= 1.8
+    if persistent_workers and num_workers > 0:
+        dataloader_common_args['persistent_workers'] = True
+    
+    # Add prefetch factor for PyTorch >= 1.7
+    if prefetch_factor > 2 and num_workers > 0:
+        dataloader_common_args['prefetch_factor'] = prefetch_factor
+    
     if not is_graph:
-        # for padding
-        def collate_fn(batch):
-            x_batch = pad_sequence([x[0] for x in batch], batch_first=True)
-            y_batch = pad_sequence(
-                [x[1].mT if is_classification else x[1] for x in batch],
-                batch_first=True,
-            )
-            padding_mask = (x_batch > 0).sum(-1)
-            padding_mask[padding_mask != 0] = 1
-            return x_batch, y_batch.squeeze(-1), padding_mask.bool()
-
-        def collate_fn_angle_track_cascade(batch):
-            x_batch = pad_sequence([x[0] for x in batch], batch_first=True)
-            y_batch = pad_sequence([x[1][0].mT for x in batch],batch_first=True,
-            )
-            angles_batch = pad_sequence([x[1][1] for x in batch], batch_first=True)
-            padding_mask = (x_batch > 0).sum(-1)
-            padding_mask[padding_mask != 0] = 1
-            return x_batch, y_batch.squeeze(-1), angles_batch, padding_mask.bool()
-
-        collate_fn = collate_fn if not is_angle_and_track_cascade else collate_fn_angle_track_cascade
         train_loader = create_infnite_loader_generator(
             DataLoader(
-                datasets["train"],
-                batch_size=batch_size,
-                num_workers=num_workers,
-                collate_fn=collate_fn,
-            )
+                train_dataset,
+                batch_size=None,
+                shuffle=False,
+                **dataloader_common_args
+            ),
+            buffer_size=prefetch_factor
         )
-        if use_val_subset:
-            val_loader = DataLoader(
-                datasets["val_subset"],
-                batch_size=batch_size,
-                collate_fn=collate_fn,
-                num_workers=num_workers,
-            )
-        else:
-            val_loader = DataLoader(
-                datasets["val"],
-                batch_size=batch_size,
-                collate_fn=collate_fn,
-                num_workers=num_workers,
-            )
+        
+        val_loader = DataLoader(
+            val_dataset,
+            batch_size=None, 
+            **dataloader_common_args,
+        )
+        
         test_loader = DataLoader(
-            datasets["test"], batch_size=batch_size, num_workers=num_workers
+            test_dataset, 
+            batch_size=batch_size, 
+            **dataloader_common_args
         )
     else:
         train_loader = create_infnite_loader_generator(
             GraphDataLoader(
-                datasets["train"], batch_size=batch_size, num_workers=num_workers
-            )
+                train_dataset, 
+                batch_size=batch_size, 
+                **dataloader_common_args
+            ),
+            buffer_size=prefetch_factor
         )
+        
         test_loader = GraphDataLoader(
-            datasets["test"], batch_size, num_workers=num_workers
+            test_dataset, 
+            batch_size, 
+            **dataloader_common_args
         )
-        if use_val_subset:
-            val_loader = GraphDataLoader(
-                datasets["val_subset"], batch_size, num_workers=num_workers
-            )
-        else:
-            val_loader = GraphDataLoader(
-                datasets["val_subset"], batch_size, num_workers=num_workers
-            )
+        
+        val_loader = GraphDataLoader(
+            val_dataset, 
+            batch_size, 
+            **dataloader_common_args
+        )
 
-    return {"train": train_loader, "val": val_loader, "test": test_loader}
+    res = {"train": train_loader, "val": val_loader, "test": test_loader}
+    if return_datasets:
+        res["train_dataset"] = train_dataset
+        res["val_dataset"] = val_dataset
+        res["test_dataset"] = test_dataset
+    return res

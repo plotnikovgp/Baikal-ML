@@ -1,21 +1,61 @@
 ---
 model_type: "encoder"
 train_type: "angle_reconstruction"
-path_to_data: "/home/plotnikovgp/baikal/data/baikal_mc2020_multi_split_0924_MChits-8-2_normed.h5"
+# path_to_data: &path_to_data "/home/plotnikovgp/baikal/data/baikal_multi_0324_flat_treck-cascade_h8_s2_pureMC_normed-3strings-10hits.h5"
+path_to_data: &path_to_data "/home/plotnikovgp/baikal/data/baikal_reco_reco_h8s2_norm.h5"
 is_graph: False
+# from_checkpoint: "/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/checkpoints/angle_reconstruction_exp_data_with_reco/encoder_nl5_hs128_dff512_nh2_lr1e4_with_reco_noise0_Q-disabled/best.ckpt"
+# from_checkpoint: "/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/checkpoints/angle_reconstruction_v5_mc_0924/encoder_nl5_hs512_dff512_nh1_lr1e4_no-eas_10-3_mae/best.ckpt"
 model_params:
   in_features: 5
-  hidden_size: 256
-  num_layers: 5
-  dim_feedforward_size: 256
-  n_heads: 1
-  out_size: 2
+  hidden_size: &hidden_size 512
+  num_layers: &num_layers 5
+  dim_feedforward_size: &dff 512
+  n_heads: &n_heads 1
+  out_size: 3
   dropout_p: 0.0
   use_cls_token: True
   return_only_cls_token: True
+
+data_prefilter_params:
+  additive_gauss_noise_std: [0.0, 0.0, 0.0, 0.0, 0.0]
+  data_file: *path_to_data
+
 lr: 1.0e-4
-batch_size: 128
-num_train_steps_per_validation: 50
+batch_size: &batch_size 128
+accumulate_grad_steps: 1
+tres_cut: 100000.0
+num_train_steps_per_validation: 250
 grad_clip_value: 1.0
-exp_name: "encoder_nl5_hs256_nh1_bs128_loss-vec"
-exp_project: "angle_reconstruction_v2_mc_0924"
+
+val_subset_cut: 30
+warmup_steps: 10000
+events_amount: 10000000
+
+exp_name: "encoder_nl5_hs512_dff512_nh1_lr1e4_bs128_with_10M_events_nm250"
+exp_project: "angle_reconstruction_exp_data_with_reco"
+# exp_project: "angle_reconstruction_v5_mc_0924"
+# model_type: "encoder"s
+# train_type: "angle_reconstruction" 
+# # path_to_data: "/home/plotnikovgp/baikal/data/baikal_multi_0324_flat_treck-cascade_h8_s2_pureMC_normed-2strings.h5"
+# path_to_data: "/home/plotnikovgp/baikal/data/baikal_multi_0324_flat_treck-cascade_h8_s2_pureMC_normed_min_track_l-100.h5"
+# is_graph: False
+# model_params:
+#   in_features: 5
+#   hidden_size: 128
+#   num_layers: 5
+#   dim_feedforward_size: 512
+#   n_heads: 2
+#   out_size: 3
+#   dropout_p: 0.0
+#   use_cls_token: True
+#   return_only_cls_token: True
+# lr: 1.0e-4
+# batch_size: 128
+# accumulate_grad_steps: 1
+# tres_cut: 10.0
+# num_train_steps_per_validation: 300
+# grad_clip_value: 1.0
+# warmup_steps: 10000
+# exp_name: "encoder_nl5_hs128_dff512_nh2_lr1e4_tl100_with_track_hits_mask_nm300"
+# exp_project: "angle_reconstruction_track_length_exp_mc_2020_0924"

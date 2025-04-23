@@ -8,27 +8,34 @@ class UncertaintyPredictor(nn.Module):
         super().__init__()
         self.device = "cuda"
         self.model = model.eval()
+        for p in self.model.parameters():
+            p.requires_grad = False
         self.model.return_hidden = True
         self.predictor = nn.Sequential(
             nn.Linear(model.hidden_size, model.hidden_size),
             nn.ReLU(),
-            nn.Linear(model.hidden_size, 1),
+            nn.Linear(model.hidden_size, model.hidden_size),
+            nn.ReLU(),
+            nn.Linear(model.hidden_size, 3),
         )
         
     def forward(self, x, mask):
         with torch.no_grad():
             x, hidden = self.model(x, mask)
         x = x / x.norm(dim=1, keepdim=True)
-        sigma = self.predictor(hidden).mean(1)
-        return torch.cat([x, sigma], dim=-1)
+        log_sigma = self.predictor(hidden).mean(1)
+        return torch.cat([x, log_sigma], dim=-1)
 
 
-def cosine_similarity_uncertainty_loss(pred_and_sigma, target):
-    # pred_and_sigma: B x (3 + 1)
+def uncertainty_loss(pred_and_log_sigma2, target):
+    # pred_and_log_sigma2: B x (3 + 3)
     # target: B x 3
-    pred = pred_and_sigma[:, :-1]
-    sigma2 = pred_and_sigma[:, -1] ** 2
-    cosine_similarity = F.cosine_similarity(pred, target, dim=1)
-    cosine_loss = 1 - cosine_similarity.mean()
-    loss = -torch.mean(torch.log(sigma2) + cosine_loss / sigma2)
+    pred, log_sigma2 = pred_and_log_sigma2[:, :3], pred_and_log_sigma2[:, 3:]
+    pred_sigma2 = torch.exp(log_sigma2)
+    # print(pred.shape, target.shape, log_sigma2.shape)
+
+    squared_error = (pred - target) ** 2
+
+    # NLL Loss for Gaussian: log(sigma^2) + [(y - mu)^2 / sigma^2]
+    loss = torch.mean(log_sigma2 + squared_error / pred_sigma2)
     return loss

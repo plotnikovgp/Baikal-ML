@@ -197,7 +197,7 @@ def train(
     validate_fun_kwargs={},
     validate_every=1,
     log_every=1,
-    epochs=1000,
+    num_epochs=10000,
     use_wandb=False,
     save_best_model=True,
     valid_main_metric="loss",  # should be lower -> better (mb fix in feautere)
@@ -205,11 +205,21 @@ def train(
     validate_befor_train=True,
 ):
     best_val_metric = None
-    with tqdm(range(epochs), unit="batch", dynamic_ncols=True) as epoch_iter:
-        for epoch in epoch_iter:
+    current_train_iters_count = 0
+    num_iters_in_loader = len(train_loader)
+    print("Epochs per train loader iter: ", train_fun_kwargs["num_iters"] / num_iters_in_loader)
+    with tqdm(range(num_epochs), unit="batch", dynamic_ncols=True) as epoch_iter:
+        while True:
             if not validate_befor_train:
                 train_logs = train_fun(model, **train_fun_kwargs)
+                train_iters_count += train_fun_kwargs["num_iters"]
+                if train_iters_count >= num_iters_in_loader:
+                    new_epochs_count += train_iters_count // num_iters_in_loader
+                    epoch_iter.update(new_epochs_count)
+                    train_iters_count = train_iters_count % num_iters_in_loader
+
                 train_logs_ = {"train/" + k: v for k, v in train_logs.items()}
+                train_logs_["train/epoch"] = epoch_iter.n
                 epoch_iter.set_description(str(train_logs))
                 if use_wandb and epoch % log_every == 0:
                     wandb.log(train_logs_)
@@ -229,3 +239,7 @@ def train(
                     best_val_metric = val_logs[valid_main_metric]
                     save_path = model_save_dir + "/model.pth"
                     torch.save(model.state_dict(), save_path)
+            
+            if epoch_iter.n >= num_epochs:
+                logging.info("Epochs limit reached")
+                break

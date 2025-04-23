@@ -72,11 +72,13 @@ class Encoder(nn.Module):
                 dim=1,
             )
         x = self.enc(x, src_key_padding_mask=mask)
-        res = self.head(x)
+        y = self.head(x)
 
         if self.second_head is not None:
             z = self.second_head(x)
-            res = torch.cat([y, z], dim=-1)
+            res = torch.cat([y.mean(1), z.mean(1)], dim=-1)
         if self.class_token is not None and self.return_only_cls_token:
-            res = res.mean(1) # [:, 0, :]
+            res = y.mean(1) # [:, 0, :]
+        else:
+            res = y
         return res if not self.return_hidden else (res, x)
