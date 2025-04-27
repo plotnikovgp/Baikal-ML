@@ -1,0 +1,27 @@
+---
+train_type: "angle_reconstruction_sigma_tune"
+model_type: "uncertainty_predictor"
+
+# path_to_data: "/home/plotnikovgp/baikal/data/baikal_multi_0324_flat_treck-cascade_h8_s2_pureMC_normed-2strings.h5"
+path_to_data: "/home/plotnikovgp/baikal/data/baikal_multi_0324_flat_treck-cascade_h8_s2_pureMC_normed-3strings-10hits.h5"
+is_graph: False
+encoder_model_path: "/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/checkpoints/angle_reconstruction_v5_mc_0924/encoder_nl5_hs512_dff512_nh1_lr1e4_no-eas_10-3_mae/best.ckpt"
+encoder_model_params:
+  in_features: 5
+  hidden_size: 512
+  num_layers: 5
+  dim_feedforward_size: 512
+  n_heads: 1
+  out_size: 3
+  dropout_p: 0.0
+  use_cls_token: True
+  return_only_cls_token: True
+  
+lr: 1.0e-3
+batch_size: 512
+accumulate_grad_steps: 1
+num_train_steps_per_validation: 100
+grad_clip_value: 1.0
+warmup_steps: 100
+exp_name: "encoder_nl5_hs512_dff512_nh1_lr1e4_no-eas_10-3_mae_sigma_tune_larger"
+exp_project: "angle_reconstruction_sigma_v5_mc_0924"
