@@ -121,12 +121,4 @@ See the example config files in `train_configs/` for complete examples:
 
 - metrics - all logic for metrics calculation 
 
-- models - each file contains some architecture 
-
-- train_configs - yaml configs describing task type, model etc
-    - multi_dataset_prefilters_example.yaml - example with custom prefilters for each dataset
-    - multi_dataset_named_example.yaml - example with named datasets and performance optimizations
-
-- examples
-    - multi_dataset_example.py - code example showing how to use the multi-dataset functionality
-
+- models - each file contains some architecture

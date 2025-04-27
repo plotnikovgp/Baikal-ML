@@ -8,7 +8,9 @@ from sklearn.metrics import (
     mean_absolute_percentage_error,
     mean_absolute_error,
 )
+import traceback
 from scipy.spatial.distance import cosine as cosine_dist
+import logging
 
 THRESHOLD = 0.5
 
@@ -32,9 +34,8 @@ def binary_clf_metrics(y_pred_prob, y_true, threshold=THRESHOLD):
             "precision": precision_score(y_true, y_pred, zero_division=0),
             "recall": recall_score(y_true, y_pred, zero_division=0),
         }
-        return metrics
     except ValueError:
-        return {}
+        traceback.print_exc()
 
 
 def regression_metrics(y_pred, y_true):
@@ -93,11 +94,11 @@ def angle_reconstruction_metrics(y_pred, y_true, plot=False):
         dot_product = np.clip(dot_product, -1.0, 1.0)
         dir_resolution = np.abs(np.rad2deg(np.arccos(dot_product)))
         metrics["theta_resolution_q50"] = np.quantile(theta_resolution, 0.5)
-        metrics["theta_resolution_q68"] = np.quantile(theta_resolution, 0.68)
+        # metrics["theta_resolution_q68"] = np.quantile(theta_resolution, 0.68)
         metrics["phi_resolution_q50"] = np.quantile(phi_resolution, 0.5)
-        metrics["phi_resolution_q68"] = np.quantile(phi_resolution, 0.68)
+        # metrics["phi_resolution_q68"] = np.quantile(phi_resolution, 0.68)
         metrics["dir_resoultion_q50"] = np.quantile(dir_resolution, 0.5)
-        metrics["dir_resoultion_q68"] = np.quantile(dir_resolution, 0.68)
+        # metrics["dir_resoultion_q68"] = np.quantile(dir_resolution, 0.68)
 
     return {k: float(v) for k, v in metrics.items()}
 

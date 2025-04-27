@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from .layers import GradientReversal
 
 
 class BatchNorm1dTranspose(nn.BatchNorm1d):
@@ -78,7 +79,53 @@ class Encoder(nn.Module):
             z = self.second_head(x)
             res = torch.cat([y.mean(1), z.mean(1)], dim=-1)
         if self.class_token is not None and self.return_only_cls_token:
-            res = y.mean(1) # [:, 0, :]
+            res = y.mean(1) # TODO: refactor, mean works sligthly better than cls token only
         else:
             res = y
         return res if not self.return_hidden else (res, x)
+
+
+class EncoderDomainAdaptation(nn.Module):
+    def __init__(
+        self,
+        encoder: Encoder,
+        num_domains=2,
+        domain_classifier_hidden_size=128,
+        domain_classifier_layers=2,
+        gradient_reversal_alpha=1.0,
+        **kwargs
+    ):
+        super().__init__()
+        
+        self.encoder = encoder
+        self.angle_head = nn.Linear(hidden_size, out_size)
+        self.gradient_reversal = GradientReversal(alpha=gradient_reversal_alpha)
+        
+        domain_classifier_layers_list = []
+        input_size = hidden_size
+        
+        for _ in range(domain_classifier_layers - 1):
+            domain_classifier_layers_list.extend([
+                nn.Linear(input_size, domain_classifier_hidden_size),
+                nn.ReLU(),
+                nn.Dropout(dropout_p)
+            ])
+            input_size = domain_classifier_hidden_size
+            
+        domain_classifier_layers_list.append(
+            nn.Linear(input_size, num_domains)
+        )
+        
+        self.domain_classifier = nn.Sequential(*domain_classifier_layers_list)
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    
+    def forward(self, x, mask):
+        _, hidden_states = self.encoder(x, mask)
+        features = hidden_states[:, 0]
+        
+        angle_output = self.angle_head(features)
+        reversed_features = self.gradient_reversal(features)
+        domain_output = self.domain_classifier(reversed_features)
+        
+        return angle_output, domain_output, features
+        

@@ -41,18 +41,6 @@ def validate_config(parsed_config: tp.Dict[str, tp.Any]):
 
 
 def create_preprocessor(train_type, is_graph, config):
-    """
-    Create a preprocessor based on the training type and configuration.
-    This allows for creating custom preprocessors for individual datasets.
-    
-    Args:
-        train_type: The type of training being performed
-        is_graph: Whether the model is using graph-based data
-        config: Configuration dictionary with parameters for the preprocessor
-        
-    Returns:
-        A preprocessor instance configured with the given parameters
-    """
     if train_type == "noise_sig":
         return (
             NoiseSigGraphPreprocessor(config["knn_neighbours"])
@@ -207,7 +195,6 @@ def main():
         label_dataset_name = train_params.get("label_dataset_name", None)
         
         def criterion(y_pred, y_true, domain_pred=None, domain_true=None):
-            # Main task loss (angle reconstruction) - only applied to labeled samples
             if label_dataset_name is not None:
                 mask = domain_true == dataset_names.index(label_dataset_name)
                 if mask.sum() > 0:
@@ -217,7 +204,6 @@ def main():
             else:
                 angle_loss = torch.abs(y_pred - y_true).mean()
             
-            # Domain adaptation loss
             if domain_pred is not None and domain_true is not None:
                 domain_loss = torch.nn.functional.cross_entropy(domain_pred, domain_true)
                 return angle_loss + domain_adaptation_loss_k * domain_loss
@@ -226,42 +212,31 @@ def main():
     else:
         raise ValueError("unknown train_type")
     
-    # Create a default preprocessor for single dataset mode
     default_preprocessor = create_preprocessor(train_type, is_graph, train_params)
     
-    # Dataset names for validation
     dataset_names = None
 
-    # Check if using multi-dataset setup
     if "dataset_configs" in train_params:
-        # Get dataset names if provided
         dataset_names = []
         
-        # Configure each dataset
         for i, config in enumerate(train_params["dataset_configs"]):
-            # Apply common configuration to each dataset unless it's explicitly overridden
             for key, value in train_params.items():
                 if key not in ["dataset_configs", "dataset_weights", "dataset_names"] and key not in config:
                     config[key] = value
             
-            # Get dataset name (use provided name or default to "dataset_{i}")
             dataset_name = config.get("name", f"dataset_{i}")
             dataset_names.append(dataset_name)
             
-            # Set DatasetType based on train_type if not specified
             if "DatasetType" not in config:
                 config["DatasetType"] = DatasetType
             
-            # Create individual preprocessor for each dataset with its own parameters
             if "preprocessor" not in config:
-                # Create a preprocessor using this dataset's specific configuration
                 config["preprocessor"] = create_preprocessor(
                     train_type, 
                     config.get("is_graph", is_graph),
                     config
                 )
                 
-        # Create multi-dataset dataloaders
         dataloaders = create_multi_dataset_dataloader(
             dataset_configs=train_params["dataset_configs"],
             probabilities=train_params.get("dataset_weights", None),
@@ -274,7 +249,6 @@ def main():
             return_datasets=True,
         )
     else:
-        # Original single dataset setup
         dataloaders = create_dataloaders(
             DatasetType=DatasetType,
             path_to_data=train_params["path_to_data"],
@@ -301,7 +275,6 @@ def main():
     )
     warmup_scheduler = warmup.ExponentialWarmup(optimizer, train_params.get("warmup_steps", 0))
     
-    # Use train_dataset or first train_datasets from multi-dataset setup
     train_dataset = dataloaders.get("train_dataset") or dataloaders.get("train_datasets", [None])[0]
     
     train_fun_kwargs = dict(

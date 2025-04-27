@@ -44,11 +44,7 @@ class BaikalDataset(Dataset):
         self.preprocessor = preprocessor
         self.batch_size = batch_size
         self.is_graph = is_graph
-        # mean, std = self.hfile['norm_param/mean'], self.hfile['norm_param/std']
-        # self.mean = torch.tensor(mean)
-        # self.std = torch.tensor(std)
 
-        # used in inherited classes
         if set_tres_stats:
             logging.info(f"counting tres mean and std for {self.split_type}...")
             self.tres_data = np.array(self.hfile[self.split_type + "/t_res/data"])
@@ -83,18 +79,6 @@ class BaikalDataset(Dataset):
     def __len__(self):
         return self.events_amount // self.batch_size if not self.is_graph else self.events_amount
 
-    # def __getitem__(self, idx):
-    #     start, end = self.hfile[self.split_type + "/ev_starts/data"][idx : idx + 2]
-    #     data = np.array(self.hfile[self.split_type + "/data/data"][start:end])
-    #     labels = self.hfile[self.split_type + "/labels/data"][start:end]
-
-    #     data_x = torch.tensor(data, dtype=torch.float32)
-    #     data_y = torch.tensor(labels, dtype=torch.long)
-
-    #     data_x, data_y = self.preprocessor(data_x, data_y)
-
-    #     return data_x, data_y
-
     def __getitem__(self, idx):
         batch_start_idx = idx * self.batch_size
         batch_end_idx = min((idx + 1) * self.batch_size, len(self.hfile[self.split_type + "/ev_starts/data"]) - 1)
@@ -107,7 +91,6 @@ class BaikalDataset(Dataset):
 
         data_x, data_y, mask = self._collate(event_starts, raw_data, labels, pad_y=True)
         return self.preprocessor(data_x, data_y, mask)
-        # theta_phi = self.hfile[self.split_type + "/prime_prty/data"][batch_start_idx:batch_end_idx, :2]        
 
 
 class BaikalDatasetTres(BaikalDataset):
@@ -193,18 +176,7 @@ class BaikalDatasetAnglesOld(BaikalDataset):
 
 
 class BaikalDatasetAnglesSingle(BaikalDataset):
-
-    # def __len__(self):
-    #     return self.hfile[self.split_type + "/ev_starts/data"].shape[0] - 1
-
     def __getitem__(self, idx):
-        # start, end = self.hfile[self.split_type + "/ev_starts/data"][idx : idx + 2]
-        # data = np.array(self.hfile[self.split_type + "/data/data"][start:end])
-        # prime_prty = torch.tensor(self.hfile[self.split_type + "/prime_prty/data"][idx][:2])
-
-        # data_x = torch.tensor(data, dtype=torch.float32)
-
-        # return self.preprocessor(data_x, prime_prty)
         start, end = self.hfile[self.split_type + "/ev_starts/data"][idx : idx + 2]
         data = np.array(self.hfile[self.split_type + "/data/data"][start:end])
         thetha, phi = self.hfile[self.split_type + "/prime_prty/data"][idx][:2]
@@ -216,7 +188,6 @@ class BaikalDatasetAnglesSingle(BaikalDataset):
         data_x = torch.tensor(data, dtype=torch.float32)
         data_y = torch.tensor(vec, dtype=torch.float32)
         data_y /= data_y.norm()
-        # print(data_x.shape, data_y.shape)
         return self.preprocessor(data_x, data_y)
 
 

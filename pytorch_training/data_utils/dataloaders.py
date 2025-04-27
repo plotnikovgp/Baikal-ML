@@ -32,50 +32,25 @@ def create_datasets(
 
 
 def create_infnite_loader_generator(loader: tp.Iterable, buffer_size=2):
-    """
-    Create an infinite generator from a data loader.
-    
-    Args:
-        loader: DataLoader to create an infinite generator from
-        buffer_size: Number of batches to prefetch (improves performance)
-        
-    Yields:
-        Batches from the loader, restarting when exhausted
-    """
     buffer = []
     loader_iter = iter(loader)
     
     while True:
-        # Refill buffer if needed
         while len(buffer) < buffer_size:
             try:
                 item = next(loader_iter)
                 buffer.append(item)
             except StopIteration:
-                # Reset iterator if exhausted
                 loader_iter = iter(loader)
-                if not buffer:  # Only fetch next item if buffer is empty
+                if not buffer:
                     buffer.append(next(loader_iter))
                 break
                 
-        # Yield the oldest item in the buffer
         if buffer:
             yield buffer.pop(0)
 
 
 class MultiDatasetSampler(IterableDataset):
-    """
-    A dataset wrapper that samples from multiple datasets with specified probabilities.
-    Optimized for performance with prefetching and efficient iterator management.
-    
-    Args:
-        datasets (list): List of datasets to sample from.
-        probabilities (list, optional): Sampling probabilities for each dataset. 
-                                     If None, datasets will be sampled uniformly.
-        seed (int, optional): Random seed for reproducibility.
-        prefetch_size (int, optional): Number of batches to prefetch per dataset in background
-                                      to improve performance.
-    """
     def __init__(
         self, 
         datasets: list,
@@ -88,11 +63,11 @@ class MultiDatasetSampler(IterableDataset):
             self.probabilities = [1.0 / len(datasets)] * len(datasets)
         else:
             total = sum(probabilities)
-            self.probabilities = [p / total for p in probabilities]  # Normalize probabilities
+            self.probabilities = [p / total for p in probabilities]
         
         self.random_gen = random.Random(seed)
         self.prefetch_size = prefetch_size
-        self._prefetch_buffers = [[] for _ in datasets]  # Buffer for each dataset
+        self._prefetch_buffers = [[] for _ in datasets] 
         self._iterators = None  # Will be initialized lazily
     
     def _get_iterator(self, dataset_idx):
@@ -114,10 +89,8 @@ class MultiDatasetSampler(IterableDataset):
             while len(buffer) < self.prefetch_size:
                 buffer.append(next(iterator))
         except StopIteration:
-            # Reset the iterator if we've exhausted it
             self._iterators[dataset_idx] = iter(self.datasets[dataset_idx])
             
-            # Try again if the buffer is still empty
             if not buffer:
                 iterator = self._iterators[dataset_idx]
                 buffer.append(next(iterator))
@@ -126,25 +99,19 @@ class MultiDatasetSampler(IterableDataset):
         """Get a sample from the specified dataset."""
         buffer = self._prefetch_buffers[dataset_idx]
         
-        # Fill the buffer if it's empty
         if not buffer:
             self._prefetch_from_dataset(dataset_idx)
-        
-        # Return and remove the first item from the buffer
         return buffer.pop(0)
     
     def __iter__(self):
-        # Initialize buffers and iterators on first use
         if self._iterators is None:
             self._iterators = [None] * len(self.datasets)
             self._prefetch_buffers = [[] for _ in self.datasets]
             
-            # Prefetch initial items for all datasets
             for i in range(len(self.datasets)):
                 self._prefetch_from_dataset(i)
         
         while True:
-            # Sample a dataset according to the probabilities
             dataset_idx = self.random_gen.choices(
                 range(len(self.datasets)), 
                 weights=self.probabilities, 
@@ -152,10 +119,8 @@ class MultiDatasetSampler(IterableDataset):
             )[0]
             
             try:
-                # Get a sample from the dataset
                 yield self._get_sample_from_dataset(dataset_idx)
                 
-                # Refill the buffer after yielding
                 if len(self._prefetch_buffers[dataset_idx]) < self.prefetch_size:
                     self._prefetch_from_dataset(dataset_idx)
                     
@@ -217,10 +182,8 @@ def create_multi_dataset_dataloader(
         use_val_subset = config.get("use_val_subset", True)
         val_subset_cut = config.get("val_subset_cut", 3)
         
-        # Handle dataset-specific preprocessor
         preprocessor = config.get("preprocessor")
                 
-        # Create datasets for this config
         datasets = create_datasets(
             path_to_data=path_to_data,
             use_val_subset=use_val_subset,
@@ -232,7 +195,6 @@ def create_multi_dataset_dataloader(
             **kwargs
         )
         
-        # Apply caching if requested (wrap datasets in memory-caching dataset wrapper)
         if cache_datasets:
             train_ds = CachingDatasetWrapper(datasets["train"])
             if use_val_subset:
@@ -252,10 +214,7 @@ def create_multi_dataset_dataloader(
                 val_datasets.append(datasets["val"])
             test_datasets.append(datasets["test"])
     
-    # Create multi-dataset sampler for training
     train_sampler = MultiDatasetSampler(train_datasets, probabilities, prefetch_size=prefetch_factor)
-    
-    # Determine if using graph data
     using_graph_data = any(config.get("is_graph", False) for config in dataset_configs)
     
     dataloader_common_args = {
@@ -263,15 +222,12 @@ def create_multi_dataset_dataloader(
         'pin_memory': pin_memory
     }
     
-    # Add persistent workers for PyTorch >= 1.8
     if persistent_workers and num_workers > 0:
         dataloader_common_args['persistent_workers'] = True
     
-    # Add prefetch factor for PyTorch >= 1.7
     if prefetch_factor > 2 and num_workers > 0:
         dataloader_common_args['prefetch_factor'] = prefetch_factor
     
-    # Create dataloaders
     if not using_graph_data:
         train_loader = create_infnite_loader_generator(
             DataLoader(
@@ -283,7 +239,6 @@ def create_multi_dataset_dataloader(
             buffer_size=prefetch_factor
         )
         
-        # For validation and test, we use separate dataloaders for each dataset
         val_loaders = [
             DataLoader(
                 dataset,
@@ -300,7 +255,6 @@ def create_multi_dataset_dataloader(
             ) for dataset in test_datasets
         ]
     else:
-        # If any dataset is a graph dataset, use GraphDataLoader
         train_loader = create_infnite_loader_generator(
             GraphDataLoader(
                 train_sampler,
@@ -378,7 +332,6 @@ def create_dataloaders(
 ):
     datasets = create_datasets(path_to_data, use_val_subset, DatasetType, is_graph=is_graph, batch_size=batch_size, **kwargs)
     
-    # Apply caching if requested
     if cache_datasets:
         train_dataset = CachingDatasetWrapper(datasets["train"])
         val_dataset = CachingDatasetWrapper(datasets["val_subset" if use_val_subset else "val"])
@@ -388,17 +341,14 @@ def create_dataloaders(
         val_dataset = datasets["val_subset" if use_val_subset else "val"]
         test_dataset = datasets["test"]
     
-    # Common dataloader arguments
     dataloader_common_args = {
         'num_workers': num_workers,
         'pin_memory': pin_memory
     }
     
-    # Add persistent workers for PyTorch >= 1.8
     if persistent_workers and num_workers > 0:
         dataloader_common_args['persistent_workers'] = True
     
-    # Add prefetch factor for PyTorch >= 1.7
     if prefetch_factor > 2 and num_workers > 0:
         dataloader_common_args['prefetch_factor'] = prefetch_factor
     

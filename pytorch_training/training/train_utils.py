@@ -47,18 +47,14 @@ def _run_model(
             x = torch.cat([x, track_cascade_prob.unsqueeze(-1)], dim=-1)
         
         if is_domain_adaptation:
-            # Run with domain adaptation
             output, domain_output, _ = model(x, mask)
             
-            # Create domain labels tensor (batch_size,) filled with the dataset index
             batch_size = x.shape[0]
             domain_true = torch.full((batch_size,), dataset_idx, 
                                      dtype=torch.long, 
                                      device=model.device)
-            # Return additional domain outputs
             domain_pred = domain_output
         else:
-            # Standard model forward
             output = model(x, mask)
             domain_pred = None
             domain_true = None
@@ -67,16 +63,13 @@ def _run_model(
             y_true = y_true.reshape(-1, y_true.shape[-1])
             output = output.reshape(-1, output.shape[-1]).squeeze()
         elif is_angle_reconstruction or is_domain_adaptation:
-            # Already normalized if domain adaptation
             output = output / output.norm(dim=1, keepdim=True)
         elif is_angle_reconstruction_sigma_tune:
             pass
         elif is_direction:
-            # angle
             norms = output[:, :3].norm(dim=-1, keepdim=True)
             normalized_values = output[:, :3] / norms
             output = torch.cat((normalized_values, output[:, 3:]), dim=-1)
-                        # point output[:, 3:]
         else:
             y_true = y_true.reshape(-1)
             output = output.reshape(-1, output.shape[-1]).squeeze()
@@ -133,22 +126,16 @@ def train_iters(
     for iter in range(num_iters):
         data = next(train_loader)
         
-        # For domain adaptation, extract the dataset index from the third element of the tuple
         dataset_idx = data[2] if isinstance(data, tuple) and len(data) > 2 and is_domain_adaptation else None
-        
-        # Remove dataset_idx from data if it exists
         if isinstance(data, tuple) and len(data) > 2 and is_domain_adaptation:
             data = data[:2] + data[3:]
         
-        # Forward pass
         if is_domain_adaptation:
             output, y_pred, y_true, domain_pred, domain_true = _run_model(
                 model, data, is_domain_adaptation=True, dataset_idx=dataset_idx, **kwargs,
             )
-            # Call criterion with domain predictions
             loss = criterion(y_pred, y_true, domain_pred, domain_true)
             
-            # Track domain metrics
             domain_pred_hist = (
                 torch.cat((domain_pred_hist, domain_pred.detach()), dim=0)
                 if domain_pred_hist is not None
@@ -163,16 +150,13 @@ def train_iters(
             output, y_pred, y_true = _run_model(
                 model, data, **kwargs,
             )
-            # Call criterion without domain predictions
             loss = criterion(output, y_true)
         
-        # Backward pass
         loss.backward()
         loss_accum += loss.item()
         if grad_clip_value is not None:
             torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_value)
-            
-        # Optimizer step
+
         if iter % accumulate_grad_steps == 0:
             optimizer.step()
             optimizer.zero_grad()
@@ -182,7 +166,6 @@ def train_iters(
                         scheduler.step(loss_accum)
                         loss_accum = 0.
 
-        # Track metrics
         loss_hist.append(loss.item())
         
         y_pred_hist = (
@@ -197,7 +180,6 @@ def train_iters(
             else y_true
         )
         
-    # Calculate metrics
     train_metrics = metrics_calc_fun(
         y_pred_hist.detach().cpu(), y_true_hist.detach().cpu()
     )
@@ -210,7 +192,6 @@ def train_iters(
         domain_accuracy = (domain_preds == domain_labels).float().mean().item()
         train_metrics["domain_accuracy"] = domain_accuracy
         domain_bin_metrics = binary_clf_metrics(domain_preds.cpu().numpy(), domain_labels.cpu().numpy())
-        # Use update instead of extend since train_metrics is a dictionary
         train_metrics.update({"domain_" + k: v for k, v in domain_bin_metrics.items()})
     return train_metrics
 
@@ -222,7 +203,7 @@ def validate_single(
     metrics_calc_fun,
     return_preds=False,
     is_domain_adaptation=False,
-    dataset_idx=0,  # Default dataset index for validation
+    dataset_idx=0,
     **kwargs,
 ) -> dict[str, float]:
     y_pred_hist = None
@@ -239,10 +220,8 @@ def validate_single(
                 output, y_pred, y_true, domain_pred, domain_true = _run_model(
                     model, data, is_domain_adaptation=True, dataset_idx=dataset_idx, **kwargs,
                 )
-                # Call criterion with domain predictions
                 loss = criterion(y_pred, y_true, domain_pred, domain_true)
                 
-                # Track domain metrics
                 domain_pred_hist = (
                     torch.cat((domain_pred_hist, domain_pred.detach().cpu()), dim=0)
                     if domain_pred_hist is not None
@@ -257,7 +236,6 @@ def validate_single(
                 output, y_pred, y_true = _run_model(
                     model, data, **kwargs,
                 )
-                # Call criterion without domain predictions
                 loss = criterion(output, y_true)
                 
             loss_hist.append(loss.item())
@@ -278,7 +256,6 @@ def validate_single(
     val_metrics = metrics_calc_fun(y_pred_hist, y_true_hist)
     val_metrics["loss"] = sum(loss_hist) / len(loss_hist) if loss_hist else None
     
-    # Add domain classification accuracy if using domain adaptation
     if is_domain_adaptation and domain_pred_hist is not None:
         domain_preds = domain_pred_hist.argmax(dim=1)
         domain_labels = domain_true_hist
@@ -286,7 +263,7 @@ def validate_single(
         val_metrics["domain_accuracy"] = domain_accuracy
         domain_bin_metrics = binary_clf_metrics(domain_preds, domain_labels)
         domain_bin_metrics = {"domain_" + k: v for k, v in domain_bin_metrics.items()}
-        val_metrics.update(domain_bin_metrics)  # Use update instead of extend for dictionary
+        val_metrics.update(domain_bin_metrics)
     return val_metrics
 
 
@@ -299,23 +276,6 @@ def validate(
     dataset_names=None,
     **kwargs,
 ) -> dict[str, float]:
-    """
-    Validate model on one or more validation loaders.
-    
-    Args:
-        model: The model to validate.
-        val_loader: A single DataLoader or a list of DataLoaders.
-        criterion: The loss function.
-        metrics_calc_fun: Function to calculate metrics.
-        return_preds: Whether to return predictions instead of metrics.
-        dataset_names: Optional list of custom names for each dataset.
-                      If None, defaults to "dataset_{i}".
-        **kwargs: Additional arguments passed to _run_model.
-        
-    Returns:
-        Metrics for each individual dataset with custom names.
-    """
-    # Handle single validation loader (backward compatibility)
     if not isinstance(val_loader, list):
         return validate_single(
             model=model,
@@ -326,25 +286,20 @@ def validate(
             **kwargs,
         )
     
-    # Handle multiple validation loaders
     all_metrics = {}
     
-    # Get metrics for each validation dataset
     for i, loader in enumerate(val_loader):
         dataset_metrics = validate_single(
             model=model,
             val_loader=loader,
             criterion=criterion,
             metrics_calc_fun=metrics_calc_fun,
-            return_preds=False,  # Never return predictions when using multiple loaders
+            return_preds=False,
             dataset_idx=i,
             **kwargs,
         )
         
-        # Use custom dataset name if provided, otherwise use dataset_{i}
         dataset_prefix = dataset_names[i]
-        
-        # Track metrics per dataset with custom name
         for k, v in dataset_metrics.items():
             if isinstance(v, (int, float)):
                 all_metrics[f"{dataset_prefix}_{k}"] = v
@@ -364,13 +319,13 @@ def train(
     epochs=20000,
     use_wandb=False,
     save_best_model=True,
-    valid_main_metric="loss",  # should be lower -> better (mb fix in feature)
+    valid_main_metric="loss",
     model_save_dir="models",
     validate_before_train=True,
-    save_best_per_dataset=False,  # Whether to save best model for each dataset
-    dataset_names=None  # Custom names for datasets
+    save_best_per_dataset=False,
+    dataset_names=None
 ):
-    best_val_metrics = {}  # Track best metrics per dataset
+    best_val_metrics = {}
     validate_before_train=True
     train_logs_ = {}
     iters_current = 0
@@ -379,7 +334,6 @@ def train(
     print("Num steps in one epoch: ", iters_per_epoch)
     cur_epoch = 0
     
-    # Get dataset names for tracking best metrics
     if dataset_names is None and isinstance(validate_fun_kwargs.get("val_loader", None), list):
         num_datasets = len(validate_fun_kwargs["val_loader"])
         dataset_names = [f"dataset_{i}" for i in range(num_datasets)]
@@ -405,58 +359,45 @@ def train(
                 validate_before_train = False
                 val_logs = validate_fun(model, **validate_fun_kwargs)
                 
-                # Log all validation metrics to wandb
                 val_logs_ = {"val/" + k: v for k, v in val_logs.items()}
                 if use_wandb:
                     wandb.log(val_logs_)
 
-                # Save models for each dataset based on its specific metrics
                 if save_best_model or save_best_per_dataset:
                     Path(model_save_dir).mkdir(parents=True, exist_ok=True)
                     
-                    # Find all datasets in the metrics
                     for dataset_name in dataset_names or [None]:
                         if dataset_name is None:
-                            # Single dataset mode - just use the valid_main_metric
                             if valid_main_metric in val_logs:
                                 metric_key = valid_main_metric
                                 metric_value = val_logs[metric_key]
                                 dataset_label = ""
                                 
-                                # If this is the first validation or if we've improved
                                 if dataset_label not in best_val_metrics or metric_value < best_val_metrics[dataset_label]:
                                     best_val_metrics[dataset_label] = metric_value
                                     
-                                    # Save the model
                                     save_path = f"{model_save_dir}/best{dataset_label}.ckpt"
                                     torch.save(model.state_dict(), save_path)
                                     
-                                    # Save the metrics
                                     with open(f"{model_save_dir}/best_val_metrics{dataset_label}.txt", "w") as f:
                                         f.write(json.dumps(val_logs))
                                         f.write("\n" + json.dumps(train_logs_))
                                     
-                                    # Save the config
                                     with open(f"{model_save_dir}/train_config{dataset_label}.yaml", "w") as f:
                                         f.write(train_params_str)
                         else:
-                            # Multi-dataset mode
                             metric_key = f"{dataset_name}_{valid_main_metric}"
                             if metric_key in val_logs:
                                 metric_value = val_logs[metric_key]
                                 dataset_label = f"_{dataset_name}"
                                 
-                                # If this is the first validation or if we've improved
                                 if dataset_label not in best_val_metrics or metric_value < best_val_metrics[dataset_label]:
                                     best_val_metrics[dataset_label] = metric_value
                                     
-                                    # Only save individual dataset models if requested
                                     if save_best_per_dataset or (save_best_model and dataset_name == dataset_names[0]):
-                                        # Save the model
                                         save_path = f"{model_save_dir}/best{dataset_label}.ckpt"
                                         torch.save(model.state_dict(), save_path)
                                         
-                                        # Save the metrics
                                         with open(f"{model_save_dir}/best_val_metrics{dataset_label}.txt", "w") as f:
                                             f.write(json.dumps(val_logs))
                                             f.write("\n" + json.dumps(train_logs_))     
