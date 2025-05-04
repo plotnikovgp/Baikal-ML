@@ -7,6 +7,7 @@ import torch
 import yaml
 import wandb
 import pytorch_warmup as warmup
+import logging
 
 from data_utils import *
 from metrics import *
@@ -85,6 +86,40 @@ def create_preprocessor(train_type, is_graph, config):
         raise ValueError(f"Unknown train_type: {train_type}")
 
 
+def load_state_dict_partial(model: torch.nn.Module, state_dict: dict, strict: bool = False) -> None:
+    """
+    Load state dict partially, ignoring non-matching keys.
+    
+    Args:
+        model: The model to load weights into
+        state_dict: The state dict to load
+        strict: If True, requires exact matching of keys. If False, ignores non-matching keys.
+    """
+    model_state_dict = model.state_dict()
+    missing_keys = []
+    unexpected_keys = []
+    
+    for key in state_dict:
+        if key not in model_state_dict:
+            unexpected_keys.append(key)
+            continue
+        if state_dict[key].shape != model_state_dict[key].shape:
+            logging.warning(f"Shape mismatch for key {key}: expected {model_state_dict[key].shape}, got {state_dict[key].shape}")
+            continue
+        model_state_dict[key] = state_dict[key]
+    
+    for key in model_state_dict:
+        if key not in state_dict:
+            missing_keys.append(key)
+    
+    if missing_keys:
+        logging.warning(f"Missing keys in state_dict: {missing_keys}")
+    if unexpected_keys:
+        logging.warning(f"Unexpected keys in state_dict: {unexpected_keys}")
+    
+    model.load_state_dict(model_state_dict, strict=strict)
+
+
 def main():
     fix_seed()
     args = parse_args()
@@ -102,17 +137,17 @@ def main():
     model = load_model(train_params["model_type"], train_params["model_params"]).to(DEVICE) if train_type != "angle_reconstruction_sigma_tune" else None
 
     if train_params.get("from_checkpoint"):
-        model.load_state_dict(torch.load(train_params["from_checkpoint"]))
+        state_dict = torch.load(train_params["from_checkpoint"])
+        load_state_dict_partial(model, state_dict, strict=False)
     model.eval()
-    track_cascade_model = None
-    # with open("train_configs/encoder_track_cascade.yaml", "r") as f:
-    #     track_cascade_params = yaml.safe_load(f)
-    # track_cascade_model = load_model(track_cascade_params["model_type"], track_cascade_params["model_params"])
-    # track_cascade_model.load_state_dict(
-    #     torch.load("/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/checkpoints/track_cascade_enc_hyps_mc_0924/encoder_nl5_dff512_hs1024_nh2_bs128_tres=10.0_new_data/best.ckpt")
-    # )
-    # track_cascade_model.to(DEVICE)
-    # track_cascade_model.eval()
+    # track_cascade_model = None
+    with open("train_configs/encoder_track_cascade.yaml", "r") as f:
+        track_cascade_params = yaml.safe_load(f)
+    track_cascade_model = load_model(track_cascade_params["model_type"], track_cascade_params["model_params"])
+    track_cascade_state_dict = torch.load("/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/checkpoints/track_cascade_enc_hyps_mc_0924/encoder_nl5_dff512_hs512_try_on_other_data/best.ckpt")
+    load_state_dict_partial(track_cascade_model, track_cascade_state_dict, strict=True)
+    track_cascade_model.to(DEVICE)
+    track_cascade_model.eval()
 
     if train_type == "noise_sig":
         DatasetType = BaikalDataset

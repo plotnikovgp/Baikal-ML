@@ -213,7 +213,7 @@ def validate_single(
     loss_hist = []
     domain_loss_hist = []
 
-    model.eval()
+    model.train()
     with torch.no_grad():
         for data in val_loader:
             if is_domain_adaptation:

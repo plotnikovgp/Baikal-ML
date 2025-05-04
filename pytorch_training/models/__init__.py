@@ -1,5 +1,4 @@
-from .encoder import Encoder
-from .encoder_domain_adaptation import EncoderDomainAdaptation
+from .encoder import *
 from .graphnet import GraphnetDynedge, GraphnetAndEncoderStack
 from .lstm import LSTM
 from .gat import GAT

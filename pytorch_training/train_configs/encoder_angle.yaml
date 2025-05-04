@@ -4,10 +4,10 @@ train_type: "angle_reconstruction"
 # path_to_data: &path_to_data "/home/plotnikovgp/baikal/data/baikal_multi_0324_flat_treck-cascade_h8_s2_pureMC_normed-3strings-10hits.h5"
 path_to_data: &path_to_data "/home/plotnikovgp/baikal/data/baikal_reco_reco_h8s2_norm.h5"
 is_graph: False
-# from_checkpoint: "/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/checkpoints/angle_reconstruction_exp_data_with_reco/encoder_nl5_hs128_dff512_nh2_lr1e4_with_reco_noise0_Q-disabled/best.ckpt"
+from_checkpoint: "/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/checkpoints/angle_reconstruction_combine_reco_mc/encoder_nl5_hs512_dff512_nh1_lr1e4_bs128_nm250_wr5_wm5/best_reco.ckpt"
 # from_checkpoint: "/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/checkpoints/angle_reconstruction_v5_mc_0924/encoder_nl5_hs512_dff512_nh1_lr1e4_no-eas_10-3_mae/best.ckpt"
 model_params:
-  in_features: 5
+  in_features: 6
   hidden_size: &hidden_size 512
   num_layers: &num_layers 5
   dim_feedforward_size: &dff 512
@@ -32,7 +32,7 @@ val_subset_cut: 30
 warmup_steps: 10000
 events_amount: 10000000
 
-exp_name: "encoder_nl5_hs512_dff512_nh1_lr1e4_bs128_with_10M_events_nm250"
+exp_name: "encoder_nl5_hs512_dff512_nh1_lr1e4_bs128_reco_finetune_with_track-cascade_preds"
 exp_project: "angle_reconstruction_exp_data_with_reco"
 # exp_project: "angle_reconstruction_v5_mc_0924"
 # model_type: "encoder"s
