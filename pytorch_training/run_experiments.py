@@ -38,7 +38,7 @@ def main():
     parser.add_argument(
         "--base-config",
         "-c",
-        default="train_configs/track_cascade_multi_da.yaml",
+        default="train_configs/noise_sig.yaml",
         help="Base configuration file path",
     )
     parser.add_argument(
@@ -80,22 +80,13 @@ def main():
     base_config_path = args.base_config
 
     parameter_variations = [
-        # Vary learning rate
-        {"lr": 1e-3, "exp_name": "track_cascade_lr1e-3"},
-        {"lr": 1e-4, "exp_name": "track_cascade_lr1e-4"},
-        {"lr": 5e-5, "exp_name": "track_cascade_lr5e-5"},
-        # Vary batch size
-        {"batch_size": 64, "exp_name": "track_cascade_bs64"},
-        {"batch_size": 128, "exp_name": "track_cascade_bs128"},
-        {"batch_size": 256, "exp_name": "track_cascade_bs256"},
-        # Vary model parameters
-        {"model_params": {"hidden_size": 256}, "exp_name": "track_cascade_hs256"},
-        {"model_params": {"hidden_size": 512}, "exp_name": "track_cascade_hs512"},
-        {"model_params": {"hidden_size": 1024}, "exp_name": "track_cascade_hs1024"},
-        # Vary domain adaptation loss weight
-        {"domain_adaptation_loss_k": 0.5, "exp_name": "track_cascade_da_k0.5"},
-        {"domain_adaptation_loss_k": 1.0, "exp_name": "track_cascade_da_k1.0"},
-        {"domain_adaptation_loss_k": 2.0, "exp_name": "track_cascade_da_k2.0"},
+        # Vary hidden size and dff and num_layers
+        {"model_params": {"hidden_size": 64, "dim_feedforward_size": 256, "num_layers": 5}, "exp_name": "encoder_hs64_dff256_nl5"},
+        # {"model_params": {"hidden_size": 128, "dim_feedforward_size": 128, "num_layers": 5}, "exp_name": "encoder_hs128_dff128_nl5"},
+        # {"model_params": {"hidden_size": 128, "dim_feedforward_size": 512, "num_layers": 5}, "exp_name": "encoder_hs128_dff512_nl5"},
+        # {"model_params": {"hidden_size": 128, "dim_feedforward_size": 512, "num_layers": 3}, "exp_name": "encoder_hs128_dff512_nl3"},
+        # {"model_params": {"hidden_size": 512, "dim_feedforward_size": 512, "num_layers": 5}, "exp_name": "encoder_hs512_dff512_nl5"},
+        # {"model_params": {"hidden_size": 512, "dim_feedforward_size": 512, "num_layers": 7}, "exp_name": "encoder_hs512_dff512_nl7"},
     ]
 
     base_config = load_config(base_config_path)
