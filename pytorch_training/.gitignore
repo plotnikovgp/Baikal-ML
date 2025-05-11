@@ -1,2 +1,9 @@
 **/__pycache__/
 **/*.pth
+checkpoints/
+wandb/
+**/data/*.h5
+**/.ipynb_checkpoints/
+notebooks/
+**/*.ckpt
+**/*.txt
