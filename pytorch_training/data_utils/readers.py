@@ -105,6 +105,25 @@ class BaikalDataset(Dataset):
 
 class BaikalDatasetTres(BaikalDataset):
     def __getitem__(self, idx):
+        batch_start_idx = idx * self.batch_size
+        batch_end_idx = min(
+            (idx + 1) * self.batch_size,
+            len(self.hfile[self.split_type + "/ev_starts/data"]) - 1,
+        )
+        event_starts = self.hfile[self.split_type + "/ev_starts/data"][batch_start_idx : batch_end_idx + 1]
+
+        global_start = event_starts[0]
+        global_end = event_starts[-1]
+        raw_data = self.hfile[self.split_type + "/data/data"][global_start:global_end]
+        tres = self.hfile[self.split_type + "/t_res/data"][global_start:global_end]
+
+        data_x, _, mask = self._collate(event_starts, raw_data)
+
+        return self.preprocessor(data_x, tres, mask)
+        
+
+class BaikalDatasetTresSingle(BaikalDataset):
+    def __getitem__(self, idx):
         start, end = self.hfile[self.split_type + "/ev_starts/data"][idx : idx + 2]
         data = np.array(self.hfile[self.split_type + "/data/data"][start:end])
         tres = self.tres_data[start:end]
