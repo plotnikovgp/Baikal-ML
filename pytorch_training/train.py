@@ -19,8 +19,8 @@ SEED = 42
 
 torch.autograd.set_detect_anomaly(True)
 
+
 def fix_seed(seed: int = SEED):
-    
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
@@ -35,7 +35,14 @@ def parse_args() -> argparse.Namespace:
 
 
 def validate_config(parsed_config: tp.Dict[str, tp.Any]):
-    required_keys = ["path_to_data", "model_type", "batch_size", "lr", "model_params", "is_graph"]
+    required_keys = [
+        "path_to_data",
+        "model_type",
+        "batch_size",
+        "lr",
+        "model_params",
+        "is_graph",
+    ]
     for key in required_keys:
         if key not in parsed_config:
             raise ValueError(f"Required key={key} wasn't provided in config")
@@ -43,34 +50,27 @@ def validate_config(parsed_config: tp.Dict[str, tp.Any]):
 
 def create_preprocessor(train_type, is_graph, config):
     if train_type == "noise_sig":
-        return (
-            NoiseSigGraphPreprocessor(config["knn_neighbours"])
-            if is_graph
-            else NoiseSigPreprocessor()
-        )
+        return NoiseSigGraphPreprocessor(config["knn_neighbours"]) if is_graph else NoiseSigPreprocessor()
     elif train_type == "track_cascade":
         return (
-            TrackCascadeGraphPreprocessor(
-                config["knn_neighbours"], config["tres_cut"]
-            )
+            TrackCascadeGraphPreprocessor(config["knn_neighbours"], config["tres_cut"])
             if is_graph
             else TrackCascadePreprocessor(config["tres_cut"])
         )
     elif train_type == "tres":
-        return (
-            TresGraphPreprocessor(config["knn_neighbours"])
-            if is_graph
-            else TresPreprocessor()
-        )
+        return TresGraphPreprocessor(config["knn_neighbours"]) if is_graph else TresPreprocessor()
     elif train_type == "tres_and_track_cascade":
         return (
-            TresAndTrackCascadeGraphPreprocessor(
-                config["knn_neighbours"], config["tres_cut"]
-            )
+            TresAndTrackCascadeGraphPreprocessor(config["knn_neighbours"], config["tres_cut"])
             if is_graph
             else TresAndTrackCascadePreprocessor(config["tres_cut"])
         )
-    elif train_type == "angle_reconstruction" or train_type == "angle_reconstruction_old" or train_type == "angle_reconstruction_domain_adaptation":
+    elif train_type in [
+        "angle_reconstruction",
+        "angle_reconstruction_old",
+        "angle_reconstruction_domain_adaptation",
+        "angle_reconstruction_sigma_tune",
+    ]:
         if not is_graph:
             data_prefilter = DataPrefilter(**(config.get("data_prefilter_params", {})))
             return AnglePreprocessorWithTres(config["tres_cut"], data_prefilter)
@@ -78,10 +78,15 @@ def create_preprocessor(train_type, is_graph, config):
             return AngleGraphPreprocessor(config["knn_neighbours"])
     elif train_type == "direction":
         return DirectionPreprocessor()
-    elif train_type == "angle_reconstruction_sigma_tune":
-        return AnglePreprocessor()
     elif train_type == "angle_and_track_cascade":
         return AngleAndTrackCascadePreprocessor(config["tres_cut"])
+    elif train_type == "track_cascade_domain_adaptation":
+        # Select your preprocessor for track_cascade with domain adaptation
+        return (
+            TrackCascadeGraphPreprocessor(config["knn_neighbours"], config.get("tres_cut", None))
+            if is_graph
+            else TrackCascadePreprocessor(config.get("tres_cut", None))
+        )
     else:
         raise ValueError(f"Unknown train_type: {train_type}")
 
@@ -89,7 +94,7 @@ def create_preprocessor(train_type, is_graph, config):
 def load_state_dict_partial(model: torch.nn.Module, state_dict: dict, strict: bool = False) -> None:
     """
     Load state dict partially, ignoring non-matching keys.
-    
+
     Args:
         model: The model to load weights into
         state_dict: The state dict to load
@@ -98,25 +103,27 @@ def load_state_dict_partial(model: torch.nn.Module, state_dict: dict, strict: bo
     model_state_dict = model.state_dict()
     missing_keys = []
     unexpected_keys = []
-    
+
     for key in state_dict:
         if key not in model_state_dict:
             unexpected_keys.append(key)
             continue
         if state_dict[key].shape != model_state_dict[key].shape:
-            logging.warning(f"Shape mismatch for key {key}: expected {model_state_dict[key].shape}, got {state_dict[key].shape}")
+            logging.warning(
+                f"Shape mismatch for key {key}: expected {model_state_dict[key].shape}, got {state_dict[key].shape}"
+            )
             continue
         model_state_dict[key] = state_dict[key]
-    
+
     for key in model_state_dict:
         if key not in state_dict:
             missing_keys.append(key)
-    
+
     if missing_keys:
         logging.warning(f"Missing keys in state_dict: {missing_keys}")
     if unexpected_keys:
         logging.warning(f"Unexpected keys in state_dict: {unexpected_keys}")
-    
+
     model.load_state_dict(model_state_dict, strict=strict)
 
 
@@ -134,20 +141,24 @@ def main():
     train_type = train_params.get("train_type")
     is_graph = train_params.get("is_graph")
     is_classification = False
-    model = load_model(train_params["model_type"], train_params["model_params"]).to(DEVICE) if train_type != "angle_reconstruction_sigma_tune" else None
+    model = (
+        load_model(train_params["model_type"], train_params["model_params"]).to(DEVICE)
+        if train_type != "angle_reconstruction_sigma_tune"
+        else None
+    )
 
     if train_params.get("from_checkpoint"):
         state_dict = torch.load(train_params["from_checkpoint"])
         load_state_dict_partial(model, state_dict, strict=False)
-    model.eval()
-    # track_cascade_model = None
-    with open("train_configs/encoder_track_cascade.yaml", "r") as f:
-        track_cascade_params = yaml.safe_load(f)
-    track_cascade_model = load_model(track_cascade_params["model_type"], track_cascade_params["model_params"])
-    track_cascade_state_dict = torch.load("/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/checkpoints/track_cascade_enc_hyps_mc_0924/encoder_nl5_dff512_hs512_try_on_other_data/best.ckpt")
-    load_state_dict_partial(track_cascade_model, track_cascade_state_dict, strict=True)
-    track_cascade_model.to(DEVICE)
-    track_cascade_model.eval()
+
+    track_cascade_model = None
+    # with open("train_configs/encoder_track_cascade.yaml", "r") as f:
+    #     track_cascade_params = yaml.safe_load(f)
+    # track_cascade_model = load_model(track_cascade_params["model_type"], track_cascade_params["model_params"])
+    # track_cascade_state_dict = torch.load("/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/checkpoints/track_cascade_enc_hyps_mc_0924/encoder_nl5_dff512_hs512_try_on_other_data/best.ckpt")
+    # load_state_dict_partial(track_cascade_model, track_cascade_state_dict, strict=True)
+    # track_cascade_model.to(DEVICE)
+    # track_cascade_model.eval()
 
     if train_type == "noise_sig":
         DatasetType = BaikalDataset
@@ -155,7 +166,7 @@ def main():
         criterion = torch.nn.CrossEntropyLoss()
         metrics_calc_fun = binary_clf_metrics
     elif train_type == "track_cascade":
-        DatasetType = BaikalDatasetTrackCascade
+        DatasetType = BaikalDatasetTrackCascade if not is_graph else BaikalDatasetTrackCascadeSingle
         metrics_calc_fun = track_cascade_clf_metrics
         is_classification = True
         criterion = torch.nn.CrossEntropyLoss()
@@ -174,6 +185,7 @@ def main():
             ce_loss = ce_(y_pred[:, :-1], y_true[:, 0].long())
             mse_loss = mse_(y_pred[:, -1], y_true[:, -1])
             return ce_loss + train_params["tres_mse_coef"] * mse_loss
+
     elif train_type == "angle_reconstruction" or train_type == "angle_reconstruction_old":
         if not is_graph:
             DatasetType = BaikalDatasetAngles if "old" not in train_type else BaikalDatasetAnglesOld
@@ -181,12 +193,15 @@ def main():
             DatasetType = BaikalDatasetAnglesSingle if "old" not in train_type else BaikalDatasetAnglesOldSingle
         train_type = "angle_reconstruction"
         metrics_calc_fun = angle_reconstruction_metrics
+
         def criterion(y_pred, y_true):
             return torch.abs(y_pred - y_true).mean()
+
     elif train_type == "direction":
         DatasetType = BaikalDatasetAngles
         metrics_calc_fun = direction_metrics
         dist_loss_coef = train_params["distance_loss_coef"]
+
         def criterion(y_pred, y_true):
             angle_pred = y_pred[:, :3]
             angle_true = y_true[:, :3]
@@ -200,6 +215,7 @@ def main():
             distance_loss = torch.abs(torch.sum(w * n, dim=1, keepdim=True)) / norm_n_clamped
             distance_loss = distance_loss.mean()
             return angle_loss + distance_loss * dist_loss_coef
+
     elif train_type == "angle_reconstruction_sigma_tune":
         DatasetType = BaikalDatasetAngles
         encoder_model = load_model("encoder", train_params["encoder_model_params"])
@@ -211,24 +227,26 @@ def main():
     elif train_type == "angle_and_track_cascade":
         DatasetType = BaikalDatasetAnglesAndTrackCascade
         ce_ = torch.nn.CrossEntropyLoss()
-        mse_ = torch.nn.MSELoss()        
+        mse_ = torch.nn.MSELoss()
+
         def criterion(output, y_true):
             ce_loss = ce_(output[:, :2], y_true[:, 0].long())
             mse_loss = mse_(output[:, 0, 2:].reshape(-1, 2), y_true[:, :2])
             return ce_loss + train_params["mse_coef"] * mse_loss
+
     elif train_type == "angle_reconstruction_domain_adaptation":
         if not is_graph:
             DatasetType = BaikalDatasetAngles
         else:
             DatasetType = BaikalDatasetAnglesSingle
-        
+
         # Use the same metrics function as regular angle reconstruction
         metrics_calc_fun = angle_reconstruction_metrics
-        
+
         # Custom criterion for domain adaptation that handles labeled/unlabeled datasets
         domain_adaptation_loss_k = train_params.get("domain_adaptation_loss_k", 0.1)
         label_dataset_name = train_params.get("label_dataset_name", None)
-        
+
         def criterion(y_pred, y_true, domain_pred=None, domain_true=None):
             if label_dataset_name is not None:
                 mask = domain_true == dataset_names.index(label_dataset_name)
@@ -238,40 +256,73 @@ def main():
                     angle_loss = torch.tensor(0.0, device=y_pred.device)
             else:
                 angle_loss = torch.abs(y_pred - y_true).mean()
-            
+
             if domain_pred is not None and domain_true is not None:
                 domain_loss = torch.nn.functional.cross_entropy(domain_pred, domain_true)
                 return angle_loss + domain_adaptation_loss_k * domain_loss
             else:
                 return angle_loss
+
+    elif train_type == "track_cascade_domain_adaptation":
+        if not is_graph:
+            DatasetType = BaikalDatasetTrackCascade
+        else:
+            DatasetType = BaikalDatasetTrackCascadeSingle
+
+        metrics_calc_fun = track_cascade_clf_metrics
+
+        # For domain adaptation
+        domain_adaptation_loss_k = train_params.get("domain_adaptation_loss_k", 0.1)
+        label_dataset_name = train_params.get("label_dataset_name", None)
+
+        ce_ = torch.nn.CrossEntropyLoss()
+
+        def criterion(y_pred, y_true, domain_pred=None, domain_true=None):
+            """
+            y_pred: main output (logits for track_cascade classification)
+            y_true: main labels
+            domain_pred: domain classifier output (logits)
+            domain_true: domain labels (ints)
+            """
+            if label_dataset_name is not None:
+                mask = domain_true == dataset_names.index(label_dataset_name)
+                if mask.sum() > 0:
+                    main_loss = ce_(y_pred[mask], y_true[mask].long())
+                else:
+                    main_loss = torch.tensor(0.0, device=y_pred.device)
+            else:
+                main_loss = ce_(y_pred, y_true.long())
+
+            if domain_pred is not None and domain_true is not None:
+                domain_loss = torch.nn.functional.cross_entropy(domain_pred, domain_true)
+                return main_loss + domain_adaptation_loss_k * domain_loss
+            else:
+                return main_loss
+
     else:
         raise ValueError("unknown train_type")
-    
+
     default_preprocessor = create_preprocessor(train_type, is_graph, train_params)
-    
+
     dataset_names = None
 
     if "dataset_configs" in train_params:
         dataset_names = []
-        
+
         for i, config in enumerate(train_params["dataset_configs"]):
             for key, value in train_params.items():
                 if key not in ["dataset_configs", "dataset_weights", "dataset_names"] and key not in config:
                     config[key] = value
-            
+
             dataset_name = config.get("name", f"dataset_{i}")
             dataset_names.append(dataset_name)
-            
+
             if "DatasetType" not in config:
                 config["DatasetType"] = DatasetType
-            
+
             if "preprocessor" not in config:
-                config["preprocessor"] = create_preprocessor(
-                    train_type, 
-                    config.get("is_graph", is_graph),
-                    config
-                )
-                
+                config["preprocessor"] = create_preprocessor(train_type, config.get("is_graph", is_graph), config)
+
         dataloaders = create_multi_dataset_dataloader(
             dataset_configs=train_params["dataset_configs"],
             probabilities=train_params.get("dataset_weights", None),
@@ -305,13 +356,11 @@ def main():
     print(model)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=train_params["lr"])
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, "min", factor=0.5, min_lr=1e-3, patience=128
-    )
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min", factor=0.5, min_lr=1e-3, patience=128)
     warmup_scheduler = warmup.ExponentialWarmup(optimizer, train_params.get("warmup_steps", 0))
-    
+
     train_dataset = dataloaders.get("train_dataset") or dataloaders.get("train_datasets", [None])[0]
-    
+
     train_fun_kwargs = dict(
         optimizer=optimizer,
         dataset=train_dataset,
@@ -359,8 +408,7 @@ def main():
             config=train_params,
         )
 
-
-    save_dir = Path("checkpoints") / train_params["exp_project"] / train_params["exp_name"] 
+    save_dir = Path("checkpoints") / train_params["exp_project"] / train_params["exp_name"]
     Path.mkdir(save_dir, parents=True, exist_ok=True)
     train(
         model,

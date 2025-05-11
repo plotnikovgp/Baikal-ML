@@ -17,9 +17,7 @@ class BasePreprocessor(ABC):
 
 
 class NoiseSigPreprocessor(BasePreprocessor):
-    def __call__(
-        self, x: torch.Tensor, y: torch.Tensor, mask: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def __call__(self, x: torch.Tensor, y: torch.Tensor, mask: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         y[(y != 0) & mask] = 1
         y = y.long()
         return x, y, mask
@@ -27,32 +25,31 @@ class NoiseSigPreprocessor(BasePreprocessor):
 
 class DataPrefilter:
     def __init__(
-            self,
-            data_file: str | None = None,
-            Q_lower_bound: float | None = None,
-            Q_upper_bound: float | None = None,
-            additive_gauss_noise_std: tp.Sequence[float] | None = None,
-            mult_gauss_noise_fraction: float | None = None,
-            norm_Q: bool = False,
-            **kwargs,
-        ):
-            self.additive_gauss_noise_std = additive_gauss_noise_std
-            self.mult_gauss_noise_fraction = mult_gauss_noise_fraction
-            self.norm_Q = norm_Q
-            self.Q_lower_bound = None
-            self.Q_upper_bound = None
+        self,
+        data_file: str | None = None,
+        Q_lower_bound: float | None = None,
+        Q_upper_bound: float | None = None,
+        additive_gauss_noise_std: tp.Sequence[float] | None = None,
+        mult_gauss_noise_fraction: float | None = None,
+        norm_Q: bool = False,
+        **kwargs,
+    ):
+        self.additive_gauss_noise_std = additive_gauss_noise_std
+        self.mult_gauss_noise_fraction = mult_gauss_noise_fraction
+        self.norm_Q = norm_Q
+        self.Q_lower_bound = None
+        self.Q_upper_bound = None
 
-            if data_file:
-                self.hfile = h5.File(data_file, 'r')
-                self.means = np.array(self.hfile['norm_param/mean'])
-                self.stds = np.array(self.hfile['norm_param/std'])
-            if Q_lower_bound is not None or Q_upper_bound is not None:
-                assert data_file
-                if Q_lower_bound is not None:   
-                    self.Q_lower_bound = (Q_lower_bound - self.means[0]) / self.stds[0]
-                if Q_upper_bound is not None:
-                    self.Q_upper_bound = (Q_upper_bound - self.means[0]) / self.stds[0]
-
+        if data_file:
+            self.hfile = h5.File(data_file, "r")
+            self.means = np.array(self.hfile["norm_param/mean"])
+            self.stds = np.array(self.hfile["norm_param/std"])
+        if Q_lower_bound is not None or Q_upper_bound is not None:
+            assert data_file
+            if Q_lower_bound is not None:
+                self.Q_lower_bound = (Q_lower_bound - self.means[0]) / self.stds[0]
+            if Q_upper_bound is not None:
+                self.Q_upper_bound = (Q_upper_bound - self.means[0]) / self.stds[0]
 
     def __call__(self, data_x):
         if self.norm_Q:
@@ -68,11 +65,10 @@ class DataPrefilter:
             data_x = data_x + noise
             data_x[:, :1] = 0
         if self.mult_gauss_noise_fraction is not None:
-            data_x[0] = data_x[0] * (
-                1 + (0, self.mult_gauss_noise_fraction, data_x[0].shape)
-            )
+            data_x[0] = data_x[0] * (1 + (0, self.mult_gauss_noise_fraction, data_x[0].shape))
         return data_x
-    
+
+
 class TrackCascadePreprocessor(BasePreprocessor):
     def __init__(self, tres_cut):
         self.tres_cut = tres_cut
@@ -96,9 +92,7 @@ class TresPreprocessor(BasePreprocessor):
         self.tres_mean = tres_mean
         self.tres_std = tres_std
 
-    def __call__(
-        self, x: torch.Tensor, tres: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def __call__(self, x: torch.Tensor, tres: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         tres = (tres - self.tres_mean) / (self.tres_std + EPS)
         return x, tres
 
@@ -108,9 +102,7 @@ class TresAndTrackCascadePreprocessor(TresPreprocessor):
         super().__init__()
         self.tres_cut = tres_cut
 
-    def __call__(
-        self, x: torch.Tensor, y: torch.Tensor, tres: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def __call__(self, x: torch.Tensor, y: torch.Tensor, tres: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         y[y > 0] = 1
         y[y < 0] = 0
         y[torch.abs(tres) < self.tres_cut] = 0
@@ -139,7 +131,12 @@ class AnglePreprocessorWithTres(BasePreprocessor):
         self.data_prefilter = data_prefilter
 
     def __call__(
-        self, x: torch.Tensor, y: torch.Tensor, mask: torch.Tensor, tres: torch.Tensor, labels: torch.Tensor
+        self,
+        x: torch.Tensor,
+        y: torch.Tensor,
+        mask: torch.Tensor,
+        tres: torch.Tensor,
+        labels: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         y = y[:, :2]
         thetha = torch.deg2rad(y[:, 0])
@@ -154,7 +151,7 @@ class AnglePreprocessorWithTres(BasePreprocessor):
         # print(track_hits.sum(), track_hits.shape[0] * track_hits.shape[1])
         if self.data_prefilter is not None:
             x = self.data_prefilter(x)
-        mask = mask # & (labels != 0) & track_hits
+        mask = mask  # & (labels != 0) & track_hits
         mask[mask.sum(-1) == 0] = True
         return x, angle, mask
 
@@ -174,6 +171,7 @@ class DirectionPreprocessor(BasePreprocessor):
         angle_and_point = torch.cat((angle, points), -1)
         return x, angle_and_point, mask
 
+
 class AngleAndTrackCascadePreprocessor(TrackCascadePreprocessor):
     def __call__(
         self,
@@ -184,7 +182,7 @@ class AngleAndTrackCascadePreprocessor(TrackCascadePreprocessor):
     ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
         track_cascade_labels[track_cascade_labels > 0] = 1
         track_cascade_labels[track_cascade_labels < 0] = 0
-        track_cascade_labels[torch.abs(tres) < self.tres_cut] = 0        
+        track_cascade_labels[torch.abs(tres) < self.tres_cut] = 0
         return x, (track_cascade_labels.unsqueeze(0), angles)
 
 
@@ -198,9 +196,7 @@ class BaseGraphPreprocessor(ABC):
 
 
 class AngleGraphPreprocessor(BaseGraphPreprocessor):
-    def __call__(
-        self, x: torch.Tensor, y: torch.Tensor
-    ) -> GData:
+    def __call__(self, x: torch.Tensor, y: torch.Tensor) -> GData:
         # y = y[:2]
         # thetha = torch.deg2rad(y[0])
         # phi = torch.deg2rad(y[1])
@@ -213,7 +209,7 @@ class AngleGraphPreprocessor(BaseGraphPreprocessor):
         edge_index = gnn.knn_graph(x[:, 1], k=self.n_neighbours)
         graph = GData(x=x, edge_index=edge_index, y=y)
         return graph
-        
+
 
 class NoiseSigGraphPreprocessor(BaseGraphPreprocessor):
     def __call__(self, x: torch.Tensor, y: torch.Tensor) -> GData:
@@ -233,7 +229,7 @@ class TrackCascadeGraphPreprocessor(BaseGraphPreprocessor):
         y[y > 0] = 1  # cascade
         y[y < 0] = 0  # track
         y[torch.abs(tres) < self.tres_cut] = 0
-        
+
         edge_index = gnn.knn_graph(x[:, 1], k=self.n_neighbours)
         graph = GData(x=x, edge_index=edge_index, y=y)
         return graph
@@ -250,9 +246,7 @@ class TresGraphPreprocessor(BaseGraphPreprocessor):
         self.tres_std = tres_std
 
     def __call__(self, x: torch.Tensor, tres: torch.Tensor) -> GData:
-        assert (
-            self.tres_mean is not None and self.tres_std is not None
-        ), "stats for preproccesor weren't not set"
+        assert self.tres_mean is not None and self.tres_std is not None, "stats for preproccesor weren't not set"
         tres = (tres - self.tres_mean) / (self.tres_std + EPS)
         edge_index = gnn.knn_graph(x[:, 1], k=self.n_neighbours)
         graph = GData(x=x, edge_index=edge_index, y=tres)
