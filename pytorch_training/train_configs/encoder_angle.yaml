@@ -4,7 +4,7 @@ train_type: "angle_reconstruction"
 # path_to_data: &path_to_data "/home/plotnikovgp/baikal/data/baikal_multi_0324_flat_treck-cascade_h8_s2_pureMC_normed-3strings-10hits.h5"
 path_to_data: &path_to_data "/home/plotnikovgp/baikal/data/baikal_reco_reco_h8s2_norm.h5"
 is_graph: False
-from_checkpoint: "/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/checkpoints/angle_reconstruction_combine_reco_mc/encoder_nl5_hs512_dff512_nh1_lr1e4_bs128_nm250_wr5_wm5/best_reco.ckpt"
+# from_checkpoint: "/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/checkpoints/angle_reconstruction_combine_reco_mc/encoder_nl5_hs512_dff512_nh1_lr1e4_bs128_nm250_wr5_wm5/best_reco.ckpt"
 # from_checkpoint: "/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/checkpoints/angle_reconstruction_v5_mc_0924/encoder_nl5_hs512_dff512_nh1_lr1e4_no-eas_10-3_mae/best.ckpt"
 model_params:
   in_features: 6

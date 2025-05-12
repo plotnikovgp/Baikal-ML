@@ -17,7 +17,9 @@ class BasePreprocessor(ABC):
 
 
 class NoiseSigPreprocessor(BasePreprocessor):
-    def __call__(self, x: torch.Tensor, y: torch.Tensor, mask: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def __call__(
+        self, x: torch.Tensor, y: torch.Tensor, mask: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         y[(y != 0) & mask] = 1
         y = y.long()
         return x, y, mask
@@ -61,11 +63,15 @@ class DataPrefilter:
 
         if self.additive_gauss_noise_std is not None:
             # data_x: [batch_size, 5], additive_gauss_noise_std: [5], add noise to each feature with corresponding std
-            noise = torch.randn_like(data_x) * torch.tensor(self.additive_gauss_noise_std, device=data_x.device)
+            noise = torch.randn_like(data_x) * torch.tensor(
+                self.additive_gauss_noise_std, device=data_x.device
+            )
             data_x = data_x + noise
             data_x[:, :1] = 0
         if self.mult_gauss_noise_fraction is not None:
-            data_x[0] = data_x[0] * (1 + (0, self.mult_gauss_noise_fraction, data_x[0].shape))
+            data_x[0] = data_x[0] * (
+                1 + (0, self.mult_gauss_noise_fraction, data_x[0].shape)
+            )
         return data_x
 
 
@@ -92,7 +98,9 @@ class TresPreprocessor(BasePreprocessor):
         self.tres_mean = tres_mean
         self.tres_std = tres_std
 
-    def __call__(self, x: torch.Tensor, tres: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def __call__(
+        self, x: torch.Tensor, tres: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         tres = (tres - self.tres_mean) / (self.tres_std + EPS)
         return x, tres
 
@@ -102,7 +110,9 @@ class TresAndTrackCascadePreprocessor(TresPreprocessor):
         super().__init__()
         self.tres_cut = tres_cut
 
-    def __call__(self, x: torch.Tensor, y: torch.Tensor, tres: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def __call__(
+        self, x: torch.Tensor, y: torch.Tensor, tres: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         y[y > 0] = 1
         y[y < 0] = 0
         y[torch.abs(tres) < self.tres_cut] = 0
@@ -154,6 +164,24 @@ class AnglePreprocessorWithTres(BasePreprocessor):
         mask = mask  # & (labels != 0) & track_hits
         mask[mask.sum(-1) == 0] = True
         return x, angle, mask
+
+
+class EnergyPreprocessor(BasePreprocessor):
+    def __init__(self, data_prefilter: DataPrefilter | None = None):
+        self.data_prefilter = data_prefilter
+
+    def __call__(
+        self, x: torch.Tensor, y: torch.Tensor, mask: torch.Tensor, **kwargs
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+
+        # print(y.shape, thetha.min(), thetha.max(), phi.min(), phi.max())
+        energy = torch.log10(y)
+
+        if self.data_prefilter is not None:
+            x = self.data_prefilter(x)
+        mask = mask
+        mask[mask.sum(-1) == 0] = True
+        return x, energy, mask
 
 
 class DirectionPreprocessor(BasePreprocessor):
@@ -246,7 +274,9 @@ class TresGraphPreprocessor(BaseGraphPreprocessor):
         self.tres_std = tres_std
 
     def __call__(self, x: torch.Tensor, tres: torch.Tensor) -> GData:
-        assert self.tres_mean is not None and self.tres_std is not None, "stats for preproccesor weren't not set"
+        assert (
+            self.tres_mean is not None and self.tres_std is not None
+        ), "stats for preproccesor weren't not set"
         tres = (tres - self.tres_mean) / (self.tres_std + EPS)
         edge_index = gnn.knn_graph(x[:, 1], k=self.n_neighbours)
         graph = GData(x=x, edge_index=edge_index, y=tres)

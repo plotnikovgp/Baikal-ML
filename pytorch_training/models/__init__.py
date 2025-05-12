@@ -4,6 +4,8 @@ from .lstm import LSTM
 from .gat import GAT
 from .gincn import GINCN
 from .uncertainty_predictor import UncertaintyPredictor, uncertainty_loss
+from .unet import UNetModel
+from .cnn import CNNModel, CNNModelWithAttention
 import torch.nn as nn
 import typing as tp
 
@@ -25,6 +27,12 @@ def load_model(model_type: str, model_kwargs: dict[str, tp.Any]) -> nn.Module:
         return GINCN(**model_kwargs)
     elif model_type == "uncertainty_predictor":
         return UncertaintyPredictor(**model_kwargs)
+    elif model_type == "unet":
+        return UNetModel(**model_kwargs)
+    elif model_type == "cnn":
+        return CNNModel(**model_kwargs)
+    elif model_type == "cnn_attention":
+        return CNNModelWithAttention(**model_kwargs)
     else:
         raise NotImplementedError
     # elif model

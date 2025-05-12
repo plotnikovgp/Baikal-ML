@@ -50,7 +50,11 @@ def validate_config(parsed_config: tp.Dict[str, tp.Any]):
 
 def create_preprocessor(train_type, is_graph, config):
     if train_type == "noise_sig":
-        return NoiseSigGraphPreprocessor(config["knn_neighbours"]) if is_graph else NoiseSigPreprocessor()
+        return (
+            NoiseSigGraphPreprocessor(config["knn_neighbours"])
+            if is_graph
+            else NoiseSigPreprocessor()
+        )
     elif train_type == "track_cascade":
         return (
             TrackCascadeGraphPreprocessor(config["knn_neighbours"], config["tres_cut"])
@@ -58,13 +62,22 @@ def create_preprocessor(train_type, is_graph, config):
             else TrackCascadePreprocessor(config["tres_cut"])
         )
     elif train_type == "tres":
-        return TresGraphPreprocessor(config["knn_neighbours"]) if is_graph else TresPreprocessor()
+        return (
+            TresGraphPreprocessor(config["knn_neighbours"])
+            if is_graph
+            else TresPreprocessor()
+        )
     elif train_type == "tres_and_track_cascade":
         return (
-            TresAndTrackCascadeGraphPreprocessor(config["knn_neighbours"], config["tres_cut"])
+            TresAndTrackCascadeGraphPreprocessor(
+                config["knn_neighbours"], config["tres_cut"]
+            )
             if is_graph
             else TresAndTrackCascadePreprocessor(config["tres_cut"])
         )
+    elif train_type == "energy_reconstruction":
+        data_prefilter = DataPrefilter(**(config.get("data_prefilter_params", {})))
+        return EnergyPreprocessor(data_prefilter)
     elif train_type in [
         "angle_reconstruction",
         "angle_reconstruction_old",
@@ -83,7 +96,9 @@ def create_preprocessor(train_type, is_graph, config):
     elif train_type == "track_cascade_domain_adaptation":
         # Select your preprocessor for track_cascade with domain adaptation
         return (
-            TrackCascadeGraphPreprocessor(config["knn_neighbours"], config.get("tres_cut", None))
+            TrackCascadeGraphPreprocessor(
+                config["knn_neighbours"], config.get("tres_cut", None)
+            )
             if is_graph
             else TrackCascadePreprocessor(config.get("tres_cut", None))
         )
@@ -91,7 +106,9 @@ def create_preprocessor(train_type, is_graph, config):
         raise ValueError(f"Unknown train_type: {train_type}")
 
 
-def load_state_dict_partial(model: torch.nn.Module, state_dict: dict, strict: bool = False) -> None:
+def load_state_dict_partial(
+    model: torch.nn.Module, state_dict: dict, strict: bool = False
+) -> None:
     """
     Load state dict partially, ignoring non-matching keys.
 
@@ -166,7 +183,11 @@ def main():
         criterion = torch.nn.CrossEntropyLoss()
         metrics_calc_fun = binary_clf_metrics
     elif train_type == "track_cascade":
-        DatasetType = BaikalDatasetTrackCascade if not is_graph else BaikalDatasetTrackCascadeSingle
+        DatasetType = (
+            BaikalDatasetTrackCascade
+            if not is_graph
+            else BaikalDatasetTrackCascadeSingle
+        )
         metrics_calc_fun = track_cascade_clf_metrics
         is_classification = True
         criterion = torch.nn.CrossEntropyLoss()
@@ -186,11 +207,21 @@ def main():
             mse_loss = mse_(y_pred[:, -1], y_true[:, -1])
             return ce_loss + train_params["tres_mse_coef"] * mse_loss
 
-    elif train_type == "angle_reconstruction" or train_type == "angle_reconstruction_old":
+    elif (
+        train_type == "angle_reconstruction" or train_type == "angle_reconstruction_old"
+    ):
         if not is_graph:
-            DatasetType = BaikalDatasetAngles if "old" not in train_type else BaikalDatasetAnglesOld
+            DatasetType = (
+                BaikalDatasetAngles
+                if "old" not in train_type
+                else BaikalDatasetAnglesOld
+            )
         else:
-            DatasetType = BaikalDatasetAnglesSingle if "old" not in train_type else BaikalDatasetAnglesOldSingle
+            DatasetType = (
+                BaikalDatasetAnglesSingle
+                if "old" not in train_type
+                else BaikalDatasetAnglesOldSingle
+            )
         train_type = "angle_reconstruction"
         metrics_calc_fun = angle_reconstruction_metrics
 
@@ -212,7 +243,9 @@ def main():
             n = torch.cross(angle_pred, angle_true)
             norm_n = torch.norm(n, dim=1, keepdim=True)
             norm_n_clamped = torch.clamp(norm_n, min=1e-6)
-            distance_loss = torch.abs(torch.sum(w * n, dim=1, keepdim=True)) / norm_n_clamped
+            distance_loss = (
+                torch.abs(torch.sum(w * n, dim=1, keepdim=True)) / norm_n_clamped
+            )
             distance_loss = distance_loss.mean()
             return angle_loss + distance_loss * dist_loss_coef
 
@@ -221,7 +254,9 @@ def main():
         encoder_model = load_model("encoder", train_params["encoder_model_params"])
         encoder_model.load_state_dict(torch.load(train_params["encoder_model_path"]))
         encoder_model = encoder_model.to(DEVICE)
-        model = load_model(train_params["model_type"], {"model": encoder_model}).to(DEVICE)
+        model = load_model(train_params["model_type"], {"model": encoder_model}).to(
+            DEVICE
+        )
         metrics_calc_fun = angle_uncertainty_metrics
         criterion = uncertainty_loss
     elif train_type == "angle_and_track_cascade":
@@ -258,7 +293,9 @@ def main():
                 angle_loss = torch.abs(y_pred - y_true).mean()
 
             if domain_pred is not None and domain_true is not None:
-                domain_loss = torch.nn.functional.cross_entropy(domain_pred, domain_true)
+                domain_loss = torch.nn.functional.cross_entropy(
+                    domain_pred, domain_true
+                )
                 return angle_loss + domain_adaptation_loss_k * domain_loss
             else:
                 return angle_loss
@@ -294,11 +331,17 @@ def main():
                 main_loss = ce_(y_pred, y_true.long())
 
             if domain_pred is not None and domain_true is not None:
-                domain_loss = torch.nn.functional.cross_entropy(domain_pred, domain_true)
+                domain_loss = torch.nn.functional.cross_entropy(
+                    domain_pred, domain_true
+                )
                 return main_loss + domain_adaptation_loss_k * domain_loss
             else:
                 return main_loss
 
+    elif train_type == "energy_reconstruction":
+        DatasetType = BaikalDatasetEnergy
+        metrics_calc_fun = regression_metrics
+        criterion = torch.nn.MSELoss()
     else:
         raise ValueError("unknown train_type")
 
@@ -311,7 +354,10 @@ def main():
 
         for i, config in enumerate(train_params["dataset_configs"]):
             for key, value in train_params.items():
-                if key not in ["dataset_configs", "dataset_weights", "dataset_names"] and key not in config:
+                if (
+                    key not in ["dataset_configs", "dataset_weights", "dataset_names"]
+                    and key not in config
+                ):
                     config[key] = value
 
             dataset_name = config.get("name", f"dataset_{i}")
@@ -321,7 +367,9 @@ def main():
                 config["DatasetType"] = DatasetType
 
             if "preprocessor" not in config:
-                config["preprocessor"] = create_preprocessor(train_type, config.get("is_graph", is_graph), config)
+                config["preprocessor"] = create_preprocessor(
+                    train_type, config.get("is_graph", is_graph), config
+                )
 
         dataloaders = create_multi_dataset_dataloader(
             dataset_configs=train_params["dataset_configs"],
@@ -356,10 +404,16 @@ def main():
     print(model)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=train_params["lr"])
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min", factor=0.5, min_lr=1e-3, patience=128)
-    warmup_scheduler = warmup.ExponentialWarmup(optimizer, train_params.get("warmup_steps", 0))
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, "min", factor=0.5, min_lr=1e-3, patience=128
+    )
+    warmup_scheduler = warmup.ExponentialWarmup(
+        optimizer, train_params.get("warmup_steps", 0)
+    )
 
-    train_dataset = dataloaders.get("train_dataset") or dataloaders.get("train_datasets", [None])[0]
+    train_dataset = (
+        dataloaders.get("train_dataset") or dataloaders.get("train_datasets", [None])[0]
+    )
 
     train_fun_kwargs = dict(
         optimizer=optimizer,
@@ -377,16 +431,20 @@ def main():
         is_track_cascade_tres_train=(train_type == "tres_and_track_cascade"),
         is_angle_reconstruction=(train_type == "angle_reconstruction"),
         is_angle_and_track_cascade=(train_type == "angle_and_track_cascade"),
-        is_angle_reconstruction_sigma_tune=(train_type == "angle_reconstruction_sigma_tune"),
+        is_angle_reconstruction_sigma_tune=(
+            train_type == "angle_reconstruction_sigma_tune"
+        ),
         is_direction=(train_type == "direction"),
         is_domain_adaptation=(train_type == "angle_reconstruction_domain_adaptation"),
+        is_energy_reconstruction=(train_type == "energy_reconstruction"),
         grad_clip_value=train_params.get("grad_clip_value", None),
         accumulate_grad_steps=train_params.get("accumulate_grad_steps", 1),
+        min_recall=train_params.get("min_recall", None),
     )
-
     validate_fun_kwargs = dict(
         val_loader=dataloaders["val"],
-        dataset=dataloaders.get("val_dataset") or dataloaders.get("val_datasets", [None])[0],
+        dataset=dataloaders.get("val_dataset")
+        or dataloaders.get("val_datasets", [None])[0],
         criterion=criterion,
         is_graph=is_graph,
         metrics_calc_fun=metrics_calc_fun,
@@ -394,11 +452,15 @@ def main():
         is_classification=is_classification,
         is_track_cascade_tres_train=(train_type == "tres_and_track_cascade"),
         is_angle_reconstruction=(train_type == "angle_reconstruction"),
-        is_angle_reconstruction_sigma_tune=(train_type == "angle_reconstruction_sigma_tune"),
+        is_angle_reconstruction_sigma_tune=(
+            train_type == "angle_reconstruction_sigma_tune"
+        ),
         is_angle_and_track_cascade=(train_type == "angle_and_track_cascade"),
         is_direction=(train_type == "direction"),
         is_domain_adaptation=(train_type == "angle_reconstruction_domain_adaptation"),
+        is_energy_reconstruction=(train_type == "energy_reconstruction"),
         dataset_names=dataset_names,  # Use custom dataset names
+        min_recall=train_params.get("min_recall", None),
     )
 
     if not args.disable_wandb:
@@ -408,7 +470,9 @@ def main():
             config=train_params,
         )
 
-    save_dir = Path("checkpoints") / train_params["exp_project"] / train_params["exp_name"]
+    save_dir = (
+        Path("checkpoints") / train_params["exp_project"] / train_params["exp_name"]
+    )
     Path.mkdir(save_dir, parents=True, exist_ok=True)
     train(
         model,

@@ -18,6 +18,7 @@ def _run_model(
     is_angle_and_track_cascade=False,
     is_angle_reconstruction_sigma_tune=False,
     is_direction=False,
+    is_energy_reconstruction=False,
     is_domain_adaptation=False,
     track_cascade_model=None,
     dataset_idx=None,
@@ -51,7 +52,9 @@ def _run_model(
             output, domain_output, _ = model(x, mask)
 
             batch_size = x.shape[0]
-            domain_true = torch.full((batch_size,), dataset_idx, dtype=torch.long, device=model.device)
+            domain_true = torch.full(
+                (batch_size,), dataset_idx, dtype=torch.long, device=model.device
+            )
             domain_pred = domain_output
         else:
             output = model(x, mask)
@@ -72,7 +75,13 @@ def _run_model(
         else:
             y_true = y_true.reshape(-1)
             output = output.reshape(-1, output.shape[-1]).squeeze()
-        if not (is_angle_reconstruction or is_direction or is_angle_reconstruction_sigma_tune or is_domain_adaptation):
+        if not (
+            is_energy_reconstruction
+            or is_angle_reconstruction
+            or is_direction
+            or is_angle_reconstruction_sigma_tune
+            or is_domain_adaptation
+        ):
             mask = mask.reshape(-1)
             y_true = y_true[mask != 0]
             output = output[mask != 0]
@@ -110,6 +119,7 @@ def train_iters(
     num_iters=1,
     grad_clip_value=None,
     is_domain_adaptation=False,
+    min_recall=None,
     **kwargs,
 ):
     model.train()
@@ -125,11 +135,11 @@ def train_iters(
     for iter in range(num_iters):
         data = next(train_loader)
 
-        dataset_idx = data[2] if isinstance(data, tuple) and len(data) > 2 and is_domain_adaptation else None
-        if isinstance(data, tuple) and len(data) > 2 and is_domain_adaptation:
-            data = data[:2] + data[3:]
-
+        # Extract dataset_idx from data when in domain adaptation mode
+        dataset_idx = None
         if is_domain_adaptation:
+            dataset_idx = data[2]
+            data = data[:2] + data[3:]
             output, y_pred, y_true, domain_pred, domain_true = _run_model(
                 model,
                 data,
@@ -173,11 +183,29 @@ def train_iters(
 
         loss_hist.append(loss.item())
 
-        y_pred_hist = torch.cat((y_pred_hist, y_pred), dim=0) if y_pred_hist is not None else y_pred
+        y_pred_hist = (
+            torch.cat((y_pred_hist, y_pred), dim=0)
+            if y_pred_hist is not None
+            else y_pred
+        )
 
-        y_true_hist = torch.cat((y_true_hist, y_true), dim=0) if y_true_hist is not None else y_true
+        y_true_hist = (
+            torch.cat((y_true_hist, y_true), dim=0)
+            if y_true_hist is not None
+            else y_true
+        )
 
-    train_metrics = metrics_calc_fun(y_pred_hist.detach().cpu(), y_true_hist.detach().cpu())
+    if min_recall is not None:
+        train_metrics = metrics_calc_fun(
+            y_pred_hist.detach().cpu(),
+            y_true_hist.detach().cpu(),
+            min_recall=min_recall,
+        )
+    else:
+        train_metrics = metrics_calc_fun(
+            y_pred_hist.detach().cpu(), y_true_hist.detach().cpu()
+        )
+
     train_metrics["loss"] = sum(loss_hist) / len(loss_hist) if loss_hist else None
     train_metrics["lr"] = optimizer.param_groups[0]["lr"]
 
@@ -186,7 +214,10 @@ def train_iters(
         domain_labels = domain_true_hist
         domain_accuracy = (domain_preds == domain_labels).float().mean().item()
         train_metrics["domain_accuracy"] = domain_accuracy
-        domain_bin_metrics = binary_clf_metrics(domain_preds.cpu().numpy(), domain_labels.cpu().numpy())
+        domain_bin_metrics = binary_clf_metrics(
+            domain_preds.cpu().numpy(),
+            domain_labels.cpu().numpy(),
+        )
         train_metrics.update({"domain_" + k: v for k, v in domain_bin_metrics.items()})
     return train_metrics
 
@@ -199,6 +230,7 @@ def validate_single(
     return_preds=False,
     is_domain_adaptation=False,
     dataset_idx=0,
+    min_recall=None,
     **kwargs,
 ) -> dict[str, float]:
     y_pred_hist = None
@@ -254,7 +286,10 @@ def validate_single(
 
     if return_preds:
         return y_pred_hist, y_true_hist
-    val_metrics = metrics_calc_fun(y_pred_hist, y_true_hist)
+    if min_recall is not None:
+        val_metrics = metrics_calc_fun(y_pred_hist, y_true_hist, min_recall=min_recall)
+    else:
+        val_metrics = metrics_calc_fun(y_pred_hist, y_true_hist)
     val_metrics["loss"] = sum(loss_hist) / len(loss_hist) if loss_hist else None
 
     if is_domain_adaptation and domain_pred_hist is not None:
@@ -275,6 +310,7 @@ def validate(
     metrics_calc_fun,
     return_preds=False,
     dataset_names=None,
+    min_recall=None,
     **kwargs,
 ) -> dict[str, float]:
     if not isinstance(val_loader, list):
@@ -284,6 +320,7 @@ def validate(
             criterion=criterion,
             metrics_calc_fun=metrics_calc_fun,
             return_preds=return_preds,
+            min_recall=min_recall,
             **kwargs,
         )
 
@@ -297,6 +334,7 @@ def validate(
             metrics_calc_fun=metrics_calc_fun,
             return_preds=False,
             dataset_idx=i,
+            min_recall=min_recall,
             **kwargs,
         )
 
@@ -335,7 +373,9 @@ def train(
     print("Num steps in one epoch: ", iters_per_epoch)
     cur_epoch = 0
 
-    if dataset_names is None and isinstance(validate_fun_kwargs.get("val_loader", None), list):
+    if dataset_names is None and isinstance(
+        validate_fun_kwargs.get("val_loader", None), list
+    ):
         num_datasets = len(validate_fun_kwargs["val_loader"])
         dataset_names = [f"dataset_{i}" for i in range(num_datasets)]
 
@@ -343,7 +383,9 @@ def train(
         for _ in step_iter:
             if not validate_before_train:
                 train_logs = train_fun(model, **train_fun_kwargs)
-                train_logs_ = {"train/" + k: train_logs[k] for k in sorted(list(train_logs.keys()))}
+                train_logs_ = {
+                    "train/" + k: train_logs[k] for k in sorted(list(train_logs.keys()))
+                }
                 iters_current += train_fun_kwargs["num_iters"]
                 if iters_current >= iters_per_epoch:
                     cur_epoch += iters_current // iters_per_epoch
@@ -380,7 +422,9 @@ def train(
                                 ):
                                     best_val_metrics[dataset_label] = metric_value
 
-                                    save_path = f"{model_save_dir}/best{dataset_label}.ckpt"
+                                    save_path = (
+                                        f"{model_save_dir}/best{dataset_label}.ckpt"
+                                    )
                                     torch.save(model.state_dict(), save_path)
 
                                     with open(
@@ -407,8 +451,13 @@ def train(
                                 ):
                                     best_val_metrics[dataset_label] = metric_value
 
-                                    if save_best_per_dataset or (save_best_model and dataset_name == dataset_names[0]):
-                                        save_path = f"{model_save_dir}/best{dataset_label}.ckpt"
+                                    if save_best_per_dataset or (
+                                        save_best_model
+                                        and dataset_name == dataset_names[0]
+                                    ):
+                                        save_path = (
+                                            f"{model_save_dir}/best{dataset_label}.ckpt"
+                                        )
                                         torch.save(model.state_dict(), save_path)
 
                                         with open(

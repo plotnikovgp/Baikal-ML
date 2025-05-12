@@ -5,7 +5,9 @@ from torch_geometric.nn import GCNConv
 
 
 def get_mlp(dim_in, dim_out):
-    return nn.Sequential(gnn.Linear(dim_in, dim_out), nn.ReLU(), gnn.Linear(dim_out, dim_out))
+    return nn.Sequential(
+        gnn.Linear(dim_in, dim_out), nn.ReLU(), gnn.Linear(dim_out, dim_out)
+    )
 
 
 class GINCN(nn.Module):

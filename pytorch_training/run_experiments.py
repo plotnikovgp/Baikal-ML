@@ -34,7 +34,9 @@ def run_training(config_path, gpu_id=None, disable_wandb=False):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run multiple experiments with parameter variations")
+    parser = argparse.ArgumentParser(
+        description="Run multiple experiments with parameter variations"
+    )
     parser.add_argument(
         "--base-config",
         "-c",
@@ -81,7 +83,14 @@ def main():
 
     parameter_variations = [
         # Vary hidden size and dff and num_layers
-        {"model_params": {"hidden_size": 64, "dim_feedforward_size": 256, "num_layers": 5}, "exp_name": "encoder_hs64_dff256_nl5"},
+        {
+            "model_params": {
+                "hidden_size": 64,
+                "dim_feedforward_size": 256,
+                "num_layers": 5,
+            },
+            "exp_name": "encoder_hs64_dff256_nl5",
+        },
         # {"model_params": {"hidden_size": 128, "dim_feedforward_size": 128, "num_layers": 5}, "exp_name": "encoder_hs128_dff128_nl5"},
         # {"model_params": {"hidden_size": 128, "dim_feedforward_size": 512, "num_layers": 5}, "exp_name": "encoder_hs128_dff512_nl5"},
         # {"model_params": {"hidden_size": 128, "dim_feedforward_size": 512, "num_layers": 3}, "exp_name": "encoder_hs128_dff512_nl3"},
@@ -100,7 +109,9 @@ def main():
     experiments_completed = 0
 
     # Print experiment plan
-    print(f"Running {total_experiments} experiments with maximum {max_parallel} in parallel")
+    print(
+        f"Running {total_experiments} experiments with maximum {max_parallel} in parallel"
+    )
     if gpu_ids:
         print(f"Using GPUs: {gpu_ids}")
     else:
@@ -119,7 +130,11 @@ def main():
 
             # Apply parameter updates
             for param, value in variation.items():
-                if isinstance(value, dict) and param in config and isinstance(config[param], dict):
+                if (
+                    isinstance(value, dict)
+                    and param in config
+                    and isinstance(config[param], dict)
+                ):
                     # For nested parameters like model_params
                     config[param].update(value)
                 else:
@@ -133,7 +148,9 @@ def main():
             if gpu_ids:
                 gpu_id = gpu_ids[len(running_processes) % len(gpu_ids)]
 
-            print(f"Starting experiment [{exp_idx + 1}/{total_experiments}]: {exp_name}")
+            print(
+                f"Starting experiment [{exp_idx + 1}/{total_experiments}]: {exp_name}"
+            )
             process = run_training(str(temp_config_path), gpu_id, args.disable_wandb)
             running_processes[exp_name] = process
             exp_idx += 1
@@ -143,7 +160,11 @@ def main():
         for exp_name, process in running_processes.items():
             if process.poll() is not None:
                 exit_code = process.returncode
-                status = "completed successfully" if exit_code == 0 else f"failed with code {exit_code}"
+                status = (
+                    "completed successfully"
+                    if exit_code == 0
+                    else f"failed with code {exit_code}"
+                )
                 print(f"Experiment {exp_name} {status}")
                 completed_experiments.append(exp_name)
                 experiments_completed += 1

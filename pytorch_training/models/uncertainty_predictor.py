@@ -38,10 +38,14 @@ class UncertaintyPredictor(nn.Module):
 
         x = x / x.norm(dim=1, keepdim=True)
 
-        hiddens = torch.stack(hiddens_by_layer[1:], dim=0)  # (num_layers, B, seq, hidden)
+        hiddens = torch.stack(
+            hiddens_by_layer[1:], dim=0
+        )  # (num_layers, B, seq, hidden)
         pooled = hiddens.sum(2)  # e.g., use [CLS] token, shape (num_layers, B, hidden)
 
-        weights = torch.nn.functional.softmax(self.layer_weights, dim=0)  # (num_layers,)
+        weights = torch.nn.functional.softmax(
+            self.layer_weights, dim=0
+        )  # (num_layers,)
         feats_summary = torch.sum(weights[:, None, None] * pooled, dim=0)  # (B, hidden)
 
         feats = self.feature_extractor_from_hidden(feats_summary)

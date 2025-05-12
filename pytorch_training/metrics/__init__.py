@@ -27,17 +27,51 @@ def extract_angles(vector):
     return theta_deg, phi_deg
 
 
-def binary_clf_metrics(y_pred_prob, y_true, threshold=THRESHOLD):
-    y_pred = np.array(y_pred_prob > threshold, dtype=np.int32)
+def binary_clf_metrics(y_pred_prob, y_true, threshold=THRESHOLD, min_recall=None):
+    y_pred_prob = np.array(y_pred_prob, dtype=np.float32)
     y_true = np.array(y_true, dtype=np.int32)
+
+    # If min_recall is specified, find the threshold that gives at least that recall
+    if min_recall is not None:
+        sorted_indices = np.argsort(y_pred_prob)
+        sorted_indices = np.flip(sorted_indices)
+
+        sorted_y_true = y_true[sorted_indices]
+        sorted_y_pred_prob = y_pred_prob[sorted_indices]
+
+        true_positives = np.cumsum(sorted_y_true)
+        total_positives = np.sum(y_true)
+
+        if total_positives > 0:
+            recalls = true_positives / total_positives
+
+            valid_indices = np.where(recalls >= min_recall)[0]
+            if len(valid_indices) > 0:
+                min_valid_index = valid_indices[0]
+                threshold = sorted_y_pred_prob[min_valid_index]
+                logging.info(
+                    f"Using threshold {threshold} to achieve minimum recall of {min_recall}"
+                )
+            else:
+                # If no threshold achieves min_recall, use the lowest threshold
+                threshold = np.min(y_pred_prob) - 1e-6
+                logging.warning(
+                    f"Could not find threshold for min_recall={min_recall}, using {threshold}"
+                )
+
+    y_pred = np.array(y_pred_prob > threshold, dtype=np.int32)
+
     try:
         metrics = {
             "auc": roc_auc_score(y_true, y_pred_prob),
             "precision": precision_score(y_true, y_pred, zero_division=0),
             "recall": recall_score(y_true, y_pred, zero_division=0),
+            "threshold": threshold,
         }
+        return metrics
     except ValueError:
         traceback.print_exc()
+        raise
 
 
 def regression_metrics(y_pred, y_true):
@@ -86,7 +120,9 @@ def angle_reconstruction_metrics(y_pred, y_true, plot=False):
         fig.savefig("angle_reconstruction_metrics_init_Q-constant_another_data.png")
 
     if not np.isnan(y_pred_theta_angle).any() and not np.isnan(y_pred_phi_angle).any():
-        metrics["theta_mae"] = mean_absolute_error(y_true_theta_angle, y_pred_theta_angle)
+        metrics["theta_mae"] = mean_absolute_error(
+            y_true_theta_angle, y_pred_theta_angle
+        )
         metrics["phi_mae"] = mean_absolute_error(y_true_phi_angle, y_pred_phi_angle)
         theta_resolution = np.abs(y_true_theta_angle - y_pred_theta_angle)
         phi_resolution = np.abs(y_true_phi_angle - y_pred_phi_angle)
@@ -130,8 +166,12 @@ def direction_metrics(y_pred, y_true):
     point_pred_init = point_pred * STD[2:] + MEAN[2:]
     point_true_init = point_true * STD[2:] + MEAN[2:]
     metrics = {k: v for k, v in angle_metrics.items()}
-    metrics["direction_norm"] = caculate_distance(point_pred, point_true, angle_pred, angle_true)
-    metrics["direction_meters"] = caculate_distance(point_pred_init, point_true_init, angle_pred, angle_true)
+    metrics["direction_norm"] = caculate_distance(
+        point_pred, point_true, angle_pred, angle_true
+    )
+    metrics["direction_meters"] = caculate_distance(
+        point_pred_init, point_true_init, angle_pred, angle_true
+    )
     return metrics
 
 
@@ -140,7 +180,9 @@ def angle_uncertainty_metrics(y_pred_and_log_sigma, y_true):
     y_pred, log_sigma = y_pred_and_log_sigma[:, :3], y_pred_and_log_sigma[:, 3:]
     y_pred = np.array(y_pred, dtype=np.float32)
     y_true = np.array(y_true, dtype=np.float32)
-    predicted_sigma = np.exp(np.array(log_sigma, dtype=np.float32) / 2)  # Convert to standard deviation
+    predicted_sigma = np.exp(
+        np.array(log_sigma, dtype=np.float32) / 2
+    )  # Convert to standard deviation
 
     # Extract angles from true and predicted vectors
     angles_true = np.array([extract_angles(vec) for vec in y_true], dtype=np.float32)
@@ -166,12 +208,18 @@ def angle_uncertainty_metrics(y_pred_and_log_sigma, y_true):
         y_true_normalized = np.zeros_like(y_true)
         y_pred_normalized = np.zeros_like(y_pred)
 
-        y_true_normalized[valid_indices] = y_true[valid_indices] / y_true_norm[valid_indices]
-        y_pred_normalized[valid_indices] = y_pred[valid_indices] / y_pred_norm[valid_indices]
+        y_true_normalized[valid_indices] = (
+            y_true[valid_indices] / y_true_norm[valid_indices]
+        )
+        y_pred_normalized[valid_indices] = (
+            y_pred[valid_indices] / y_pred_norm[valid_indices]
+        )
 
         dot_product = np.sum(y_true_normalized * y_pred_normalized, axis=1)
         dot_product = np.clip(dot_product, -1.0, 1.0)
-        dir_resolution[valid_indices] = np.abs(np.rad2deg(np.arccos(dot_product[valid_indices])))
+        dir_resolution[valid_indices] = np.abs(
+            np.rad2deg(np.arccos(dot_product[valid_indices]))
+        )
 
     # Calculate angular differences
     theta_resolution = np.abs(y_true_theta_angle - y_pred_theta_angle)
@@ -218,7 +266,12 @@ def angle_uncertainty_metrics(y_pred_and_log_sigma, y_true):
         # Error propagation for arctan2: σ_φ² = (σ_y/(x²+y²))² + (σ_x·y/(x²+y²))²
         xy_norm_squared = x**2 + y**2
         if xy_norm_squared > 1e-6:  # Avoid division by near-zero
-            sigma_phi[i] = np.rad2deg(np.sqrt((sigma_y / xy_norm_squared) ** 2 + (sigma_x * y / xy_norm_squared) ** 2))
+            sigma_phi[i] = np.rad2deg(
+                np.sqrt(
+                    (sigma_y / xy_norm_squared) ** 2
+                    + (sigma_x * y / xy_norm_squared) ** 2
+                )
+            )
         else:
             sigma_phi[i] = 180.0  # Large uncertainty when on z-axis
 
@@ -248,36 +301,73 @@ def angle_uncertainty_metrics(y_pred_and_log_sigma, y_true):
     return {k: float(v) for k, v in metrics.items()}
 
 
-def regression_and_clf_metrics(y_pred, y_true):
+def regression_and_clf_metrics(y_pred, y_true, min_recall=None):
     metrics = {}
-    metrics.update(binary_clf_metrics(y_pred[:, :, 2].reshape(-1), y_true[:, :, 2].reshape(-1)))
-    metrics.update(regression_metrics(y_pred[:, 0, :2].reshape(-1), y_true[:, 0, :2].reshape(-1)))
+    metrics.update(
+        binary_clf_metrics(
+            y_pred[:, :, 2].reshape(-1),
+            y_true[:, :, 2].reshape(-1),
+            min_recall=min_recall,
+        )
+    )
+    metrics.update(
+        regression_metrics(y_pred[:, 0, :2].reshape(-1), y_true[:, 0, :2].reshape(-1))
+    )
     return metrics
 
 
-def angle_and_track_cascade_metrics(y_pred, y_true, angles_pred, angles_true):
+def angle_and_track_cascade_metrics(
+    y_pred, y_true, angles_pred, angles_true, min_recall=None
+):
     metrics = {}
-    metrics.update(binary_clf_metrics(y_pred.reshape(-1), y_true.reshape(-1)))
+    metrics.update(
+        binary_clf_metrics(
+            y_pred.reshape(-1), y_true.reshape(-1), min_recall=min_recall
+        )
+    )
     metrics.update(angle_reconstruction_metrics(angles_pred, angles_true))
     return metrics
 
 
-def track_cascade_clf_metrics(y_pred, y_true, threshold=THRESHOLD):
+def track_cascade_clf_metrics(y_pred, y_true, threshold=THRESHOLD, min_recall=None):
     metrics = {}
     y_true = np.array(y_true, dtype=bool)
-    y_pred_class = np.array(y_pred > threshold, dtype=bool)
-    metrics = {k + "[cascade=1]": v for k, v in binary_clf_metrics(y_pred, y_true, threshold).items()}
-    metrics.update({k + "[track=1]": v for k, v in binary_clf_metrics(1 - y_pred, ~y_true, 1 - threshold).items()})
-    metrics.update({"n_cascade/n_track_pred": y_pred_class.sum() / (~y_pred_class).sum()})
+
+    # Use min_recall for the cascade metrics
+    cascade_metrics = binary_clf_metrics(
+        y_pred, y_true, threshold, min_recall=min_recall
+    )
+    y_pred_class = np.array(
+        y_pred > cascade_metrics.get("threshold", threshold), dtype=bool
+    )
+
+    metrics = {k + "[cascade=1]": v for k, v in cascade_metrics.items()}
+
+    # For track metrics (inverse of cascade), we don't use min_recall
+    metrics.update(
+        {
+            k + "[track=1]": v
+            for k, v in binary_clf_metrics(1 - y_pred, ~y_true, 1 - threshold).items()
+        }
+    )
+    metrics.update(
+        {"n_cascade/n_track_pred": y_pred_class.sum() / (~y_pred_class).sum()}
+    )
     metrics.update({"n_cascade/n_track_true": y_true.sum() / (~y_true).sum()})
 
     return {k: float(v) for k, v in metrics.items()}
 
 
-def tres_and_track_cascade_metrics(y_pred, y_true):
+def tres_and_track_cascade_metrics(y_pred, y_true, min_recall=None):
     metrics = {}
-    metrics.update(track_cascade_clf_metrics(y_pred[:, 0].reshape(-1), y_true[:, 0].reshape(-1)))
-    metrics.update(regression_metrics(y_pred[:, 1].reshape(-1), y_true[:, 1].reshape(-1)))
+    metrics.update(
+        track_cascade_clf_metrics(
+            y_pred[:, 0].reshape(-1), y_true[:, 0].reshape(-1), min_recall=min_recall
+        )
+    )
+    metrics.update(
+        regression_metrics(y_pred[:, 1].reshape(-1), y_true[:, 1].reshape(-1))
+    )
     # metrics.update(
     #     angle_reconstruction_metrics(y_pred[:, :2].reshape(-1), y_true[:, :2].reshape(-1))
     # )

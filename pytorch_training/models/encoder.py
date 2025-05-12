@@ -59,7 +59,11 @@ class Encoder(nn.Module):
             else None
         )
         self.return_only_cls_token = return_only_cls_token
-        self.second_head = nn.Linear(hidden_size, second_head_out_size) if second_head_out_size is not None else None
+        self.second_head = (
+            nn.Linear(hidden_size, second_head_out_size)
+            if second_head_out_size is not None
+            else None
+        )
         self.return_hidden = return_hidden
         self.return_hiddens_by_layers = return_hiddens_by_layers
 
@@ -104,7 +108,6 @@ class Encoder(nn.Module):
 class EncoderDomainAdaptation(nn.Module):
     def __init__(
         self,
-        encoder: Encoder,
         num_domains=2,
         domain_classifier_hidden_size=128,
         domain_classifier_layers=2,
@@ -114,6 +117,7 @@ class EncoderDomainAdaptation(nn.Module):
         super().__init__()
 
         self.encoder = Encoder(**kwargs)
+        self.encoder.return_hidden = True
         self.angle_head = nn.Linear(self.encoder.hidden_size, self.encoder.out_size)
         self.gradient_reversal = GradientReversal(alpha=gradient_reversal_alpha)
 

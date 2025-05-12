@@ -22,9 +22,13 @@ def create_datasets(
 ):
     datasets = {}
     for split_type in SPLIT_TYPES:
-        datasets[split_type] = DatasetType(path_to_data, split_type, batch_size=batch_size, is_graph=is_graph, **kwargs)
+        datasets[split_type] = DatasetType(
+            path_to_data, split_type, batch_size=batch_size, is_graph=is_graph, **kwargs
+        )
     if use_val_subset:
-        datasets["val_subset"] = Subset(datasets["val"], list(range(0, len(datasets["val"]), val_subset_cut)))
+        datasets["val_subset"] = Subset(
+            datasets["val"], list(range(0, len(datasets["val"]), val_subset_cut))
+        )
     return datasets
 
 
@@ -109,7 +113,9 @@ class MultiDatasetSampler(IterableDataset):
                 self._prefetch_from_dataset(i)
 
         while True:
-            dataset_idx = self.random_gen.choices(range(len(self.datasets)), weights=self.probabilities, k=1)[0]
+            dataset_idx = self.random_gen.choices(
+                range(len(self.datasets)), weights=self.probabilities, k=1
+            )[0]
 
             try:
                 yield self._get_sample_from_dataset(dataset_idx)
@@ -207,7 +213,9 @@ def create_multi_dataset_dataloader(
                 val_datasets.append(datasets["val"])
             test_datasets.append(datasets["test"])
 
-    train_sampler = MultiDatasetSampler(train_datasets, probabilities, prefetch_size=prefetch_factor)
+    train_sampler = MultiDatasetSampler(
+        train_datasets, probabilities, prefetch_size=prefetch_factor
+    )
     using_graph_data = any(config.get("is_graph", False) for config in dataset_configs)
 
     dataloader_common_args = {"num_workers": num_workers, "pin_memory": pin_memory}
@@ -220,27 +228,37 @@ def create_multi_dataset_dataloader(
 
     if not using_graph_data:
         train_loader = create_infnite_loader_generator(
-            DataLoader(train_sampler, batch_size=None, shuffle=False, **dataloader_common_args),
-            buffer_size=prefetch_factor,
-        )
-
-        val_loaders = [DataLoader(dataset, batch_size=None, **dataloader_common_args) for dataset in val_datasets]
-
-        test_loaders = [
-            DataLoader(dataset, batch_size=batch_size, **dataloader_common_args) for dataset in test_datasets
-        ]
-    else:
-        train_loader = create_infnite_loader_generator(
-            GraphDataLoader(train_sampler, batch_size=batch_size, **dataloader_common_args),
+            DataLoader(
+                train_sampler, batch_size=None, shuffle=False, **dataloader_common_args
+            ),
             buffer_size=prefetch_factor,
         )
 
         val_loaders = [
-            GraphDataLoader(dataset, batch_size=batch_size, **dataloader_common_args) for dataset in val_datasets
+            DataLoader(dataset, batch_size=None, **dataloader_common_args)
+            for dataset in val_datasets
         ]
 
         test_loaders = [
-            GraphDataLoader(dataset, batch_size=batch_size, **dataloader_common_args) for dataset in test_datasets
+            DataLoader(dataset, batch_size=batch_size, **dataloader_common_args)
+            for dataset in test_datasets
+        ]
+    else:
+        train_loader = create_infnite_loader_generator(
+            GraphDataLoader(
+                train_sampler, batch_size=batch_size, **dataloader_common_args
+            ),
+            buffer_size=prefetch_factor,
+        )
+
+        val_loaders = [
+            GraphDataLoader(dataset, batch_size=batch_size, **dataloader_common_args)
+            for dataset in val_datasets
+        ]
+
+        test_loaders = [
+            GraphDataLoader(dataset, batch_size=batch_size, **dataloader_common_args)
+            for dataset in test_datasets
         ]
 
     res = {"train": train_loader, "val": val_loaders, "test": test_loaders}
@@ -301,7 +319,9 @@ def create_dataloaders(
 
     if cache_datasets:
         train_dataset = CachingDatasetWrapper(datasets["train"])
-        val_dataset = CachingDatasetWrapper(datasets["val_subset" if use_val_subset else "val"])
+        val_dataset = CachingDatasetWrapper(
+            datasets["val_subset" if use_val_subset else "val"]
+        )
         test_dataset = CachingDatasetWrapper(datasets["test"])
     else:
         train_dataset = datasets["train"]
@@ -318,7 +338,9 @@ def create_dataloaders(
 
     if not is_graph:
         train_loader = create_infnite_loader_generator(
-            DataLoader(train_dataset, batch_size=None, shuffle=False, **dataloader_common_args),
+            DataLoader(
+                train_dataset, batch_size=None, shuffle=False, **dataloader_common_args
+            ),
             buffer_size=prefetch_factor,
         )
 
@@ -328,14 +350,20 @@ def create_dataloaders(
             **dataloader_common_args,
         )
 
-        test_loader = DataLoader(test_dataset, batch_size=batch_size, **dataloader_common_args)
+        test_loader = DataLoader(
+            test_dataset, batch_size=batch_size, **dataloader_common_args
+        )
     else:
         train_loader = create_infnite_loader_generator(
-            GraphDataLoader(train_dataset, batch_size=batch_size, **dataloader_common_args),
+            GraphDataLoader(
+                train_dataset, batch_size=batch_size, **dataloader_common_args
+            ),
             buffer_size=prefetch_factor,
         )
 
-        test_loader = GraphDataLoader(test_dataset, batch_size, **dataloader_common_args)
+        test_loader = GraphDataLoader(
+            test_dataset, batch_size, **dataloader_common_args
+        )
 
         val_loader = GraphDataLoader(val_dataset, batch_size, **dataloader_common_args)
 

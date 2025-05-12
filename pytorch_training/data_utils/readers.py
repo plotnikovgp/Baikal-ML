@@ -34,9 +34,13 @@ class BaikalDataset(Dataset):
         # NB: only for train dataset
         print(data_file, self.hfile.keys())
         try:
-            self.events_amount = self.hfile[self.split_type + "/ev_starts/data"].shape[0] - 1
+            self.events_amount = (
+                self.hfile[self.split_type + "/ev_starts/data"].shape[0] - 1
+            )
         except KeyError:
-            self.events_amount = self.hfile[self.split_type + "/data"].shape[0] - 1  # old angles dataset
+            self.events_amount = (
+                self.hfile[self.split_type + "/data"].shape[0] - 1
+            )  # old angles dataset
 
         if events_amount is not None and split_type == "train":
             self.events_amount = min(self.events_amount, events_amount)
@@ -76,15 +80,25 @@ class BaikalDataset(Dataset):
                 y = torch.tensor(raw_data_y[start : start + length])
                 batch_y.append(y)
 
-        data_x = torch.nn.utils.rnn.pad_sequence(batch_x, batch_first=True, padding_value=0)
-        data_y = torch.nn.utils.rnn.pad_sequence(batch_y, batch_first=True, padding_value=0) if batch_y else None
+        data_x = torch.nn.utils.rnn.pad_sequence(
+            batch_x, batch_first=True, padding_value=0
+        )
+        data_y = (
+            torch.nn.utils.rnn.pad_sequence(batch_y, batch_first=True, padding_value=0)
+            if batch_y
+            else None
+        )
         mask = torch.zeros((len(seq_lengths), data_x.shape[1]), dtype=torch.bool)
         for i, length in enumerate(seq_lengths):
             mask[i, :length] = 1
         return data_x, data_y, mask
 
     def __len__(self):
-        return self.events_amount // self.batch_size if not self.is_graph else self.events_amount
+        return (
+            self.events_amount // self.batch_size
+            if not self.is_graph
+            else self.events_amount
+        )
 
     def __getitem__(self, idx):
         batch_start_idx = idx * self.batch_size
@@ -92,7 +106,9 @@ class BaikalDataset(Dataset):
             (idx + 1) * self.batch_size,
             len(self.hfile[self.split_type + "/ev_starts/data"]) - 1,
         )
-        event_starts = self.hfile[self.split_type + "/ev_starts/data"][batch_start_idx : batch_end_idx + 1]
+        event_starts = self.hfile[self.split_type + "/ev_starts/data"][
+            batch_start_idx : batch_end_idx + 1
+        ]
 
         global_start = event_starts[0]
         global_end = event_starts[-1]
@@ -110,7 +126,9 @@ class BaikalDatasetTres(BaikalDataset):
             (idx + 1) * self.batch_size,
             len(self.hfile[self.split_type + "/ev_starts/data"]) - 1,
         )
-        event_starts = self.hfile[self.split_type + "/ev_starts/data"][batch_start_idx : batch_end_idx + 1]
+        event_starts = self.hfile[self.split_type + "/ev_starts/data"][
+            batch_start_idx : batch_end_idx + 1
+        ]
 
         global_start = event_starts[0]
         global_end = event_starts[-1]
@@ -120,7 +138,7 @@ class BaikalDatasetTres(BaikalDataset):
         data_x, _, mask = self._collate(event_starts, raw_data)
 
         return self.preprocessor(data_x, tres, mask)
-        
+
 
 class BaikalDatasetTresSingle(BaikalDataset):
     def __getitem__(self, idx):
@@ -143,12 +161,18 @@ class BaikalDatasetTrackCascade(BaikalDataset):
             (idx + 1) * self.batch_size,
             len(self.hfile[self.split_type + "/ev_starts/data"]) - 1,
         )
-        event_starts = self.hfile[self.split_type + "/ev_starts/data"][batch_start_idx : batch_end_idx + 1]
+        event_starts = self.hfile[self.split_type + "/ev_starts/data"][
+            batch_start_idx : batch_end_idx + 1
+        ]
 
         global_start = event_starts[0]
         global_end = event_starts[-1]
-        raw_data = torch.tensor(self.hfile[self.split_type + "/data/data"][global_start:global_end])
-        tres = torch.tensor(self.hfile[self.split_type + "/t_res/data"][global_start:global_end])
+        raw_data = torch.tensor(
+            self.hfile[self.split_type + "/data/data"][global_start:global_end]
+        )
+        tres = torch.tensor(
+            self.hfile[self.split_type + "/t_res/data"][global_start:global_end]
+        )
 
         labels = self.hfile[self.split_type + "/labels/data"][global_start:global_end]
 
@@ -170,15 +194,29 @@ class BaikalDatasetAngles(BaikalDataset):
             (idx + 1) * self.batch_size,
             len(self.hfile[self.split_type + "/ev_starts/data"]) - 1,
         )
-        event_starts = self.hfile[self.split_type + "/ev_starts/data"][batch_start_idx : batch_end_idx + 1]
-        prime_prty = torch.tensor(self.hfile[self.split_type + "/prime_prty/data"][batch_start_idx:batch_end_idx])
+        event_starts = self.hfile[self.split_type + "/ev_starts/data"][
+            batch_start_idx : batch_end_idx + 1
+        ]
+        prime_prty = torch.tensor(
+            self.hfile[self.split_type + "/prime_prty/data"][
+                batch_start_idx:batch_end_idx
+            ]
+        )
         global_start = event_starts[0]
         global_end = event_starts[-1]
-        raw_data = torch.tensor(self.hfile[self.split_type + "/data/data"][global_start:global_end])
-        hits_labels = torch.tensor(self.hfile[self.split_type + "/labels/data"][global_start:global_end])
+        raw_data = torch.tensor(
+            self.hfile[self.split_type + "/data/data"][global_start:global_end]
+        )
+        hits_labels = torch.tensor(
+            self.hfile[self.split_type + "/labels/data"][global_start:global_end]
+        )
         # is_track_hit = hits_labels < 0
-        tres = torch.tensor(self.hfile[self.split_type + "/t_res/data"][global_start:global_end])
-        raw_data = torch.cat([raw_data, hits_labels.reshape(-1, 1), tres.reshape(-1, 1)], dim=-1)
+        tres = torch.tensor(
+            self.hfile[self.split_type + "/t_res/data"][global_start:global_end]
+        )
+        raw_data = torch.cat(
+            [raw_data, hits_labels.reshape(-1, 1), tres.reshape(-1, 1)], dim=-1
+        )
         data_x, _, mask = self._collate(event_starts, raw_data, None, pad_y=False)
         # data_y: [batch_size, 5]
         # mask = mask & (data_x[:, :, -1] < 0)
@@ -190,9 +228,13 @@ class BaikalDatasetAngles(BaikalDataset):
 class BaikalDatasetAnglesOld(BaikalDataset):
     def __getitem__(self, idx):
         batch_start_idx = idx * self.batch_size
-        batch_end_idx = min((idx + 1) * self.batch_size, len(self.hfile[self.split_type + "/data"]) - 1)
+        batch_end_idx = min(
+            (idx + 1) * self.batch_size, len(self.hfile[self.split_type + "/data"]) - 1
+        )
 
-        angles = torch.tensor(self.hfile[self.split_type + "/ev_chars"][batch_start_idx:batch_end_idx])
+        angles = torch.tensor(
+            self.hfile[self.split_type + "/ev_chars"][batch_start_idx:batch_end_idx]
+        )
 
         batch_x = []
         seq_lengths = []
@@ -201,7 +243,9 @@ class BaikalDatasetAnglesOld(BaikalDataset):
             seq_lengths.append(mask_len)
             data = self.hfile[self.split_type + "/data"][i][:mask_len]
             batch_x.append(torch.tensor(data, dtype=torch.float32))
-        data_x = torch.nn.utils.rnn.pad_sequence(batch_x, batch_first=True, padding_value=0)
+        data_x = torch.nn.utils.rnn.pad_sequence(
+            batch_x, batch_first=True, padding_value=0
+        )
 
         mask = torch.zeros((len(seq_lengths), data_x.shape[1]), dtype=torch.bool)
         for i, length in enumerate(seq_lengths):
@@ -236,3 +280,44 @@ class BaikalDatasetAnglesOldSingle(BaikalDataset):
         data_x = torch.tensor(self.hfile[self.split_type + "/data"][idx][:mask_len])
 
         return self.preprocessor(data_x, angles)
+
+
+class BaikalDatasetEnergy(BaikalDataset):
+    def __getitem__(self, idx):
+        batch_start_idx = idx * self.batch_size
+        batch_end_idx = min(
+            (idx + 1) * self.batch_size,
+            len(self.hfile[self.split_type + "/ev_starts/data"]) - 1,
+        )
+        event_starts = self.hfile[self.split_type + "/ev_starts/data"][
+            batch_start_idx : batch_end_idx + 1
+        ]
+        prime_prty = torch.tensor(
+            self.hfile[self.split_type + "/prime_prty/data"][
+                batch_start_idx:batch_end_idx
+            ]
+        )
+        global_start = event_starts[0]
+        global_end = event_starts[-1]
+        raw_data = torch.tensor(
+            self.hfile[self.split_type + "/data/data"][global_start:global_end]
+        )
+        hits_labels = torch.tensor(
+            self.hfile[self.split_type + "/labels/data"][global_start:global_end]
+        )
+
+        energy = prime_prty[:, 2]
+        # is_track_hit = hits_labels < 0
+        tres = torch.tensor(
+            self.hfile[self.split_type + "/t_res/data"][global_start:global_end]
+        )
+        raw_data = torch.cat(
+            [raw_data, hits_labels.reshape(-1, 1), tres.reshape(-1, 1)], dim=-1
+        )
+        data_x, _, mask = self._collate(event_starts, raw_data, None, pad_y=False)
+        # data_y: [batch_size, 5]
+        # mask = mask & (data_x[:, :, -1] < 0)
+        data_x, labels, tres = data_x[:, :, :-2], data_x[:, :, -2], data_x[:, :, -1]
+        res = self.preprocessor(data_x, energy, mask, labels=labels, tres=tres)
+
+        return res

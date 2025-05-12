@@ -74,17 +74,23 @@ class GraphnetDynedge(nn.Module):
             layers = []
             layer_sizes = [nb_latent_features] + list(sizes)
 
-            for ix, (nb_in, nb_out) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
+            for ix, (nb_in, nb_out) in enumerate(
+                zip(layer_sizes[:-1], layer_sizes[1:])
+            ):
                 if ix == 0:
                     nb_in *= 2
                 layers.append(nn.Linear(nb_in, nb_out))
                 layers.append(self._activation)
 
-            сonv_layer = DynEdgeConv(nn.Sequential(*layers), aggr="add", nb_neighbors=self._nb_neigbours)
+            сonv_layer = DynEdgeConv(
+                nn.Sequential(*layers), aggr="add", nb_neighbors=self._nb_neigbours
+            )
             self._conv_layers.append(сonv_layer)
             nb_latent_features = nb_out
 
-        nb_latent_features = sum(sizes[-1] for sizes in self._dynedge_layer_sizes) + nb_input_features
+        nb_latent_features = (
+            sum(sizes[-1] for sizes in self._dynedge_layer_sizes) + nb_input_features
+        )
         post_processing_layers = []
         layer_sizes = [nb_latent_features] + list(self._post_processing_layer_sizes)
 
@@ -130,10 +136,16 @@ class Encoder(nn.Module):
         super().__init__()
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.first_layer = nn.Linear(in_features, hidden_size)
-        enc_layer = nn.TransformerEncoderLayer(hidden_size, n_heads, dim_feedforward_size, dropout_p, batch_first=True)
+        enc_layer = nn.TransformerEncoderLayer(
+            hidden_size, n_heads, dim_feedforward_size, dropout_p, batch_first=True
+        )
         self.enc = nn.TransformerEncoder(enc_layer, num_layers)
         self.head = nn.Linear(hidden_size, out_size)
-        self.second_head = nn.Linear(hidden_size, second_head_out_size) if second_head_out_size is not None else None
+        self.second_head = (
+            nn.Linear(hidden_size, second_head_out_size)
+            if second_head_out_size is not None
+            else None
+        )
         self.aggregator = aggregator
 
     def forward(self, x, mask):
