@@ -66,7 +66,7 @@ def binary_clf_metrics(y_pred_prob, y_true, threshold=THRESHOLD, min_recall=None
             "auc": roc_auc_score(y_true, y_pred_prob),
             "precision": precision_score(y_true, y_pred, zero_division=0),
             "recall": recall_score(y_true, y_pred, zero_division=0),
-            "threshold": threshold,
+            "threshold": float(threshold),
         }
         return metrics
     except ValueError:

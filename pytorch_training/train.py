@@ -78,6 +78,9 @@ def create_preprocessor(train_type, is_graph, config):
     elif train_type == "energy_reconstruction":
         data_prefilter = DataPrefilter(**(config.get("data_prefilter_params", {})))
         return EnergyPreprocessor(data_prefilter)
+    elif train_type == "energy_reconstruction_domain_adaptation":
+        data_prefilter = DataPrefilter(**(config.get("data_prefilter_params", {})))
+        return EnergyPreprocessor(data_prefilter)
     elif train_type in [
         "angle_reconstruction",
         "angle_reconstruction_old",
@@ -283,22 +286,22 @@ def main():
         label_dataset_name = train_params.get("label_dataset_name", None)
 
         def criterion(y_pred, y_true, domain_pred=None, domain_true=None):
-            if label_dataset_name is not None:
-                mask = domain_true == dataset_names.index(label_dataset_name)
-                if mask.sum() > 0:
-                    angle_loss = torch.abs(y_pred[mask] - y_true[mask]).mean()
-                else:
-                    angle_loss = torch.tensor(0.0, device=y_pred.device)
-            else:
-                angle_loss = torch.abs(y_pred - y_true).mean()
+            if domain_true is None:
+                return {"loss": torch.abs(y_pred - y_true).mean()}
 
-            if domain_pred is not None and domain_true is not None:
-                domain_loss = torch.nn.functional.cross_entropy(
-                    domain_pred, domain_true
-                )
-                return angle_loss + domain_adaptation_loss_k * domain_loss
+            mask = domain_true == dataset_names.index(label_dataset_name)
+            if mask.sum() > 0:
+                angle_loss = torch.abs(y_pred[mask] - y_true[mask]).mean()
             else:
-                return angle_loss
+                angle_loss = torch.tensor(0.0, device=y_pred.device)
+
+            domain_loss = torch.nn.functional.cross_entropy(domain_pred, domain_true)
+            total_loss = angle_loss + domain_adaptation_loss_k * domain_loss
+            return {
+                "loss": total_loss,  # For backward pass
+                "angle_loss": angle_loss.detach(),
+                "domain_loss": domain_loss.detach(),
+            }
 
     elif train_type == "track_cascade_domain_adaptation":
         if not is_graph:
@@ -321,27 +324,76 @@ def main():
             domain_pred: domain classifier output (logits)
             domain_true: domain labels (ints)
             """
-            if label_dataset_name is not None:
-                mask = domain_true == dataset_names.index(label_dataset_name)
-                if mask.sum() > 0:
-                    main_loss = ce_(y_pred[mask], y_true[mask].long())
-                else:
-                    main_loss = torch.tensor(0.0, device=y_pred.device)
-            else:
-                main_loss = ce_(y_pred, y_true.long())
+            if domain_true is None:
+                return {"loss": ce_(y_pred, y_true.long())}
 
-            if domain_pred is not None and domain_true is not None:
-                domain_loss = torch.nn.functional.cross_entropy(
-                    domain_pred, domain_true
-                )
-                return main_loss + domain_adaptation_loss_k * domain_loss
+            mask = domain_true == dataset_names.index(label_dataset_name)
+            if mask.sum() > 0:
+                track_cascade_loss = ce_(y_pred[mask], y_true[mask].long())
             else:
-                return main_loss
+                track_cascade_loss = torch.tensor(0.0, device=y_pred.device)
+
+            domain_loss = torch.nn.functional.cross_entropy(domain_pred, domain_true)
+            total_loss = track_cascade_loss + domain_adaptation_loss_k * domain_loss
+            return {
+                "loss": total_loss,  # For backward pass
+                "track_cascade_loss": track_cascade_loss.detach(),
+                "domain_loss": domain_loss.detach(),
+            }
 
     elif train_type == "energy_reconstruction":
         DatasetType = BaikalDatasetEnergy
         metrics_calc_fun = regression_metrics
         criterion = torch.nn.MSELoss()
+    elif train_type == "energy_reconstruction_domain_adaptation":
+        DatasetType = BaikalDatasetEnergy
+        metrics_calc_fun = regression_metrics
+
+        # For domain adaptation
+        domain_adaptation_loss_k = train_params.get("domain_adaptation_loss_k", 0.1)
+        label_dataset_name = train_params.get("label_dataset_name", None)
+
+        # Move the criterion definition to after dataset_names is populated
+        # We'll initialize it to None here and define it properly later
+        def log_cosh_loss(y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
+            def _log_cosh(x: torch.Tensor) -> torch.Tensor:
+                return x + torch.nn.functional.softplus(-2.0 * x) - math.log(2.0)
+
+            return torch.mean(_log_cosh(y_pred - y_true))
+
+        if train_params.get("use_cosh_loss", False):
+            energy_loss_ = log_cosh_loss
+        else:
+            energy_loss_ = torch.nn.L1Loss()  # torch.nn.MSELoss()
+
+        def criterion(y_pred, y_true, domain_pred=None, domain_true=None):
+            """
+            y_pred: main output (energy prediction)
+            y_true: main labels (energy values)
+            domain_pred: domain classifier output (logits)
+            domain_true: domain labels (ints)
+            """
+            assert label_dataset_name is not None
+            y_pred = y_pred.squeeze()
+            y_true = y_true.squeeze()
+
+            if domain_true is None:
+                return {"loss": energy_loss_(y_pred, y_true)}
+
+            mask = domain_true == dataset_names.index(label_dataset_name)
+            if mask.sum() > 0:
+                energy_loss = energy_loss_(y_pred[mask], y_true[mask])
+            else:
+                energy_loss = torch.tensor(0.0, device=y_pred.device)
+
+            domain_loss = torch.nn.functional.cross_entropy(domain_pred, domain_true)
+            total_loss = energy_loss + domain_adaptation_loss_k * domain_loss
+            return {
+                "loss": total_loss,  # For backward pass
+                "energy_loss": energy_loss.detach(),
+                "domain_loss": domain_loss.detach(),
+            }
+
     else:
         raise ValueError("unknown train_type")
 
@@ -435,8 +487,8 @@ def main():
             train_type == "angle_reconstruction_sigma_tune"
         ),
         is_direction=(train_type == "direction"),
-        is_domain_adaptation=(train_type == "angle_reconstruction_domain_adaptation"),
-        is_energy_reconstruction=(train_type == "energy_reconstruction"),
+        is_domain_adaptation="domain_adaptation" in train_type,
+        is_energy_reconstruction="energy_reconstruction" in train_type,
         grad_clip_value=train_params.get("grad_clip_value", None),
         accumulate_grad_steps=train_params.get("accumulate_grad_steps", 1),
         min_recall=train_params.get("min_recall", None),
@@ -457,8 +509,8 @@ def main():
         ),
         is_angle_and_track_cascade=(train_type == "angle_and_track_cascade"),
         is_direction=(train_type == "direction"),
-        is_domain_adaptation=(train_type == "angle_reconstruction_domain_adaptation"),
-        is_energy_reconstruction=(train_type == "energy_reconstruction"),
+        is_domain_adaptation="domain_adaptation" in train_type,
+        is_energy_reconstruction="energy_reconstruction" in train_type,
         dataset_names=dataset_names,  # Use custom dataset names
         min_recall=train_params.get("min_recall", None),
     )

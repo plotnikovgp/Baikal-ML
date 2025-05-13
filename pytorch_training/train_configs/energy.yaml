@@ -2,18 +2,21 @@ exp_project: "energt_reconstruction_reco_mc"
 exp_name: "encoder_nl5_hs128_dff128_nh1_lr1e4_bs128_nm250_wr10_wm0"
 train_type: "energy_reconstruction"
 
+
+# "/home/plotnikovgp/Baikal-ML/pytorch_training/data/baikal_reco_reco_h8s2_norm.h5"
 dataset_weights: [1.0]
 dataset_configs:
   -
-    path_to_data: &p1 "/home/plotnikovgp/Baikal-ML/pytorch_training/data/baikal_reco_reco_h8s2_norm.h5"
+    path_to_data: &p1 "/home/plotnikovgp/Baikal-ML/pytorch_training/data/baikal_mc2020_multi_split_MChits-8-2_track-caskade-nue2_normed_.h5"
     name: "reco"
     tres_cut: 10000.0
-    val_subset_cut: 5
+    val_subset_cut: 20
     data_prefilter_params:
       data_file: *p1
       norm_Q: True
 
-    
+
+from_checkpoint: "/home/plotnikovgp/Baikal-ML/pytorch_training/checkpoints/energt_reconstruction_reco_mc/encoder_nl5_hs128_dff128_nh1_lr1e4_bs128_nm250_wr10_wm0/best_reco.ckpt"
 model_type: "encoder"
 model_params:
   in_features: 5

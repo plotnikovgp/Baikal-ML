@@ -147,4 +147,4 @@ class EncoderDomainAdaptation(nn.Module):
         reversed_features = self.gradient_reversal(features)
         domain_output = self.domain_classifier(reversed_features)
 
-        return angle_output, domain_output, features
+        return angle_output, domain_output

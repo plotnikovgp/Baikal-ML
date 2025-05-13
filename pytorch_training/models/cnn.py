@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from .layers import GradientReversal
 
 
 class Conv1DBlock(nn.Module):
@@ -267,6 +268,114 @@ class CNNModelWithAttention(nn.Module):
         return output
 
 
+class CNNDomainAdaptation(nn.Module):
+    def __init__(
+        self,
+        num_domains=2,
+        domain_classifier_hidden_size=128,
+        domain_classifier_layers=2,
+        gradient_reversal_alpha=1.0,
+        use_attention=False,
+        **kwargs,
+    ):
+        super().__init__()
+
+        # Create the appropriate CNN model
+        if use_attention:
+            self.cnn = CNNModelWithAttention(**kwargs)
+        else:
+            self.cnn = CNNModel(**kwargs)
+
+        # Make sure the model aggregates outputs for domain adaptation
+        if not self.cnn.aggregate_output:
+            print("Warning: Setting aggregate_output=True for domain adaptation")
+            self.cnn.aggregate_output = True
+
+        # We don't need a separate main_head - we'll use the CNN's output_proj
+        self.gradient_reversal = GradientReversal(alpha=gradient_reversal_alpha)
+
+        # Build the domain classifier
+        domain_classifier_layers_list = []
+        input_size = self.cnn.hidden_size
+
+        for _ in range(domain_classifier_layers - 1):
+            domain_classifier_layers_list.extend(
+                [
+                    nn.Linear(input_size, domain_classifier_hidden_size),
+                    nn.ReLU(),
+                    nn.Dropout(self.cnn.dropout_p),  # Use the CNN's dropout parameter
+                ]
+            )
+            input_size = domain_classifier_hidden_size
+
+        domain_classifier_layers_list.append(nn.Linear(input_size, num_domains))
+
+        self.domain_classifier = nn.Sequential(*domain_classifier_layers_list)
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+        num_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
+        print(
+            f"CNN Domain Adaptation Model initialized with {num_params/1e6:.3f}M parameters"
+        )
+
+    def forward(self, x, mask=None):
+        """
+        Forward pass through the network
+
+        Args:
+            x: Input tensor of shape [B, N, F]
+            mask: Optional mask
+
+        Returns:
+            Tuple of (main_output, domain_output)
+        """
+        batch_size, seq_len, _ = x.shape
+
+        if isinstance(self.cnn, CNNModelWithAttention):
+            # Process with attention CNN
+            features = self.cnn.input_proj(x)  # [B, N, hidden_size]
+            attn_idx = 0
+
+            for i, block in enumerate(self.cnn.cnn_blocks):
+                features = features.transpose(1, 2)  # [B, hidden_size, N]
+                features = block(features)
+                features = features.transpose(1, 2)  # [B, N, hidden_size]
+
+                if i in self.cnn.attention_layers:
+                    x_norm = self.cnn.layer_norms[attn_idx](features)
+
+                    # Apply self-attention
+                    attn_output, _ = self.cnn.attention_blocks[attn_idx](
+                        query=x_norm, key=x_norm, value=x_norm
+                    )
+
+                    features = features + attn_output
+                    attn_idx += 1
+        else:
+            # Process with regular CNN
+            features = self.cnn.input_proj(x)  # [B, N, hidden_size]
+            features = features.transpose(1, 2)  # [B, hidden_size, N]
+
+            # Apply CNN blocks
+            for block in self.cnn.cnn_blocks:
+                features = block(features)
+
+            features = features.transpose(1, 2)  # [B, N, hidden_size]
+
+        # At this point, features is [B, N, hidden_size]
+        # Aggregate features
+        pooled_features = features.mean(dim=1)  # [B, hidden_size]
+
+        # Use the CNN's output projection for the main task
+        main_output = self.cnn.output_proj(pooled_features)  # [B, out_size]
+
+        # Apply domain adaptation
+        reversed_features = self.gradient_reversal(pooled_features)
+        domain_output = self.domain_classifier(reversed_features)  # [B, num_domains]
+
+        return main_output, domain_output
+
+
 def sample_run():
     """
     Create and test various CNN model configurations to show parameter counts
@@ -382,6 +491,7 @@ def sample_run():
     # Print output shapes
     print(f"\nStandard model output shape: {standard_output.shape}")
     print(f"Aggregated model output shape: {aggregated_output.shape}")
+
 
 if __name__ == "__main__":
     # Run the sample function when the script is executed directly

@@ -1,0 +1,61 @@
+exp_project: "energy_reconstruction_domain_adaptation"
+exp_name: "encoder_nl5_hs128_dff128_nh1_lr1e4_bs128_nm250_da_wr5_wm5_k0_lcosh"
+
+# Basic training parameters
+train_type: "energy_reconstruction_domain_adaptation"
+is_graph: False
+batch_size: 128
+lr: 0.0001
+val_subset_cut: 5
+num_train_steps_per_validation: 250
+domain_adaptation_loss_k: &da_k 0.0
+label_dataset_name: "mc2020"
+dataset_weights: [0.5, 0.5]
+
+use_cosh_loss: True
+# Dataset configurations
+dataset_configs:
+  -
+    path_to_data: "/home/plotnikovgp/Baikal-ML/pytorch_training/data/baikal_reco_reco_h8s2_norm.h5"
+    name: "reco"
+    tres_cut: 10000.0
+    val_subset_cut: 5
+  -
+    path_to_data: &p1 "/home/plotnikovgp/Baikal-ML/pytorch_training/data/baikal_mc2020_multi_split_MChits-8-2_track-caskade-nue2_normed_.h5"
+    name: "mc2020"
+    tres_cut: 10000.0
+    val_subset_cut: 30
+    data_prefilter_params:
+      data_file: *p1
+      norm_Q: True
+
+# Model configuration
+model_type: "encoder_domain_adaptation"  # Using existing domain adaptation wrapper
+model_params:
+  in_features: 5
+  hidden_size: &hidden_size 512
+  num_layers: &num_layers 5
+  dim_feedforward_size: &dff 512
+  n_heads: &n_heads 1
+  out_size: 1
+  dropout_p: 0.0
+  use_batch_norm: False
+  num_domains: 2  # Two datasets: reco and mc2020
+  domain_classifier_hidden_size: 128
+  domain_classifier_layers: 2
+  gradient_reversal_alpha: *da_k
+
+# Training configuration
+accumulate_grad_steps: 1
+tres_cut: 100000.0
+grad_clip_value: 1.0
+warmup_steps: 5000
+events_amount: 1000000
+
+# Using multiple GPUs or workers
+num_workers: 4
+prefetch_factor: 2
+persistent_workers: True
+pin_memory: True
+
+save_best_per_dataset: True 

@@ -21,7 +21,7 @@ def _run_model(
     is_energy_reconstruction=False,
     is_domain_adaptation=False,
     track_cascade_model=None,
-    dataset_idx=None,
+    dataset_idx=None,  # For domain adaptation, identifies which dataset the sample came from
     **kwargs,
 ):
     # print args
@@ -49,7 +49,7 @@ def _run_model(
             x = torch.cat([x, track_cascade_prob.unsqueeze(-1)], dim=-1)
 
         if is_domain_adaptation:
-            output, domain_output, _ = model(x, mask)
+            output, domain_output = model(x, mask)
 
             batch_size = x.shape[0]
             domain_true = torch.full(
@@ -64,7 +64,7 @@ def _run_model(
         if is_track_cascade_tres_train:
             y_true = y_true.reshape(-1, y_true.shape[-1])
             output = output.reshape(-1, output.shape[-1]).squeeze()
-        elif is_angle_reconstruction or is_domain_adaptation:
+        elif is_angle_reconstruction:
             output = output / output.norm(dim=1, keepdim=True)
         elif is_angle_reconstruction_sigma_tune:
             pass
@@ -75,6 +75,7 @@ def _run_model(
         else:
             y_true = y_true.reshape(-1)
             output = output.reshape(-1, output.shape[-1]).squeeze()
+
         if not (
             is_energy_reconstruction
             or is_angle_reconstruction
@@ -127,19 +128,19 @@ def train_iters(
     y_true_hist = None
     domain_pred_hist = None
     domain_true_hist = None
-    loss_hist = []
-    domain_loss_hist = []
-    total_loss_hist = []
+    loss_hist = {}
     loss_accum = 0.0
 
     for iter in range(num_iters):
         data = next(train_loader)
 
-        # Extract dataset_idx from data when in domain adaptation mode
         dataset_idx = None
         if is_domain_adaptation:
-            dataset_idx = data[2]
-            data = data[:2] + data[3:]
+            # The dataset_idx is at the last position in the tuple
+            dataset_idx = data[-1]
+            data = data[:-1]
+
+        if is_domain_adaptation:
             output, y_pred, y_true, domain_pred, domain_true = _run_model(
                 model,
                 data,
@@ -167,8 +168,20 @@ def train_iters(
             )
             loss = criterion(output, y_true)
 
-        loss.backward()
-        loss_accum += loss.item()
+            # Handle both dictionary and scalar returns for backward compatibility
+        if not isinstance(loss, dict):
+            loss = {"loss": loss}
+
+        for k, v in loss.items():
+            if k not in loss_hist:
+                loss_hist[k] = []
+            loss_hist[k].append(v.item())
+
+        loss_to_backward = loss["loss"]
+
+        loss_to_backward.backward()
+        loss_accum += loss_to_backward.item()
+
         if grad_clip_value is not None:
             torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_value)
 
@@ -181,14 +194,11 @@ def train_iters(
                         scheduler.step(loss_accum)
                         loss_accum = 0.0
 
-        loss_hist.append(loss.item())
-
         y_pred_hist = (
             torch.cat((y_pred_hist, y_pred), dim=0)
             if y_pred_hist is not None
             else y_pred
         )
-
         y_true_hist = (
             torch.cat((y_true_hist, y_true), dim=0)
             if y_true_hist is not None
@@ -206,7 +216,8 @@ def train_iters(
             y_pred_hist.detach().cpu(), y_true_hist.detach().cpu()
         )
 
-    train_metrics["loss"] = sum(loss_hist) / len(loss_hist) if loss_hist else None
+    for k, v in loss_hist.items():
+        train_metrics[k] = sum(v) / len(v) if v else None
     train_metrics["lr"] = optimizer.param_groups[0]["lr"]
 
     if is_domain_adaptation:
@@ -215,8 +226,7 @@ def train_iters(
         domain_accuracy = (domain_preds == domain_labels).float().mean().item()
         train_metrics["domain_accuracy"] = domain_accuracy
         domain_bin_metrics = binary_clf_metrics(
-            domain_preds.cpu().numpy(),
-            domain_labels.cpu().numpy(),
+            domain_preds.cpu().numpy(), domain_labels.cpu().numpy(), min_recall=0.8
         )
         train_metrics.update({"domain_" + k: v for k, v in domain_bin_metrics.items()})
     return train_metrics
@@ -237,10 +247,9 @@ def validate_single(
     y_true_hist = None
     domain_pred_hist = None
     domain_true_hist = None
-    loss_hist = []
-    domain_loss_hist = []
+    loss_hist = {}
 
-    model.train()
+    model.eval()
     with torch.no_grad():
         for data in val_loader:
             if is_domain_adaptation:
@@ -251,18 +260,18 @@ def validate_single(
                     dataset_idx=dataset_idx,
                     **kwargs,
                 )
-                loss = criterion(y_pred, y_true, domain_pred, domain_true)
-
                 domain_pred_hist = (
-                    torch.cat((domain_pred_hist, domain_pred.detach().cpu()), dim=0)
+                    torch.cat((domain_pred_hist, domain_pred.detach()), dim=0)
                     if domain_pred_hist is not None
-                    else domain_pred.detach().cpu()
+                    else domain_pred.detach()
                 )
                 domain_true_hist = (
-                    torch.cat((domain_true_hist, domain_true.detach().cpu()), dim=0)
+                    torch.cat((domain_true_hist, domain_true.detach()), dim=0)
                     if domain_true_hist is not None
-                    else domain_true.detach().cpu()
+                    else domain_true.detach()
                 )
+                # during validation all data comes from one set
+                loss = criterion(y_pred, y_true, None, None)
             else:
                 output, y_pred, y_true = _run_model(
                     model,
@@ -271,7 +280,13 @@ def validate_single(
                 )
                 loss = criterion(output, y_true)
 
-            loss_hist.append(loss.item())
+            if not isinstance(loss, dict):
+                loss = {"loss": loss}
+
+            for k, v in loss.items():
+                if k not in loss_hist:
+                    loss_hist[k] = []
+                loss_hist[k].append(v.item())
 
             y_pred_hist = (
                 torch.cat((y_pred_hist, y_pred.detach().cpu()), dim=0)
@@ -286,20 +301,26 @@ def validate_single(
 
     if return_preds:
         return y_pred_hist, y_true_hist
+
     if min_recall is not None:
+        # TODO: metrics should be class which
         val_metrics = metrics_calc_fun(y_pred_hist, y_true_hist, min_recall=min_recall)
     else:
         val_metrics = metrics_calc_fun(y_pred_hist, y_true_hist)
-    val_metrics["loss"] = sum(loss_hist) / len(loss_hist) if loss_hist else None
 
-    if is_domain_adaptation and domain_pred_hist is not None:
+    if is_domain_adaptation:
         domain_preds = domain_pred_hist.argmax(dim=1)
         domain_labels = domain_true_hist
         domain_accuracy = (domain_preds == domain_labels).float().mean().item()
         val_metrics["domain_accuracy"] = domain_accuracy
-        domain_bin_metrics = binary_clf_metrics(domain_preds, domain_labels)
-        domain_bin_metrics = {"domain_" + k: v for k, v in domain_bin_metrics.items()}
-        val_metrics.update(domain_bin_metrics)
+        domain_bin_metrics = binary_clf_metrics(
+            domain_preds.cpu().numpy(), domain_labels.cpu().numpy(), min_recall=0.8
+        )
+        val_metrics.update({"domain_" + k: v for k, v in domain_bin_metrics.items()})
+
+    for k, v in loss_hist.items():
+        val_metrics[k] = sum(v) / len(v) if v else None
+
     return val_metrics
 
 
@@ -333,7 +354,7 @@ def validate(
             criterion=criterion,
             metrics_calc_fun=metrics_calc_fun,
             return_preds=False,
-            dataset_idx=i,
+            dataset_idx=i,  # Pass index position as dataset_idx
             min_recall=min_recall,
             **kwargs,
         )
@@ -394,8 +415,11 @@ def train(
                 train_logs_["train/epoch"] = cur_epoch
                 if use_wandb:
                     wandb.log(train_logs_)
-                to_print = {k: train_logs_[k] for k in ["train/loss", "train/epoch"]}
-
+                to_print = {
+                    k: train_logs_[k]
+                    for k in train_logs_
+                    if "loss" in k or k in ["epoch"]
+                }
                 step_iter.set_description(str(to_print))
 
             if validate_before_train or cur_epoch % val_every_epochs == 0:
@@ -403,6 +427,7 @@ def train(
                 val_logs = validate_fun(model, **validate_fun_kwargs)
 
                 val_logs_ = {"val/" + k: v for k, v in val_logs.items()}
+
                 if use_wandb:
                     wandb.log(val_logs_)
 

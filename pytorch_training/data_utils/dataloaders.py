@@ -55,7 +55,7 @@ class MultiDatasetSampler(IterableDataset):
     def __init__(
         self,
         datasets: list,
-        probabilities: list = None,
+        probabilities: list | None = None,
         seed: int = 42,
         prefetch_size: int = 2,
     ):
@@ -116,9 +116,16 @@ class MultiDatasetSampler(IterableDataset):
             dataset_idx = self.random_gen.choices(
                 range(len(self.datasets)), weights=self.probabilities, k=1
             )[0]
-
+            # print(f"Sampling from dataset {dataset_idx}")
+            # a = input()
             try:
-                yield self._get_sample_from_dataset(dataset_idx)
+                sample = self._get_sample_from_dataset(dataset_idx)
+                if isinstance(sample, tuple):
+                    sample = sample + (dataset_idx,)
+                else:
+                    sample = (sample, dataset_idx)
+
+                yield sample
 
                 if len(self._prefetch_buffers[dataset_idx]) < self.prefetch_size:
                     self._prefetch_from_dataset(dataset_idx)
@@ -134,7 +141,6 @@ def create_multi_dataset_dataloader(
     batch_size: int = 128,
     num_workers: int = 1,
     return_datasets: bool = False,
-    set_tres_stats: bool = False,
     prefetch_factor: int = 2,
     persistent_workers: bool = True,
     pin_memory: bool = True,
@@ -240,7 +246,7 @@ def create_multi_dataset_dataloader(
         ]
 
         test_loaders = [
-            DataLoader(dataset, batch_size=batch_size, **dataloader_common_args)
+            DataLoader(dataset, batch_size=None, **dataloader_common_args)
             for dataset in test_datasets
         ]
     else:
@@ -299,8 +305,6 @@ def create_dataloaders(
     use_val_subset: bool = True,
     num_workers: int = 1,
     DatasetType: tp.Type[Dataset] = BaikalDataset,
-    is_classification: bool = False,
-    is_angle_and_track_cascade: bool = False,
     return_datasets: bool = True,
     prefetch_factor: int = 2,
     persistent_workers: bool = True,

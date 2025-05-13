@@ -5,7 +5,7 @@ from .gat import GAT
 from .gincn import GINCN
 from .uncertainty_predictor import UncertaintyPredictor, uncertainty_loss
 from .unet import UNetModel
-from .cnn import CNNModel, CNNModelWithAttention
+from .cnn import CNNModel, CNNModelWithAttention, CNNDomainAdaptation
 import torch.nn as nn
 import typing as tp
 
@@ -33,6 +33,8 @@ def load_model(model_type: str, model_kwargs: dict[str, tp.Any]) -> nn.Module:
         return CNNModel(**model_kwargs)
     elif model_type == "cnn_attention":
         return CNNModelWithAttention(**model_kwargs)
+    elif model_type == "cnn_domain_adaptation":
+        return CNNDomainAdaptation(**model_kwargs)
     else:
         raise NotImplementedError
     # elif model
