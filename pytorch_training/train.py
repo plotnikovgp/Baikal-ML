@@ -18,7 +18,7 @@ DEVICE = "cuda"
 SEED = 42
 
 torch.autograd.set_detect_anomaly(True)
-
+torch.set_num_threads(4)
 
 def fix_seed(seed: int = SEED):
     np.random.seed(seed)
@@ -285,13 +285,14 @@ def main():
         domain_adaptation_loss_k = train_params.get("domain_adaptation_loss_k", 0.1)
         label_dataset_name = train_params.get("label_dataset_name", None)
 
+        loss_fn = torch.nn.L1Loss()
         def criterion(y_pred, y_true, domain_pred=None, domain_true=None):
             if domain_true is None:
-                return {"loss": torch.abs(y_pred - y_true).mean()}
+                return {"loss": loss_fn(y_pred, y_true)}
 
             mask = domain_true == dataset_names.index(label_dataset_name)
             if mask.sum() > 0:
-                angle_loss = torch.abs(y_pred[mask] - y_true[mask]).mean()
+                angle_loss = loss_fn(y_pred[mask], y_true[mask])
             else:
                 angle_loss = torch.tensor(0.0, device=y_pred.device)
 
@@ -364,7 +365,7 @@ def main():
         if train_params.get("use_cosh_loss", False):
             energy_loss_ = log_cosh_loss
         else:
-            energy_loss_ = torch.nn.L1Loss()  # torch.nn.MSELoss()
+            energy_loss_ = torch.nn.MSELoss() # torch.nn.L1Loss() 
 
         def criterion(y_pred, y_true, domain_pred=None, domain_true=None):
             """
@@ -481,7 +482,7 @@ def main():
         metrics_calc_fun=metrics_calc_fun,
         is_classification=is_classification,
         is_track_cascade_tres_train=(train_type == "tres_and_track_cascade"),
-        is_angle_reconstruction=(train_type == "angle_reconstruction"),
+        is_angle_reconstruction=(train_type == "angle_reconstruction" or train_type == "angle_reconstruction_domain_adaptation"),
         is_angle_and_track_cascade=(train_type == "angle_and_track_cascade"),
         is_angle_reconstruction_sigma_tune=(
             train_type == "angle_reconstruction_sigma_tune"
@@ -503,7 +504,7 @@ def main():
         track_cascade_model=track_cascade_model,
         is_classification=is_classification,
         is_track_cascade_tres_train=(train_type == "tres_and_track_cascade"),
-        is_angle_reconstruction=(train_type == "angle_reconstruction"),
+        is_angle_reconstruction=(train_type == "angle_reconstruction" or train_type == "angle_reconstruction_domain_adaptation"),
         is_angle_reconstruction_sigma_tune=(
             train_type == "angle_reconstruction_sigma_tune"
         ),

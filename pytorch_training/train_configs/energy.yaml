@@ -1,4 +1,4 @@
-exp_project: "energt_reconstruction_reco_mc"
+exp_project: "energy_reconstruction_domain_adaptation"
 exp_name: "encoder_nl5_hs128_dff128_nh1_lr1e4_bs128_nm250_wr10_wm0"
 train_type: "energy_reconstruction"
 

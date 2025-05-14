@@ -14,6 +14,11 @@ import logging
 
 THRESHOLD = 0.5
 
+def roc_auc_score_safe(y_true, y_pred):
+    if np.unique(y_true).size == 1:
+        return 0.5
+    else:
+        return roc_auc_score(y_true, y_pred)
 
 def extract_angles(vector):
     x, y, z = vector
@@ -63,7 +68,7 @@ def binary_clf_metrics(y_pred_prob, y_true, threshold=THRESHOLD, min_recall=None
 
     try:
         metrics = {
-            "auc": roc_auc_score(y_true, y_pred_prob),
+            "auc": roc_auc_score_safe(y_true, y_pred_prob),
             "precision": precision_score(y_true, y_pred, zero_division=0),
             "recall": recall_score(y_true, y_pred, zero_division=0),
             "threshold": float(threshold),
@@ -78,13 +83,17 @@ def regression_metrics(y_pred, y_true):
     y_pred = np.array(y_pred, dtype=np.float32)
     y_true = np.array(y_true, dtype=np.float32)
     try:
+        diff = np.abs(y_true - y_pred)
         return {
             "mae": mean_absolute_error(y_true, y_pred),
             "mse": mean_squared_error(y_true, y_pred),
             "mape": mean_absolute_percentage_error(y_true, y_pred),
+            "q50": float(np.quantile(diff, 0.5)),
+            "q68": float(np.quantile(diff, 0.68)),
         }
     except ValueError:
-        return {}
+        traceback.print_exc()
+        raise
 
 
 def angle_reconstruction_metrics(y_pred, y_true, plot=False):

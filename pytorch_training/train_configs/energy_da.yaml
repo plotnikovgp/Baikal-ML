@@ -1,18 +1,18 @@
 exp_project: "energy_reconstruction_domain_adaptation"
-exp_name: "encoder_nl5_hs128_dff128_nh1_lr1e4_bs128_nm250_da_wr5_wm5_k0_lcosh"
+exp_name: "encoder_nl5_hs128_dff128_nh1_lr1e4_bs512_nm250_wr5_wm5_dak0_mse_dp0_reco-label"
 
 # Basic training parameters
 train_type: "energy_reconstruction_domain_adaptation"
 is_graph: False
-batch_size: 128
+batch_size: 512
 lr: 0.0001
 val_subset_cut: 5
 num_train_steps_per_validation: 250
 domain_adaptation_loss_k: &da_k 0.0
-label_dataset_name: "mc2020"
+label_dataset_name: "reco"
 dataset_weights: [0.5, 0.5]
 
-use_cosh_loss: True
+use_cosh_loss: False
 # Dataset configurations
 dataset_configs:
   -
@@ -33,9 +33,9 @@ dataset_configs:
 model_type: "encoder_domain_adaptation"  # Using existing domain adaptation wrapper
 model_params:
   in_features: 5
-  hidden_size: &hidden_size 512
+  hidden_size: &hidden_size 128
   num_layers: &num_layers 5
-  dim_feedforward_size: &dff 512
+  dim_feedforward_size: &dff 128
   n_heads: &n_heads 1
   out_size: 1
   dropout_p: 0.0
@@ -49,7 +49,7 @@ model_params:
 accumulate_grad_steps: 1
 tres_cut: 100000.0
 grad_clip_value: 1.0
-warmup_steps: 5000
+warmup_steps: 100
 events_amount: 1000000
 
 # Using multiple GPUs or workers
