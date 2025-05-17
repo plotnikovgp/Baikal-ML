@@ -282,6 +282,51 @@ class BaikalDatasetAnglesOldSingle(BaikalDataset):
         return self.preprocessor(data_x, angles)
 
 
+class BaikalDatasetDirection(BaikalDataset):
+    def __getitem__(self, idx):
+        batch_start_idx = idx * self.batch_size
+        batch_end_idx = min(
+            (idx + 1) * self.batch_size,
+            len(self.hfile[self.split_type + "/ev_starts/data"]) - 1,
+        )
+        event_starts = self.hfile[self.split_type + "/ev_starts/data"][
+            batch_start_idx : batch_end_idx + 1
+        ]
+        angles = torch.tensor(
+            self.hfile[self.split_type + "/prime_prty/data"][
+                batch_start_idx:batch_end_idx, :2
+            ]
+        )
+        points = torch.tensor(
+            self.hfile[self.split_type + "/muons_prty/individ_coords_norm/data"][
+                batch_start_idx:batch_end_idx, :
+            ]
+        )
+
+        global_start = event_starts[0]
+        global_end = event_starts[-1]
+        raw_data = torch.tensor(
+            self.hfile[self.split_type + "/data/data"][global_start:global_end]
+        )
+        hits_labels = torch.tensor(
+            self.hfile[self.split_type + "/labels/data"][global_start:global_end]
+        )
+
+        tres = torch.tensor(
+            self.hfile[self.split_type + "/t_res/data"][global_start:global_end]
+        )
+        raw_data = torch.cat(
+            [raw_data, hits_labels.reshape(-1, 1), tres.reshape(-1, 1)], dim=-1
+        )
+        data_x, _, mask = self._collate(event_starts, raw_data, None, pad_y=False)
+
+        data_y = torch.cat([angles, points], dim=-1)
+
+        data_x, labels, tres = data_x[:, :, :-2], data_x[:, :, -2], data_x[:, :, -1]
+        res = self.preprocessor(data_x, data_y, mask)
+        return res
+
+
 class BaikalDatasetEnergy(BaikalDataset):
     def __getitem__(self, idx):
         batch_start_idx = idx * self.batch_size
@@ -316,7 +361,7 @@ class BaikalDatasetEnergy(BaikalDataset):
         )
         data_x, _, mask = self._collate(event_starts, raw_data, None, pad_y=False)
         # data_y: [batch_size, 5]
-        # mask = mask & (data_x[:, :, -1] < 0)
+        # mask = mask & (di[:, :, -1] < 0)
         data_x, labels, tres = data_x[:, :, :-2], data_x[:, :, -2], data_x[:, :, -1]
         res = self.preprocessor(data_x, energy, mask, labels=labels, tres=tres)
 

@@ -68,7 +68,6 @@ class CNNModel(nn.Module):
         kernel_size=3,
         dropout_p=0.1,
         out_size=3,
-        use_batch_norm=True,
         use_dilated_convolutions=False,
         aggregate_output=False,
     ):
@@ -80,6 +79,7 @@ class CNNModel(nn.Module):
         self.num_layers = num_layers
         self.out_size = out_size
         self.aggregate_output = aggregate_output
+        self.dropout_p = dropout_p
 
         self.input_proj = nn.Linear(in_features, hidden_size)
 
@@ -162,7 +162,6 @@ class CNNModelWithAttention(nn.Module):
         kernel_size=3,
         dropout_p=0.1,
         out_size=3,
-        use_batch_norm=True,
         num_heads=1,
         attention_layers=[1, 3],  # Indices of layers where to add attention
         aggregate_output=False,

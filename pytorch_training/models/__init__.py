@@ -3,7 +3,7 @@ from .graphnet import GraphnetDynedge, GraphnetAndEncoderStack
 from .lstm import LSTM
 from .gat import GAT
 from .gincn import GINCN
-from .uncertainty_predictor import UncertaintyPredictor, uncertainty_loss
+from .uncertainty_predictor import UncertaintyPredictor
 from .unet import UNetModel
 from .cnn import CNNModel, CNNModelWithAttention, CNNDomainAdaptation
 import torch.nn as nn

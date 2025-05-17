@@ -92,8 +92,8 @@ class Encoder(nn.Module):
         if self.second_head is not None:
             z = self.second_head(x)
             res = torch.cat([y.mean(1), z.mean(1)], dim=-1)
-        if self.class_token is not None and self.return_only_cls_token:
-            res = y.mean(1)
+        elif self.class_token is not None and self.return_only_cls_token:
+            res = y.mean(1)  # todo: fix this
         else:
             res = y
 
@@ -112,13 +112,28 @@ class EncoderDomainAdaptation(nn.Module):
         domain_classifier_hidden_size=128,
         domain_classifier_layers=2,
         gradient_reversal_alpha=1.0,
+        uncertainty_head_hidden_size: (
+            int | None
+        ) = None,  # None means no uncertainty head
+        uncertainty_head_out_size: int | None = None,  # None means no uncertainty head
+        aggregate_output: bool = True,
         **kwargs
     ):
         super().__init__()
 
         self.encoder = Encoder(**kwargs)
         self.encoder.return_hidden = True
-        self.angle_head = nn.Linear(self.encoder.hidden_size, self.encoder.out_size)
+        self.main_head = nn.Linear(self.encoder.hidden_size, self.encoder.out_size)
+        self.aggregate_output = aggregate_output
+        if uncertainty_head_hidden_size is not None:
+            self.uncertainty_head = nn.Sequential(
+                nn.Linear(self.encoder.hidden_size, uncertainty_head_hidden_size),
+                nn.ReLU(),
+                nn.Linear(uncertainty_head_hidden_size, uncertainty_head_out_size),
+            )
+        else:
+            self.uncertainty_head = None
+
         self.gradient_reversal = GradientReversal(alpha=gradient_reversal_alpha)
 
         domain_classifier_layers_list = []
@@ -141,10 +156,19 @@ class EncoderDomainAdaptation(nn.Module):
 
     def forward(self, x, mask):
         _, hidden_states = self.encoder(x, mask)
-        features = hidden_states[:, 0]
+        features = hidden_states
 
-        angle_output = self.angle_head(features)
-        reversed_features = self.gradient_reversal(features)
+        output = self.main_head(features)
+        if self.aggregate_output:
+            output = output.mean(1)
+
+        if self.uncertainty_head is not None:
+            uncertainty_output = self.uncertainty_head(features)
+            if self.aggregate_output:
+                uncertainty_output = uncertainty_output.mean(1)
+            output = torch.cat([output, uncertainty_output], dim=-1)
+
+        reversed_features = self.gradient_reversal(features.mean(1))
         domain_output = self.domain_classifier(reversed_features)
 
-        return angle_output, domain_output
+        return output, domain_output

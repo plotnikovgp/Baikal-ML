@@ -52,17 +52,3 @@ class UncertaintyPredictor(nn.Module):
         x_and_hidden = torch.cat((x, feats), dim=-1)
         log_sigma = self.predictor(x_and_hidden)
         return torch.cat([x, log_sigma], dim=-1)
-
-
-def uncertainty_loss(pred_and_log_sigma2, target):
-    # pred_and_log_sigma2: B x (3 + 3)
-    # target: B x 3
-    pred, log_sigma2 = pred_and_log_sigma2[:, :3], pred_and_log_sigma2[:, 3:]
-    pred_sigma2 = torch.exp(log_sigma2)
-    # print(pred.shape, target.shape, log_sigma2.shape)
-
-    squared_error = (pred - target) ** 2
-
-    # NLL Loss for Gaussian: log(sigma^2) + [(y - mu)^2 / sigma^2]
-    loss = torch.mean(log_sigma2 + squared_error / pred_sigma2)
-    return loss

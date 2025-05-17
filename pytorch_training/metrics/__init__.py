@@ -11,14 +11,18 @@ from sklearn.metrics import (
 import traceback
 from scipy.spatial.distance import cosine as cosine_dist
 import logging
+from scipy.stats import spearmanr, pearsonr
+
 
 THRESHOLD = 0.5
+
 
 def roc_auc_score_safe(y_true, y_pred):
     if np.unique(y_true).size == 1:
         return 0.5
     else:
         return roc_auc_score(y_true, y_pred)
+
 
 def extract_angles(vector):
     x, y, z = vector
@@ -100,33 +104,28 @@ def angle_reconstruction_metrics(y_pred, y_true, plot=False):
     y_pred = np.array(y_pred, dtype=np.float32)
     y_true = np.array(y_true, dtype=np.float32)
     metrics = {}
+
+    # TODO: check by flag
+    if y_pred.shape[1] == 6:
+        log_sigma2_pred = np.array(y_pred[:, 3:], dtype=np.float32)
+        sigma2_pred = np.exp(log_sigma2_pred)
+        sigma_pred = np.sqrt(sigma2_pred)
+        y_pred = y_pred[:, :3]
+        sigma_true = (y_pred - y_true) ** 2
+
+        sigma_metrics = regression_metrics(sigma_pred.mean(1), sigma_true.mean(1))
+        metrics.update({"sigma2_" + k: v for k, v in sigma_metrics.items()})
+
+    kappa = None  # vmf loss
+    if y_pred.shape[1] == 4:
+        kappa = y_pred[:, 3]
+        y_pred = y_pred[:, :3]
+
     metrics.update(regression_metrics(y_pred, y_true))
     angles_true = np.array([extract_angles(vec) for vec in y_true], dtype=np.float32)
     angles_pred = np.array([extract_angles(vec) for vec in y_pred], dtype=np.float32)
     y_true_theta_angle, y_true_phi_angle = angles_true[:, 0], angles_true[:, 1]
     y_pred_theta_angle, y_pred_phi_angle = angles_pred[:, 0], angles_pred[:, 1]
-
-    if plot:
-        import matplotlib.pyplot as plt
-
-        fig, ax = plt.subplots(figsize=(12, 8), ncols=2)
-        # diff hists between true and pred
-        ax[0].set_title("theta")
-        bins_amount = 30
-        # need equal bins for both
-        bins_true = np.linspace(0, 100, bins_amount)
-        bins_pred = np.linspace(0, 100, bins_amount)
-        ax[0].hist(y_true_theta_angle, label="true", alpha=0.5, bins=bins_true)
-        ax[0].hist(y_pred_theta_angle, label="pred", alpha=0.5, bins=bins_pred)
-        ax[0].legend()
-        ax[1].set_title("phi")
-        bins_true = np.linspace(0, 180, bins_amount)
-        bins_pred = np.linspace(0, 180, bins_amount)
-        ax[1].hist(y_true_phi_angle, label="true", alpha=0.5, bins=bins_true)
-        ax[1].hist(y_pred_phi_angle, label="pred", alpha=0.5, bins=bins_pred)
-        ax[1].legend()
-        plt.show()
-        fig.savefig("angle_reconstruction_metrics_init_Q-constant_another_data.png")
 
     if not np.isnan(y_pred_theta_angle).any() and not np.isnan(y_pred_phi_angle).any():
         metrics["theta_mae"] = mean_absolute_error(
@@ -145,7 +144,11 @@ def angle_reconstruction_metrics(y_pred, y_true, plot=False):
         # metrics["phi_resolution_q68"] = np.quantile(phi_resolution, 0.68)
         metrics["dir_resoultion_q50"] = np.quantile(dir_resolution, 0.5)
         # metrics["dir_resoultion_q68"] = np.quantile(dir_resolution, 0.68)
-
+    if kappa is not None:
+        cos_sim = np.sum(y_true * y_pred, axis=1)
+        angular_error = np.arccos(np.clip(cos_sim, -1, 1))
+        metrics["kappa_pearson"] = pearsonr(kappa, angular_error)[0]
+        metrics["kappa_spearman"] = spearmanr(kappa, angular_error)[0]
     return {k: float(v) for k, v in metrics.items()}
 
 

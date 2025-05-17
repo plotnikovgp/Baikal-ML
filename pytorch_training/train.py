@@ -8,10 +8,10 @@ import yaml
 import wandb
 import pytorch_warmup as warmup
 import logging
-
+from training.losses import *
 from data_utils import *
 from metrics import *
-from models import uncertainty_loss, load_model
+from models import load_model
 from training import train, train_iters, validate
 
 DEVICE = "cuda"
@@ -19,6 +19,7 @@ SEED = 42
 
 torch.autograd.set_detect_anomaly(True)
 torch.set_num_threads(4)
+
 
 def fix_seed(seed: int = SEED):
     np.random.seed(seed)
@@ -148,7 +149,6 @@ def load_state_dict_partial(
 
 
 def main():
-    fix_seed()
     args = parse_args()
 
     config_path = args.config if "/" in args.config else "train_configs/" + args.config
@@ -157,6 +157,7 @@ def main():
         train_params = yaml.safe_load(f)
 
     train_params_str = yaml.dump(train_params)
+    fix_seed(train_params.get("random_seed", SEED))
 
     train_type = train_params.get("train_type")
     is_graph = train_params.get("is_graph")
@@ -228,11 +229,19 @@ def main():
         train_type = "angle_reconstruction"
         metrics_calc_fun = angle_reconstruction_metrics
 
-        def criterion(y_pred, y_true):
-            return torch.abs(y_pred - y_true).mean()
+        if train_params.get("use_vmf_loss", False):
+            criterion = VonMisesFisher3DLoss()
+        elif train_params.get("use_vmf_rmse_loss", False):
+            criterion = RMSEVonMisesFisher3DLoss()
+        elif train_params.get("use_mae_loss", False):
+            criterion = MAELoss()
+        elif train_params.get("use_mse_loss", False):
+            criterion = MSELoss()
+        else:
+            raise ValueError("Unknown loss function")
 
     elif train_type == "direction":
-        DatasetType = BaikalDatasetAngles
+        DatasetType = BaikalDatasetDirection
         metrics_calc_fun = direction_metrics
         dist_loss_coef = train_params["distance_loss_coef"]
 
@@ -250,7 +259,12 @@ def main():
                 torch.abs(torch.sum(w * n, dim=1, keepdim=True)) / norm_n_clamped
             )
             distance_loss = distance_loss.mean()
-            return angle_loss + distance_loss * dist_loss_coef
+
+            return {
+                "loss": angle_loss + distance_loss * dist_loss_coef,
+                "angle_loss": angle_loss,
+                "distance_loss": distance_loss,
+            }
 
     elif train_type == "angle_reconstruction_sigma_tune":
         DatasetType = BaikalDatasetAngles
@@ -285,10 +299,36 @@ def main():
         domain_adaptation_loss_k = train_params.get("domain_adaptation_loss_k", 0.1)
         label_dataset_name = train_params.get("label_dataset_name", None)
 
-        loss_fn = torch.nn.L1Loss()
+        if train_params.get("use_vmf_loss", False):
+            loss_fn = VonMisesFisher3DLoss()
+        elif train_params.get("use_vmf_rmse_loss", False):
+            loss_fn = RMSEVonMisesFisher3DLoss()
+        elif train_params.get("use_mae_loss", False):
+            loss_fn = MAELoss()
+        elif train_params.get("use_mse_loss", False):
+            loss_fn = MSELoss()
+        elif train_params.get("use_cos_loss", False):
+            loss_fn = CosSimLoss()
+        else:
+            raise ValueError("Unknown loss function")
+
+        predict_sigma = train_params.get("predict_sigma", False)
+        nll_loss_k = train_params.get("nll_loss_k", 0.0)
+        nll_loss_fn = NLLUncertaintyLoss(pred_size=3)
+
         def criterion(y_pred, y_true, domain_pred=None, domain_true=None):
+            res = {}
+            if predict_sigma:
+                nll_loss = nll_loss_fn(y_pred, y_true)
+                y_pred = y_pred[:, :3]
+                y_true = y_true[:, :3]
+                res["nll_loss"] = nll_loss
+                res["loss"] = 0 * loss_fn(y_pred, y_true) + nll_loss_k * nll_loss
+            else:
+                res["loss"] = loss_fn(y_pred, y_true)
+
             if domain_true is None:
-                return {"loss": loss_fn(y_pred, y_true)}
+                return res
 
             mask = domain_true == dataset_names.index(label_dataset_name)
             if mask.sum() > 0:
@@ -365,7 +405,7 @@ def main():
         if train_params.get("use_cosh_loss", False):
             energy_loss_ = log_cosh_loss
         else:
-            energy_loss_ = torch.nn.MSELoss() # torch.nn.L1Loss() 
+            energy_loss_ = torch.nn.MSELoss()  # torch.nn.L1Loss()
 
         def criterion(y_pred, y_true, domain_pred=None, domain_true=None):
             """
@@ -482,7 +522,10 @@ def main():
         metrics_calc_fun=metrics_calc_fun,
         is_classification=is_classification,
         is_track_cascade_tres_train=(train_type == "tres_and_track_cascade"),
-        is_angle_reconstruction=(train_type == "angle_reconstruction" or train_type == "angle_reconstruction_domain_adaptation"),
+        is_angle_reconstruction=(
+            train_type == "angle_reconstruction"
+            or train_type == "angle_reconstruction_domain_adaptation"
+        ),
         is_angle_and_track_cascade=(train_type == "angle_and_track_cascade"),
         is_angle_reconstruction_sigma_tune=(
             train_type == "angle_reconstruction_sigma_tune"
@@ -504,7 +547,10 @@ def main():
         track_cascade_model=track_cascade_model,
         is_classification=is_classification,
         is_track_cascade_tres_train=(train_type == "tres_and_track_cascade"),
-        is_angle_reconstruction=(train_type == "angle_reconstruction" or train_type == "angle_reconstruction_domain_adaptation"),
+        is_angle_reconstruction=(
+            train_type == "angle_reconstruction"
+            or train_type == "angle_reconstruction_domain_adaptation"
+        ),
         is_angle_reconstruction_sigma_tune=(
             train_type == "angle_reconstruction_sigma_tune"
         ),

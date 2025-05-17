@@ -1,3 +1,5 @@
+# reference https://github.com/graphnet-team/graphnet/blob/main/src/graphnet/training/loss_functions.py
+
 from abc import abstractmethod
 from typing import Any, Optional, Union, List, Dict
 
@@ -5,6 +7,211 @@ import numpy as np
 import scipy.special
 import torch
 from torch import Tensor
+from torch.nn.functional import (
+    one_hot,
+    binary_cross_entropy,
+    softplus,
+)
+
+
+class LossFunction(torch.nn.Module):
+    """Base class for loss functions in `graphnet`."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        """Construct `LossFunction`, saving model config."""
+        super().__init__(**kwargs)
+
+    def forward(  # type: ignore[override]
+        self,
+        prediction: Tensor,
+        target: Tensor,
+        weights: Optional[Tensor] = None,
+        return_elements: bool = False,
+    ) -> Tensor:
+        """Forward pass for all loss functions.
+
+        Args:
+            prediction: Tensor containing predictions. Shape [N,P]
+            target: Tensor containing targets. Shape [N,T]
+            return_elements: Whether elementwise loss terms should be returned.
+                The alternative is to return the averaged loss across examples.
+
+        Returns:
+            Loss, either averaged to a scalar (if `return_elements = False`) or
+            elementwise terms with shape [N,] (if `return_elements = True`).
+        """
+        elements = self._forward(prediction, target)
+        if weights is not None:
+            elements = elements * weights
+        assert elements.size(dim=0) == target.size(
+            dim=0
+        ), "`_forward` should return elementwise loss terms."
+
+        return elements if return_elements else torch.mean(elements)
+
+    @abstractmethod
+    def _forward(self, prediction: Tensor, target: Tensor) -> Tensor:
+        """Syntax like `.__call__`, for implentation in inheriting classes."""
+
+
+class MAELoss(LossFunction):
+    """Mean absolute error loss."""
+
+    def _forward(self, prediction: Tensor, target: Tensor) -> Tensor:
+        """Implement loss calculation."""
+        return torch.mean(torch.abs(prediction - target), dim=-1)
+
+
+class MSELoss(LossFunction):
+    """Mean squared error loss."""
+
+    def _forward(self, prediction: Tensor, target: Tensor) -> Tensor:
+        """Implement loss calculation."""
+        # Check(s)
+        assert prediction.dim() == 2
+        if target.dim() != prediction.dim():
+            target = target.squeeze(1)
+        assert prediction.size() == target.size()
+
+        elements = torch.mean((prediction - target) ** 2, dim=-1)
+        return elements
+
+
+class CosSimLoss(LossFunction):
+    """Cosine similarity loss."""
+
+    def _forward(self, prediction: Tensor, target: Tensor) -> Tensor:
+        """Implement loss calculation."""
+        return 1 - torch.cosine_similarity(prediction, target, dim=-1)
+
+
+class RMSELoss(MSELoss):
+    """Root mean squared error loss."""
+
+    def _forward(self, prediction: Tensor, target: Tensor) -> Tensor:
+        """Implement loss calculation."""
+        # Check(s)
+        elements = super()._forward(prediction, target)
+        elements = torch.sqrt(elements)
+        return elements
+
+
+class LogCoshLoss(LossFunction):
+    """Log-cosh loss function.
+
+    Acts like x^2 for small x; and like |x| for large x.
+    """
+
+    @classmethod
+    def _log_cosh(cls, x: Tensor) -> Tensor:  # pylint: disable=invalid-name
+        """Numerically stable version on log(cosh(x)).
+
+        Used to avoid `inf` for even moderately large differences.
+        See [https://github.com/keras-team/keras/blob/v2.6.0/keras/losses.py#L1580-L1617] # noqa: E501
+        """
+        return x + softplus(-2.0 * x) - np.log(2.0)
+
+    def _forward(self, prediction: Tensor, target: Tensor) -> Tensor:
+        """Implement loss calculation."""
+        diff = prediction - target
+        elements = self._log_cosh(diff)
+        return elements
+
+
+class CrossEntropyLoss(LossFunction):
+    """Compute cross-entropy loss for classification tasks.
+
+    Predictions are an [N, num_class]-matrix of logits (i.e., non-softmax'ed
+    probabilities), and targets are an [N,1]-matrix with integer values in
+    (0, num_classes - 1).
+    """
+
+    def __init__(
+        self,
+        options: Union[int, List[Any], Dict[Any, int]],
+        *args: Any,
+        **kwargs: Any,
+    ):
+        """Construct CrossEntropyLoss."""
+        # Base class constructor
+        super().__init__(*args, **kwargs)
+
+        # Member variables
+        self._options = options
+        self._nb_classes: int
+        if isinstance(self._options, int):
+            assert self._options in [torch.int32, torch.int64]
+            assert (
+                self._options >= 2
+            ), f"Minimum of two classes required. Got {self._options}."
+            self._nb_classes = options  # type: ignore
+        elif isinstance(self._options, list):
+            self._nb_classes = len(self._options)  # type: ignore
+        elif isinstance(self._options, dict):
+            self._nb_classes = len(
+                np.unique(list(self._options.values()))
+            )  # type: ignore
+        else:
+            raise ValueError(
+                f"Class options of type {type(self._options)} not supported"
+            )
+
+        self._loss = nn.CrossEntropyLoss(reduction="none")
+
+    def _forward(self, prediction: Tensor, target: Tensor) -> Tensor:
+        """Transform outputs to angle and prepare prediction."""
+        if isinstance(self._options, int):
+            # Integer number of classes: Targets are expected to be in
+            # (0, nb_classes - 1).
+
+            # Target integers are positive
+            assert torch.all(target >= 0)
+
+            # Target integers are consistent with the expected number of class.
+            assert torch.all(target < self._options)
+
+            assert target.dtype in [torch.int32, torch.int64]
+            target_integer = target
+
+        elif isinstance(self._options, list):
+            # List of classes: Mapping target classes in list onto
+            # (0, nb_classes - 1). Example:
+            #    Given options: [1, 12, 13, ...]
+            #    Yields: [1, 13, 12] -> [0, 2, 1, ...]
+            target_integer = torch.tensor(
+                [self._options.index(value) for value in target]
+            )
+
+        elif isinstance(self._options, dict):
+            # Dictionary of classes: Mapping target classes in dict onto
+            # (0, nb_classes - 1). Example:
+            #     Given options: {1: 0, -1: 0, 12: 1, -12: 1, ...}
+            #     Yields: [1, -1, -12, ...] -> [0, 0, 1, ...]
+            target_integer = torch.tensor(
+                [self._options[int(value)] for value in target]
+            )
+
+        else:
+            assert False, "Shouldn't reach here."
+
+        target_one_hot: Tensor = one_hot(target_integer, self._nb_classes).to(
+            prediction.device
+        )
+
+        return self._loss(prediction.float(), target_one_hot.float())
+
+
+class BinaryCrossEntropyLoss(LossFunction):
+    """Compute binary cross entropy loss.
+
+    Predictions are vector probabilities (i.e., values between 0 and 1), and
+    targets should be 0 and 1.
+    """
+
+    def _forward(self, prediction: Tensor, target: Tensor) -> Tensor:
+        return binary_cross_entropy(
+            prediction.float(), target.float(), reduction="none"
+        )
 
 
 class LogCMK(torch.autograd.Function):
@@ -49,9 +256,9 @@ class LogCMK(torch.autograd.Function):
         ctx.m = m
         ctx.dtype = dtype
         kappa = kappa.double()
-        iv = torch.from_numpy(
-            scipy.special.iv(m / 2.0 - 1, kappa.cpu().numpy())
-        ).to(kappa.device)
+        iv = torch.from_numpy(scipy.special.iv(m / 2.0 - 1, kappa.cpu().numpy())).to(
+            kappa.device
+        )
         return (
             (m / 2.0 - 1) * torch.log(kappa)
             - torch.log(iv)
@@ -68,13 +275,11 @@ class LogCMK(torch.autograd.Function):
         dtype = ctx.dtype
         kappa = kappa.double().cpu().numpy()
         grads = -(
-            (scipy.special.iv(m / 2.0, kappa))
-            / (scipy.special.iv(m / 2.0 - 1, kappa))
+            (scipy.special.iv(m / 2.0, kappa)) / (scipy.special.iv(m / 2.0 - 1, kappa))
         )
         return (
             None,
-            grad_output
-            * torch.from_numpy(grads).to(grad_output.device).type(dtype),
+            grad_output * torch.from_numpy(grads).to(grad_output.device).type(dtype),
         )
 
 
@@ -244,4 +449,118 @@ class VonMisesFisher3DLoss(VonMisesFisherLoss):
 
         kappa = prediction[:, 3]
         p = kappa.unsqueeze(1) * prediction[:, [0, 1, 2]]
-        return self._evaluate(p, target)    
+        return self._evaluate(p, target)
+
+
+class EnsembleLoss(LossFunction):
+    """Chain multiple loss functions together."""
+
+    def __init__(
+        self,
+        loss_functions: List[LossFunction],
+        loss_factors: Optional[List[float]] = None,
+        prediction_keys: Optional[List[List[int]]] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        """Chain multiple loss functions together.
+
+            Optionally apply a weight to each loss function contribution.
+
+            E.g. Loss = RMSE*0.5 + LogCoshLoss*1.5
+
+        Args:
+            loss_functions: A list of loss functions to use.
+                Each loss function contributes a term to the overall loss.
+            loss_factors: An optional list of factors that will be mulitplied
+            to each loss function contribution. Must be ordered according
+            to `loss_functions`. If not given, the weights default to 1.
+            prediction_keys: An optional list of lists of indices for which
+                prediction columns to use for each loss function. If not
+                given, all columns are used for all loss functions.
+        """
+        if loss_factors is None:
+            # add weight of 1 - i.e no discrimination
+            loss_factors = np.repeat(1, len(loss_functions)).tolist()
+
+        assert len(loss_functions) == len(loss_factors)
+        self._factors = loss_factors
+        self._loss_functions = loss_functions
+
+        if prediction_keys is not None:
+            self._prediction_keys: Optional[List[List[int]]] = prediction_keys
+        else:
+            self._prediction_keys = None
+        super().__init__(*args, **kwargs)
+
+    def _forward(self, prediction: Tensor, target: Tensor) -> Tensor:
+        """Calculate loss using multiple loss functions.
+
+        Args:
+            prediction: Output of the model.
+            target: Target tensor, extracted from graph object.
+
+        Returns:
+            Elementwise loss terms. Shape [N,]
+        """
+        if self._prediction_keys is None:
+            prediction_keys = [list(range(prediction.size(1)))] * len(
+                self._loss_functions
+            )
+        else:
+            prediction_keys = self._prediction_keys
+        for k, (loss_function, prediction_key) in enumerate(
+            zip(self._loss_functions, prediction_keys)
+        ):
+            if k == 0:
+                elements = self._factors[k] * loss_function._forward(
+                    prediction=prediction[:, prediction_key], target=target
+                )
+            else:
+                elements += self._factors[k] * loss_function._forward(
+                    prediction=prediction[:, prediction_key], target=target
+                )
+        return elements
+
+
+class RMSEVonMisesFisher3DLoss(EnsembleLoss):
+    """Combine the VonMisesFisher3DLoss with RMSELoss."""
+
+    def __init__(self, vmfs_factor: float = 0.05) -> None:
+        """VonMisesFisher3DLoss with a RMSE penality term.
+
+            The VonMisesFisher3DLoss will be weighted with `vmfs_factor`.
+
+        Args:
+            vmfs_factor: A factor applied to the VonMisesFisher3DLoss term.
+            Defaults ot 0.05.
+        """
+        super().__init__(
+            loss_functions=[RMSELoss(), VonMisesFisher3DLoss()],
+            loss_factors=[1, vmfs_factor],
+            prediction_keys=[[0, 1, 2], [0, 1, 2, 3]],
+        )
+
+
+class NLLUncertaintyLoss(LossFunction):
+    """NLL Loss for Gaussian: log(sigma^2) + [(y - mu)^2 / (sigma^2 * mean((y - mu)^2))]"""
+
+    def __init__(self, pred_size: int = 3, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.pred_size = pred_size
+
+    def _forward(self, prediction: Tensor, target: Tensor) -> Tensor:
+        """
+        Args:
+            prediction: tensor with shape [N, 2 * pred_size] with stacked (prediction, log_sigma2_prediction)
+            target: Target
+
+        Returns:
+            Elementwise loss terms. Shape [N,]
+        """
+        pred, log_pred_sigma2 = (
+            prediction[:, : self.pred_size],
+            prediction[:, self.pred_size :],
+        )
+        pred_sigma2 = torch.exp(log_pred_sigma2)
+        return log_pred_sigma2 + (pred - target) ** 2 / pred_sigma2
