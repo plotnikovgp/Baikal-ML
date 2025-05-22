@@ -14,18 +14,18 @@ model_params:
   hidden_size: 512
   num_layers: 3
   dim_feedforward_size: 512
-  n_heads: 2
+  n_heads: 1
   out_size: 3
   dropout_p: 0.0
   second_head_out_size: 3
 
-lr: 1.0e-4
-batch_size: 128
+lr: 1.0e-3
+batch_size: 512
 accumulate_grad_steps: 1
 num_train_steps_per_validation: 25
 grad_clip_value: 1.0
 warmup_steps: 1000
-distance_loss_coef: 0.
-exp_name: "encoder_nl5_hs512_dff512_nh2_lr1e4_track-len100_only-dist-loss"
+distance_loss_coef: 0.01
+exp_name: "encoder_nl5_hs512_dff512_bs512_nh1_lr1e3_track-len100_dc-0.01"
 exp_project: "direction_v1_mc_0924"
 val_subset_cut: 3

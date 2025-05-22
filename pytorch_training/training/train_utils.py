@@ -5,7 +5,9 @@ import torch
 import torch_geometric
 import json
 import numpy as np
-from metrics import binary_clf_metrics
+from metrics import binary_clf_metrics, multiclass_clf_metrics
+from metrics import BaseMetrics
+import logging
 
 
 def _run_model(
@@ -39,7 +41,7 @@ def _run_model(
 
         x, y_true, mask = (
             x.to(model.device),
-            y_true.to(model.device),
+            y_true.to(model.device) if y_true is not None else None,
             mask.to(model.device),
         )
 
@@ -241,6 +243,7 @@ def validate_single(
     is_domain_adaptation=False,
     dataset_idx=0,
     min_recall=None,
+    val_mode=False,
     **kwargs,
 ) -> dict[str, float]:
     y_pred_hist = None
@@ -303,12 +306,12 @@ def validate_single(
         return y_pred_hist, y_true_hist
 
     if min_recall is not None:
-        # TODO: metrics should be class which
+        # TODO: metrics should be class which save min recall
         val_metrics = metrics_calc_fun(y_pred_hist, y_true_hist, min_recall=min_recall)
     else:
         val_metrics = metrics_calc_fun(y_pred_hist, y_true_hist)
 
-    if is_domain_adaptation:
+    if is_domain_adaptation and not val_mode:
         domain_preds = domain_pred_hist.argmax(dim=1)
         domain_labels = domain_true_hist
         domain_accuracy = (domain_preds == domain_labels).float().mean().item()
@@ -332,6 +335,7 @@ def validate(
     return_preds=False,
     dataset_names=None,
     min_recall=None,
+    val_mode=False,
     **kwargs,
 ) -> dict[str, float]:
     if not isinstance(val_loader, list):
@@ -348,6 +352,10 @@ def validate(
     all_metrics = {}
 
     for i, loader in enumerate(val_loader):
+
+        if isinstance(metrics_calc_fun, BaseMetrics):
+            metrics_calc_fun.set_dataset_name(dataset_names[i])
+
         dataset_metrics = validate_single(
             model=model,
             val_loader=loader,
@@ -356,8 +364,15 @@ def validate(
             return_preds=False,
             dataset_idx=i,  # Pass index position as dataset_idx
             min_recall=min_recall,
+            val_mode=val_mode,
             **kwargs,
         )
+        print("val_mode", val_mode)
+        if val_mode:
+            print(f"Dataset {dataset_names[i]}")
+            for key, value in dataset_metrics.items():
+                print(f"{key}: {value}")
+            print("\n")
 
         dataset_prefix = dataset_names[i]
         for k, v in dataset_metrics.items():
@@ -384,6 +399,7 @@ def train(
     validate_before_train=True,
     save_best_per_dataset=False,
     dataset_names=None,
+    val_mode=False,
 ):
     best_val_metrics = {}
     validate_before_train = True
@@ -402,7 +418,7 @@ def train(
 
     with tqdm(range(total_iters), unit="batch", dynamic_ncols=True) as step_iter:
         for _ in step_iter:
-            if not validate_before_train:
+            if not validate_before_train and not val_mode:
                 train_logs = train_fun(model, **train_fun_kwargs)
                 train_logs_ = {
                     "train/" + k: train_logs[k] for k in sorted(list(train_logs.keys()))
@@ -422,10 +438,9 @@ def train(
                 }
                 step_iter.set_description(str(to_print))
 
-            if validate_before_train or cur_epoch % val_every_epochs == 0:
+            if validate_before_train or cur_epoch % val_every_epochs == 0 or val_mode:
                 validate_before_train = False
-                val_logs = validate_fun(model, **validate_fun_kwargs)
-
+                val_logs = validate_fun(model, val_mode=val_mode, **validate_fun_kwargs)
                 val_logs_ = {"val/" + k: v for k, v in val_logs.items()}
 
                 if use_wandb:
@@ -444,7 +459,7 @@ def train(
                                 if (
                                     dataset_label not in best_val_metrics
                                     or metric_value < best_val_metrics[dataset_label]
-                                ):
+                                ) and not val_mode:
                                     best_val_metrics[dataset_label] = metric_value
 
                                     save_path = (
@@ -456,8 +471,10 @@ def train(
                                         f"{model_save_dir}/best_val_metrics{dataset_label}.txt",
                                         "w",
                                     ) as f:
-                                        f.write(json.dumps(val_logs))
-                                        f.write("\n" + json.dumps(train_logs_))
+                                        f.write(json.dumps(val_logs, indent=4))
+                                        f.write(
+                                            "\n" + json.dumps(train_logs_, indent=4)
+                                        )
 
                                     with open(
                                         f"{model_save_dir}/train_config{dataset_label}.yaml",
@@ -489,5 +506,9 @@ def train(
                                             f"{model_save_dir}/best_val_metrics{dataset_label}.txt",
                                             "w",
                                         ) as f:
-                                            f.write(json.dumps(val_logs))
-                                            f.write("\n" + json.dumps(train_logs_))
+                                            f.write(json.dumps(val_logs, indent=4))
+                                            f.write(
+                                                "\n" + json.dumps(train_logs_, indent=4)
+                                            )
+            if val_mode:
+                break

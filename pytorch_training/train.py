@@ -50,6 +50,8 @@ def validate_config(parsed_config: tp.Dict[str, tp.Any]):
 
 
 def create_preprocessor(train_type, is_graph, config):
+    if config.get("preprocessor", None) == "no_labels":
+        return NoLabelsPreprocessor()
     if train_type == "noise_sig":
         return (
             NoiseSigGraphPreprocessor(config["knn_neighbours"])
@@ -159,6 +161,8 @@ def main():
     train_params_str = yaml.dump(train_params)
     fix_seed(train_params.get("random_seed", SEED))
 
+    is_val_mode = train_params.get("val_mode", False)
+
     train_type = train_params.get("train_type")
     is_graph = train_params.get("is_graph")
     is_classification = False
@@ -171,6 +175,11 @@ def main():
     if train_params.get("from_checkpoint"):
         state_dict = torch.load(train_params["from_checkpoint"])
         load_state_dict_partial(model, state_dict, strict=False)
+
+    save_dir = (
+        Path("checkpoints") / train_params["exp_project"] / train_params["exp_name"]
+    )
+    Path.mkdir(save_dir, parents=True, exist_ok=True)
 
     track_cascade_model = None
     # with open("train_configs/encoder_track_cascade.yaml", "r") as f:
@@ -227,7 +236,9 @@ def main():
                 else BaikalDatasetAnglesOldSingle
             )
         train_type = "angle_reconstruction"
-        metrics_calc_fun = angle_reconstruction_metrics
+        metrics_calc_fun = AngleReconstructionMetrics(
+            save_preds=is_val_mode, save_dir=save_dir
+        )
 
         if train_params.get("use_vmf_loss", False):
             criterion = VonMisesFisher3DLoss()
@@ -293,7 +304,9 @@ def main():
             DatasetType = BaikalDatasetAnglesSingle
 
         # Use the same metrics function as regular angle reconstruction
-        metrics_calc_fun = angle_reconstruction_metrics
+        metrics_calc_fun = AngleReconstructionMetrics(
+            save_preds=is_val_mode, save_dir=save_dir
+        )
 
         # Custom criterion for domain adaptation that handles labeled/unlabeled datasets
         domain_adaptation_loss_k = train_params.get("domain_adaptation_loss_k", 0.1)
@@ -323,7 +336,7 @@ def main():
                 y_pred = y_pred[:, :3]
                 y_true = y_true[:, :3]
                 res["nll_loss"] = nll_loss
-                res["loss"] = 0 * loss_fn(y_pred, y_true) + nll_loss_k * nll_loss
+                res["loss"] = loss_fn(y_pred, y_true) + nll_loss_k * nll_loss
             else:
                 res["loss"] = loss_fn(y_pred, y_true)
 
@@ -446,6 +459,7 @@ def main():
         dataset_names = []
 
         for i, config in enumerate(train_params["dataset_configs"]):
+            # Add all the parameters from the main config to the dataset config
             for key, value in train_params.items():
                 if (
                     key not in ["dataset_configs", "dataset_weights", "dataset_names"]
@@ -458,11 +472,13 @@ def main():
 
             if "DatasetType" not in config:
                 config["DatasetType"] = DatasetType
-
-            if "preprocessor" not in config:
-                config["preprocessor"] = create_preprocessor(
-                    train_type, config.get("is_graph", is_graph), config
-                )
+            elif config["DatasetType"] == "no_labels":
+                config["DatasetType"] = BaikalDatasetNoLabels
+            else:
+                raise ValueError(f"Unknown dataset type: {config['DatasetType']}")
+            config["preprocessor"] = create_preprocessor(
+                train_type, config.get("is_graph", is_graph), config
+            )
 
         dataloaders = create_multi_dataset_dataloader(
             dataset_configs=train_params["dataset_configs"],
@@ -562,28 +578,25 @@ def main():
         min_recall=train_params.get("min_recall", None),
     )
 
-    if not args.disable_wandb:
+    if not args.disable_wandb and not is_val_mode:
         wandb.init(
             project=train_params["exp_project"],
             name=train_params["exp_name"],
             config=train_params,
         )
 
-    save_dir = (
-        Path("checkpoints") / train_params["exp_project"] / train_params["exp_name"]
-    )
-    Path.mkdir(save_dir, parents=True, exist_ok=True)
     train(
         model,
         train_fun=train_iters,
         train_fun_kwargs=train_fun_kwargs,
         validate_fun=validate,
         validate_fun_kwargs=validate_fun_kwargs,
-        use_wandb=not args.disable_wandb,
+        use_wandb=not args.disable_wandb and not is_val_mode,
         model_save_dir=save_dir,
         train_params_str=train_params_str,
         save_best_per_dataset=train_params.get("save_best_per_dataset", False),
         dataset_names=dataset_names,  # Use custom dataset names
+        val_mode=is_val_mode,
     )
 
 

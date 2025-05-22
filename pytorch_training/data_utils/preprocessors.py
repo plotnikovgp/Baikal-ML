@@ -10,21 +10,6 @@ import typing as tp
 EPS = 1e-8
 
 
-class BasePreprocessor(ABC):
-    @abstractmethod
-    def __call__(self, *args, **kwargs) -> tuple[torch.Tensor, torch.Tensor]:
-        pass
-
-
-class NoiseSigPreprocessor(BasePreprocessor):
-    def __call__(
-        self, x: torch.Tensor, y: torch.Tensor, mask: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        y[(y != 0) & mask] = 1
-        y = y.long()
-        return x, y, mask
-
-
 class DataPrefilter:
     def __init__(
         self,
@@ -73,6 +58,33 @@ class DataPrefilter:
                 1 + (0, self.mult_gauss_noise_fraction, data_x[0].shape)
             )
         return data_x
+
+
+class BasePreprocessor(ABC):
+    def __init__(self, data_prefilter: DataPrefilter | None = None, *args, **kwargs):
+        self.data_prefilter = data_prefilter
+
+    @abstractmethod
+    def __call__(self, *args, **kwargs) -> tuple[torch.Tensor, torch.Tensor]:
+        pass
+
+
+class NoiseSigPreprocessor(BasePreprocessor):
+    def __call__(
+        self, x: torch.Tensor, y: torch.Tensor, mask: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        y[(y != 0) & mask] = 1
+        y = y.long()
+        return x, y, mask
+
+
+class NoLabelsPreprocessor(BasePreprocessor):
+    def __call__(
+        self, x: torch.Tensor, mask: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        if self.data_prefilter is not None:
+            x = self.data_prefilter(x)
+        return x, torch.zeros(x.shape[0], 3, dtype=torch.float32), mask
 
 
 class TrackCascadePreprocessor(BasePreprocessor):

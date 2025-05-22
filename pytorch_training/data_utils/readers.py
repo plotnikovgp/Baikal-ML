@@ -225,6 +225,28 @@ class BaikalDatasetAngles(BaikalDataset):
         return res
 
 
+class BaikalDatasetNoLabels(BaikalDataset):
+    def __getitem__(self, idx):
+        batch_start_idx = idx * self.batch_size
+        batch_end_idx = min(
+            (idx + 1) * self.batch_size,
+            len(self.hfile[self.split_type + "/ev_starts/data"]) - 1,
+        )
+        event_starts = self.hfile[self.split_type + "/ev_starts/data"][
+            batch_start_idx : batch_end_idx + 1
+        ]
+        global_start = event_starts[0]
+        global_end = event_starts[-1]
+        raw_data = torch.tensor(
+            self.hfile[self.split_type + "/data/data"][global_start:global_end]
+        )
+
+        data_x, _, mask = self._collate(event_starts, raw_data, None, pad_y=False)
+
+        res = self.preprocessor(data_x, mask)
+        return res
+
+
 class BaikalDatasetAnglesOld(BaikalDataset):
     def __getitem__(self, idx):
         batch_start_idx = idx * self.batch_size
