@@ -40,19 +40,19 @@ def main():
     parser.add_argument(
         "--base-config",
         "-c",
-        default="train_configs/noise_sig.yaml",
+        default="train_configs/anle_multi_da.yaml",
         help="Base configuration file path",
     )
     parser.add_argument(
         "--gpus",
         type=str,
-        default=None,
+        default="5,6",
         help="Comma-separated list of GPU IDs to use (default: use all available)",
     )
     parser.add_argument(
         "--max-parallel",
         type=int,
-        default=None,
+        default=4,
         help="Maximum number of parallel experiments (default: number of GPUs)",
     )
     parser.add_argument(
@@ -84,12 +84,8 @@ def main():
     parameter_variations = [
         # Vary hidden size and dff and num_layers
         {
-            "model_params": {
-                "hidden_size": 64,
-                "dim_feedforward_size": 256,
-                "num_layers": 5,
-            },
-            "exp_name": "encoder_hs64_dff256_nl5",
+            "model_params": {"gradient_reversal_alpha": 0.0},
+            "exp_name": "encoder_nl5_hs512_dff512_nh1_lr1e4_bs256_nm250_wr5_wm5_da_k01_gr01_dp0_not_pretrained",
         },
         # {"model_params": {"hidden_size": 128, "dim_feedforward_size": 128, "num_layers": 5}, "exp_name": "encoder_hs128_dff128_nl5"},
         # {"model_params": {"hidden_size": 128, "dim_feedforward_size": 512, "num_layers": 5}, "exp_name": "encoder_hs128_dff512_nl5"},

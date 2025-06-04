@@ -65,7 +65,7 @@ class MultiDatasetSampler(IterableDataset):
         else:
             total = sum(probabilities)
             self.probabilities = [p / total for p in probabilities]
-
+        print(self.probabilities)
         self.random_gen = random.Random(seed)
         self.prefetch_size = prefetch_size
         self._prefetch_buffers = [[] for _ in datasets]

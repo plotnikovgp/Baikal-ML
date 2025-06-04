@@ -108,6 +108,7 @@ class Encoder(nn.Module):
 class EncoderDomainAdaptation(nn.Module):
     def __init__(
         self,
+        freeze_encoder: bool = False,
         num_domains=2,
         domain_classifier_hidden_size=128,
         domain_classifier_layers=2,
@@ -153,6 +154,12 @@ class EncoderDomainAdaptation(nn.Module):
 
         self.domain_classifier = nn.Sequential(*domain_classifier_layers_list)
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        if freeze_encoder:
+            self.freeze_encoder()
+
+    def freeze_encoder(self):
+        for param in self.encoder.parameters():
+            param.requires_grad = False
 
     def forward(self, x, mask):
         _, hidden_states = self.encoder(x, mask)

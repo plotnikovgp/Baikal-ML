@@ -1,5 +1,5 @@
-exp_project: "angle_reconstruction_combine_reco_mc"
-exp_name: "cnn-noatt_nl4_hs256_ks5_lr1e3_bs256-a2_nm250_wr5_wm5_da_k01_gr0_dp0_mae-loss"
+exp_project: "angle_reconstruction_exp_mc"
+exp_name: "cnn-noatt_nl4_hs256_ks5_lr1e3_bs256-a2_nm250_wr5_wm5_da_k02_gr1_dp0_mae-loss"
 dataset_weights: [0.5, 0.5]
 
 lr: 1.0e-3
@@ -14,7 +14,7 @@ warmup_steps: 1000
 events_amount: 10000000
 use_mae_loss: True
 
-domain_adaptation_loss_k: 0.
+domain_adaptation_loss_k: 0.2
 label_dataset_name: "mc2020" 
 
 save_best_per_dataset: True 

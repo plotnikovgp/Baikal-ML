@@ -1,20 +1,24 @@
-exp_project: "angle_reconstruction_combine_reco_mc"
-exp_name: "encoder_nl5_hs512_dff512_nh1_lr1e4_bs256_nm250_wr5_wm5_da_k01_gr001_dp0_mae-loss_use-mean-not-cls"
+exp_project: "angle_reconstruction_combine_reco_mc_v4"
+exp_name: "encoder_nl5_hs512_dff512_nh1_lr1e4_bs256_nm250_wr10_wm0_da_k02_gr001_dp0_mc2020"
 dataset_weights: [0.5, 0.5]
 
+# from_checkpoint: "/home/plotnikovgp/Baikal-ML/pytorch_training/checkpoints/angle_reconstruction_combine_reco_mc_v4/encoder_nl5_hs512_dff512_nh1_lr1e4_bs256_nm250_wr5_wm5_da_k02_gr0_dp0_mc2020/best_mc2020.ckpt"
+
 lr: 1.0e-4
-batch_size: &batch_size 256
+batch_size: &batch_size 128
 tres_cut: 100000.0
-num_train_steps_per_validation: 250
+num_train_steps_per_validation: 500
 accumulate_grad_steps: 2
 train_type: "angle_reconstruction_domain_adaptation" 
 is_graph: False
 grad_clip_value: 1.0
-warmup_steps: 1000
+warmup_steps: 500
 events_amount: 10000000
 use_mae_loss: True
 
-domain_adaptation_loss_k: 0.1
+nll_loss_k: 0.0
+angle_loss_k: 1.0
+domain_adaptation_loss_k: 0.2
 label_dataset_name: "mc2020" 
 
 save_best_per_dataset: True 
@@ -25,15 +29,26 @@ dataset_configs:
     name: "reco"
     tres_cut: 10000.0
     val_subset_cut: 5
-    data_prefilter_params:
-      data_file: *p1
-      norm_Q: True
+    # data_prefilter_params:
+    #   data_file: *p1
+    #   norm_Q: True
   -
-    path_to_data: /home/plotnikovgp/Baikal-ML/pytorch_training/data/baikal_mc2020_multi_split_MChits-8-2_track-caskade-nue2_normed_.h5
+    path_to_data: &p2 "/home/plotnikovgp/Baikal-ML/pytorch_training/data/baikal_mc2020_multi_split_MChits-8-2_track-caskade-nue2_normed_.h5"
     name: "mc2020"
     tres_cut: 10000.0
     val_subset_cut: 30
-    
+    data_prefilter_params:
+      data_file: *p2
+      norm_Q: True
+  # -
+  #   path_to_data: /home/plotnikovgp/Baikal-ML/pytorch_training/data/baikal_exp-data-single-0324_flat_norm.h5
+  #   name: "exp_data"
+  #   val_subset_cut: 30
+  #   DatasetType: 'no_labels'
+  #   preprocessor: 'no_labels'
+
+# from_checkpoint: "/home/plotnikovgp/Baikal-ML/pytorch_training/checkpoints/angle_reconstruction_combine_reco_mc/encoder_nl5_hs512_dff512_nh1_lr1e4_bs256_nm250_wr5_wm5_da_k01_gr001_dp0_mae-loss_use-mean-not-cls/best_mc2020.ckpt"
+
 model_type: "encoder_domain_adaptation"
 model_params:
   in_features: 5
@@ -42,9 +57,9 @@ model_params:
   dim_feedforward_size: &dff 512
   n_heads: &n_heads 1
   out_size: 3
-  dropout_p: 0.
+  dropout_p: 0.0
   use_batch_norm: False
   num_domains: 2  # Two datasets: reco and mc2020
   domain_classifier_hidden_size: 128
   domain_classifier_layers: 2
-  gradient_reversal_alpha: 0.01
+  gradient_reversal_alpha: 0.1

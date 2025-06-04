@@ -1,5 +1,5 @@
-exp_project: "angle_reconstruction_combine_reco_mc"
-exp_name: "encoder_nl5_hs512_dff512_nh1_lr1e4_bs256_nm250_wr5_wm5_da_k01_gr0_dp0_mae-loss_use-mean-not-cls"
+exp_project: "angle_reconstruction_exp_mc"
+exp_name: "encoder_nl5_hs512_dff512_nh1_lr1e4_bs256_nm250_wr5_wm5_da_k01_gr01_dp0_not_pretrained_test"
 dataset_weights: [0.5, 0.5]
 
 lr: 1.0e-4
@@ -34,16 +34,16 @@ dataset_configs:
     tres_cut: 10000.0
     val_subset_cut: 30
   -
-    path_to_data: /home/plotnikovgp/Baikal-ML/pytorch_training/data/baikal_mc2020_multi_split_MChits-8-2_track-caskade-nue2_normed_.h5
+    path_to_data: /home/plotnikovgp/Baikal-ML/pytorch_training/data/baikal_exp-data-single-0324_flat_norm.h5
     name: "exp_data"
-    val_subset_cut: 30
+    val_subset_cut: 10
     DatasetType: 'no_labels'
     preprocessor: 'no_labels'
     data_prefilter_params:
       data_file: *p1
  
 
-from_checkpoint: "/home/plotnikovgp/Baikal-ML/pytorch_training/checkpoints/angle_reconstruction_combine_reco_mc/encoder_nl5_hs512_dff512_nh1_lr1e4_bs256_nm250_wr5_wm5_da_k01_gr001_dp0_mae-loss_use-mean-not-cls/best_mc2020.ckpt"
+from_checkpoint: "/home/plotnikovgp/Baikal-ML/pytorch_training/checkpoints/angle_reconstruction_exp_mc/encoder_nl5_hs512_dff512_nh1_lr1e4_bs256_nm250_wr5_wm5_da_k01_gr01_dp0/best_mc2020.ckpt"
 val_mode: True
 
 model_type: "encoder_domain_adaptation"

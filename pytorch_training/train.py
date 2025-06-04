@@ -13,6 +13,7 @@ from data_utils import *
 from metrics import *
 from models import load_model
 from training import train, train_iters, validate
+from training.schedulers import CosineScheduleAfterStep
 
 DEVICE = "cuda"
 SEED = 42
@@ -173,7 +174,7 @@ def main():
     )
 
     if train_params.get("from_checkpoint"):
-        state_dict = torch.load(train_params["from_checkpoint"])
+        state_dict = torch.load(train_params["from_checkpoint"], weights_only=False)
         load_state_dict_partial(model, state_dict, strict=False)
 
     save_dir = (
@@ -328,34 +329,56 @@ def main():
         predict_sigma = train_params.get("predict_sigma", False)
         nll_loss_k = train_params.get("nll_loss_k", 0.0)
         nll_loss_fn = NLLUncertaintyLoss(pred_size=3)
+        angle_loss_k = train_params.get("angle_loss_k", 1.0)
 
         def criterion(y_pred, y_true, domain_pred=None, domain_true=None):
             res = {}
-            if predict_sigma:
-                nll_loss = nll_loss_fn(y_pred, y_true)
+
+            if domain_true is None:
+                mask = torch.ones(y_true.shape[0], dtype=torch.bool)
+            else:
+                mask = domain_true == dataset_names.index(label_dataset_name)
+            print(torch.unique(domain_true))
+            print(
+                "mask.sum(), mask.shape, domain_true is None",
+                mask.sum(),
+                mask.sum(),
+                mask.shape,
+                domain_true is None,
+            )
+
+            if predict_sigma and mask.sum() > 0:
+                nll_loss = nll_loss_fn(y_pred[mask], y_true[mask])
                 y_pred = y_pred[:, :3]
                 y_true = y_true[:, :3]
                 res["nll_loss"] = nll_loss
-                res["loss"] = loss_fn(y_pred, y_true) + nll_loss_k * nll_loss
             else:
-                res["loss"] = loss_fn(y_pred, y_true)
+                nll_loss = torch.tensor(0.0, device=y_pred.device)
 
-            if domain_true is None:
-                return res
-
-            mask = domain_true == dataset_names.index(label_dataset_name)
             if mask.sum() > 0:
                 angle_loss = loss_fn(y_pred[mask], y_true[mask])
             else:
                 angle_loss = torch.tensor(0.0, device=y_pred.device)
 
-            domain_loss = torch.nn.functional.cross_entropy(domain_pred, domain_true)
-            total_loss = angle_loss + domain_adaptation_loss_k * domain_loss
-            return {
-                "loss": total_loss,  # For backward pass
-                "angle_loss": angle_loss.detach(),
-                "domain_loss": domain_loss.detach(),
-            }
+            if domain_pred is not None:
+                domain_loss = torch.nn.functional.cross_entropy(
+                    domain_pred, domain_true
+                )
+            else:
+                domain_loss = torch.tensor(0.0, device=y_pred.device)
+            total_loss = (
+                angle_loss_k * angle_loss
+                + domain_adaptation_loss_k * domain_loss
+                + nll_loss_k * nll_loss
+            )
+            res["loss"] = total_loss
+            res["angle_loss"] = angle_loss.detach()
+            res["domain_loss"] = domain_loss.detach()
+            res["nll_loss"] = nll_loss.detach()
+            print(mask.sum(), mask.shape)
+            print(res)
+            a = input()
+            return res
 
     elif train_type == "track_cascade_domain_adaptation":
         if not is_graph:
@@ -397,11 +420,11 @@ def main():
 
     elif train_type == "energy_reconstruction":
         DatasetType = BaikalDatasetEnergy
-        metrics_calc_fun = regression_metrics
+        metrics_calc_fun = EnergyMetrics(save_preds=is_val_mode, save_dir=save_dir)
         criterion = torch.nn.MSELoss()
     elif train_type == "energy_reconstruction_domain_adaptation":
         DatasetType = BaikalDatasetEnergy
-        metrics_calc_fun = regression_metrics
+        metrics_calc_fun = EnergyMetrics(save_preds=is_val_mode, save_dir=save_dir)
 
         # For domain adaptation
         domain_adaptation_loss_k = train_params.get("domain_adaptation_loss_k", 0.1)
@@ -516,9 +539,32 @@ def main():
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, "min", factor=0.5, min_lr=1e-3, patience=128
     )
-    warmup_scheduler = warmup.ExponentialWarmup(
-        optimizer, train_params.get("warmup_steps", 0)
-    )
+    if train_params.get("scheduler_type", "plateau") == "cosine":
+        # Setup cosine scheduler with optional warmup
+        start_step = train_params.get("cosine_start_step", 0)
+        total_steps = train_params.get("max_epochs", epochs) * len(train_loader)
+        min_lr = train_params.get("min_lr", 0)
+
+        scheduler = CosineScheduleAfterStep(
+            optimizer, start_step=start_step, total_steps=total_steps, min_lr=min_lr
+        )
+
+        warmup_steps = train_params.get("warmup_steps", 0)
+        if warmup_steps > 0:
+            warmup_scheduler = warmup.ExponentialWarmup(
+                optimizer, warmup_period=warmup_steps
+            )
+        else:
+            warmup_scheduler = None
+    else:
+        # Default plateau scheduler
+        # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        #     optimizer, patience=train_params.get("scheduler_patience", 10000), factor=0.5
+        # )
+        scheduler = None
+        warmup_scheduler = warmup.ExponentialWarmup(
+            optimizer, warmup_period=train_params.get("warmup_steps", 0)
+        )
 
     train_dataset = (
         dataloaders.get("train_dataset") or dataloaders.get("train_datasets", [None])[0]

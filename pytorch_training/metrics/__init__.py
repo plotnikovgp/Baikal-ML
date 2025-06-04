@@ -50,8 +50,6 @@ class BaseMetrics:
                 data = np.array(data)
             if not (self.save_dir / "data").exists():
                 (self.save_dir / "data").mkdir(parents=True, exist_ok=True)
-            a = input("save? (y/n)")
-            print(self.save_dir / "data" / f"{self.dataset_name}_{name}.txt")
             np.savetxt(self.save_dir / "data" / f"{self.dataset_name}_{name}.txt", data)
         self.data_to_save = {}
 
@@ -166,6 +164,17 @@ def regression_metrics(y_pred, y_true):
     except ValueError:
         traceback.print_exc()
         raise
+
+
+class EnergyMetrics(BaseMetrics):
+    def _calc_metrics(self, y_pred, y_true, **kwargs):
+        metrics = regression_metrics(y_pred, y_true)
+        if self.save_preds:
+            self.data_to_save = {
+                "true_E": y_true,
+                "pred_E": y_pred,
+            }
+        return metrics
 
 
 class AngleReconstructionMetrics(BaseMetrics):

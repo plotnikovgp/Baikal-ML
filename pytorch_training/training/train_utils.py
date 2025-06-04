@@ -136,13 +136,9 @@ def train_iters(
     for iter in range(num_iters):
         data = next(train_loader)
 
-        dataset_idx = None
         if is_domain_adaptation:
-            # The dataset_idx is at the last position in the tuple
             dataset_idx = data[-1]
             data = data[:-1]
-
-        if is_domain_adaptation:
             output, y_pred, y_true, domain_pred, domain_true = _run_model(
                 model,
                 data,
@@ -150,6 +146,7 @@ def train_iters(
                 dataset_idx=dataset_idx,
                 **kwargs,
             )
+
             loss = criterion(y_pred, y_true, domain_pred, domain_true)
 
             domain_pred_hist = (
@@ -190,11 +187,21 @@ def train_iters(
         if iter % accumulate_grad_steps == 0:
             optimizer.step()
             optimizer.zero_grad()
+
             if warmup_scheduler is not None:
                 with warmup_scheduler.dampening():
                     if warmup_scheduler.last_step + 1 >= warmup_steps:
-                        scheduler.step(loss_accum)
-                        loss_accum = 0.0
+                        if isinstance(
+                            scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
+                        ):
+                            scheduler.step(loss_accum)
+                            loss_accum = 0.0
+                        elif scheduler is not None:
+                            scheduler.step()
+            elif scheduler is not None and not isinstance(
+                scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
+            ):
+                scheduler.step()
 
         y_pred_hist = (
             torch.cat((y_pred_hist, y_pred), dim=0)
@@ -367,7 +374,6 @@ def validate(
             val_mode=val_mode,
             **kwargs,
         )
-        print("val_mode", val_mode)
         if val_mode:
             print(f"Dataset {dataset_names[i]}")
             for key, value in dataset_metrics.items():
@@ -402,7 +408,7 @@ def train(
     val_mode=False,
 ):
     best_val_metrics = {}
-    validate_before_train = True
+    validate_before_train = False
     train_logs_ = {}
     iters_current = 0
     iters_per_epoch = len(train_fun_kwargs["dataset"]) / train_fun_kwargs["num_iters"]
