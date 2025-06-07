@@ -53,7 +53,7 @@ def validate_config(parsed_config: tp.Dict[str, tp.Any]):
 def create_preprocessor(train_type, is_graph, config):
     if config.get("preprocessor", None) == "no_labels":
         return NoLabelsPreprocessor()
-    if train_type == "noise_sig":
+    if train_type == "noise_sig" or train_type == "noise_sig_domain_adaptation":
         return (
             NoiseSigGraphPreprocessor(config["knn_neighbours"])
             if is_graph
@@ -79,10 +79,7 @@ def create_preprocessor(train_type, is_graph, config):
             if is_graph
             else TresAndTrackCascadePreprocessor(config["tres_cut"])
         )
-    elif train_type == "energy_reconstruction":
-        data_prefilter = DataPrefilter(**(config.get("data_prefilter_params", {})))
-        return EnergyPreprocessor(data_prefilter)
-    elif train_type == "energy_reconstruction_domain_adaptation":
+    elif train_type == "energy_reconstruction" or train_type == "energy_reconstruction_domain_adaptation":
         data_prefilter = DataPrefilter(**(config.get("data_prefilter_params", {})))
         return EnergyPreprocessor(data_prefilter)
     elif train_type in [
@@ -181,7 +178,9 @@ def main():
         Path("checkpoints") / train_params["exp_project"] / train_params["exp_name"]
     )
     Path.mkdir(save_dir, parents=True, exist_ok=True)
-
+    with open(save_dir / "train_params.yaml", "w") as f:
+        yaml.dump(train_params, f)
+    
     track_cascade_model = None
     # with open("train_configs/encoder_track_cascade.yaml", "r") as f:
     #     track_cascade_params = yaml.safe_load(f)
@@ -195,6 +194,11 @@ def main():
         DatasetType = BaikalDataset
         is_classification = True
         criterion = torch.nn.CrossEntropyLoss()
+        metrics_calc_fun = binary_clf_metrics
+    elif train_type == "noise_sig_domain_adaptation":
+        DatasetType = BaikalDataset
+        is_classification = True
+        loss_fn = torch.nn.CrossEntropyLoss()
         metrics_calc_fun = binary_clf_metrics
     elif train_type == "track_cascade":
         DatasetType = (
@@ -338,14 +342,6 @@ def main():
                 mask = torch.ones(y_true.shape[0], dtype=torch.bool)
             else:
                 mask = domain_true == dataset_names.index(label_dataset_name)
-            print(torch.unique(domain_true))
-            print(
-                "mask.sum(), mask.shape, domain_true is None",
-                mask.sum(),
-                mask.sum(),
-                mask.shape,
-                domain_true is None,
-            )
 
             if predict_sigma and mask.sum() > 0:
                 nll_loss = nll_loss_fn(y_pred[mask], y_true[mask])
@@ -375,9 +371,6 @@ def main():
             res["angle_loss"] = angle_loss.detach()
             res["domain_loss"] = domain_loss.detach()
             res["nll_loss"] = nll_loss.detach()
-            print(mask.sum(), mask.shape)
-            print(res)
-            a = input()
             return res
 
     elif train_type == "track_cascade_domain_adaptation":
@@ -620,7 +613,7 @@ def main():
         is_direction=(train_type == "direction"),
         is_domain_adaptation="domain_adaptation" in train_type,
         is_energy_reconstruction="energy_reconstruction" in train_type,
-        dataset_names=dataset_names,  # Use custom dataset names
+        dataset_names=dataset_names,
         min_recall=train_params.get("min_recall", None),
     )
 

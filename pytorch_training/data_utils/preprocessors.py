@@ -41,7 +41,6 @@ class DataPrefilter:
     def __call__(self, data_x):
         if self.norm_Q:
             data_x[0] = (data_x[0] - self.means[0]) / self.stds[0]
-            print(data_x.shape, data_x[0].mean(), data_x[0].std())
         if self.Q_lower_bound is not None:
             data_x[0] = data_x[0].clamp(min=self.Q_lower_bound)
         if self.Q_upper_bound is not None:

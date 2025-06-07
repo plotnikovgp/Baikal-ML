@@ -360,7 +360,7 @@ def validate(
 
     for i, loader in enumerate(val_loader):
 
-        if isinstance(metrics_calc_fun, BaseMetrics):
+        if isinstance(metrics_calc_fun, BaseMetrics) and dataset_names is not None:
             metrics_calc_fun.set_dataset_name(dataset_names[i])
 
         dataset_metrics = validate_single(

@@ -162,12 +162,12 @@ class EncoderDomainAdaptation(nn.Module):
             param.requires_grad = False
 
     def forward(self, x, mask):
-        _, hidden_states = self.encoder(x, mask)
+        output, hidden_states = self.encoder(x, mask)
         features = hidden_states
 
-        output = self.main_head(features)
-        if self.aggregate_output:
-            output = output.mean(1)
+        # output = self.main_head(features)
+        # if self.aggregate_output:
+        #     output = output.mean(1)
 
         if self.uncertainty_head is not None:
             uncertainty_output = self.uncertainty_head(features)
