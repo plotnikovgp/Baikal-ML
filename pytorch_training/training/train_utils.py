@@ -18,7 +18,7 @@ def _run_model(
     is_track_cascade_tres_train=False,
     is_angle_reconstruction=False,
     is_angle_and_track_cascade=False,
-    is_angle_reconstruction_sigma_tune=False,
+    is_angle_reconstruction_uncertainty=False,
     is_direction=False,
     is_energy_reconstruction=False,
     is_domain_adaptation=False,
@@ -62,14 +62,19 @@ def _run_model(
             output = model(x, mask)
             domain_pred = None
             domain_true = None
-
         if is_track_cascade_tres_train:
             y_true = y_true.reshape(-1, y_true.shape[-1])
             output = output.reshape(-1, output.shape[-1]).squeeze()
         elif is_angle_reconstruction:
             output = output / output.norm(dim=1, keepdim=True)
-        elif is_angle_reconstruction_sigma_tune:
-            pass
+        elif is_angle_reconstruction_uncertainty:
+            output = torch.cat(
+                [
+                    output[:, :3] / output[:, :3].norm(dim=1, keepdim=True),
+                    output[:, 3:],
+                ],
+                dim=1,
+            )
         elif is_direction:
             norms = output[:, :3].norm(dim=-1, keepdim=True)
             normalized_values = output[:, :3] / norms
@@ -82,7 +87,7 @@ def _run_model(
             is_energy_reconstruction
             or is_angle_reconstruction
             or is_direction
-            or is_angle_reconstruction_sigma_tune
+            or is_angle_reconstruction_uncertainty
             or is_domain_adaptation
         ):
             mask = mask.reshape(-1)
@@ -160,6 +165,9 @@ def train_iters(
                 else domain_true.detach()
             )
         else:
+            # TODO: fix this
+            if len(data) == 4:
+                data = data[:-1]
             output, y_pred, y_true = _run_model(
                 model,
                 data,
@@ -214,6 +222,9 @@ def train_iters(
             else y_true
         )
 
+    if isinstance(metrics_calc_fun, BaseMetrics):
+        metrics_calc_fun.set_plot_metrics(False)
+
     if min_recall is not None:
         train_metrics = metrics_calc_fun(
             y_pred_hist.detach().cpu(),
@@ -251,6 +262,7 @@ def validate_single(
     dataset_idx=0,
     min_recall=None,
     val_mode=False,
+    dataset_name=None,
     **kwargs,
 ) -> dict[str, float]:
     y_pred_hist = None
@@ -312,11 +324,18 @@ def validate_single(
     if return_preds:
         return y_pred_hist, y_true_hist
 
+    if isinstance(metrics_calc_fun, BaseMetrics) and dataset_name is not None:
+        metrics_calc_fun.set_dataset_name(dataset_name)
+        metrics_calc_fun.set_plot_metrics(True)
+
     if min_recall is not None:
         # TODO: metrics should be class which save min recall
         val_metrics = metrics_calc_fun(y_pred_hist, y_true_hist, min_recall=min_recall)
     else:
         val_metrics = metrics_calc_fun(y_pred_hist, y_true_hist)
+
+    if isinstance(metrics_calc_fun, BaseMetrics):
+        metrics_calc_fun.set_plot_metrics(False)
 
     if is_domain_adaptation and not val_mode:
         domain_preds = domain_pred_hist.argmax(dim=1)
@@ -359,10 +378,6 @@ def validate(
     all_metrics = {}
 
     for i, loader in enumerate(val_loader):
-
-        if isinstance(metrics_calc_fun, BaseMetrics) and dataset_names is not None:
-            metrics_calc_fun.set_dataset_name(dataset_names[i])
-
         dataset_metrics = validate_single(
             model=model,
             val_loader=loader,
@@ -372,6 +387,7 @@ def validate(
             dataset_idx=i,  # Pass index position as dataset_idx
             min_recall=min_recall,
             val_mode=val_mode,
+            dataset_name=dataset_names[i],
             **kwargs,
         )
         if val_mode:
@@ -408,7 +424,7 @@ def train(
     val_mode=False,
 ):
     best_val_metrics = {}
-    validate_before_train = False
+    validate_before_train = True
     train_logs_ = {}
     iters_current = 0
     iters_per_epoch = len(train_fun_kwargs["dataset"]) / train_fun_kwargs["num_iters"]

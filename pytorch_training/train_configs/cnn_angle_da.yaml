@@ -1,5 +1,5 @@
-exp_project: "angle_reconstruction_exp_mc"
-exp_name: "cnn-noatt_nl4_hs256_ks5_lr1e3_bs256-a2_nm250_wr5_wm5_da_k02_gr1_dp0_mae-loss"
+exp_project: "angle_reconstruction_combine_reco_mc_track_length_v1"
+exp_name: "cnn_no-att_da_ga1_reco"
 dataset_weights: [0.5, 0.5]
 
 lr: 1.0e-3
@@ -10,29 +10,36 @@ accumulate_grad_steps: 2
 train_type: "angle_reconstruction_domain_adaptation" 
 is_graph: False
 grad_clip_value: 1.0
-warmup_steps: 1000
+warmup_steps: 100
 events_amount: 10000000
 use_mae_loss: True
 
 domain_adaptation_loss_k: 0.2
-label_dataset_name: "mc2020" 
+label_dataset_name: "reco" 
 
-save_best_per_dataset: True 
+from_checkpoint: "/home/plotnikovgp/Baikal-ML/pytorch_training/checkpoints/angle_reconstruction_combine_reco_mc_track_length_v1/cnn_no-att_da_ga1_reco/best_mc2020.ckpt"
+val_mode: True
+save_best_per_dataset: True
 
 dataset_configs:
+dataset_configs:
   -
-    path_to_data: &p1 "/home/plotnikovgp/Baikal-ML/pytorch_training/data/baikal_reco_reco_h8s2_norm.h5"
+    path_to_data: &p1 "/home/plotnikovgp/Baikal-ML/pytorch_training/data/baikal_reco_reco_h8s2_norm_tl100.h5"
     name: "reco"
     tres_cut: 10000.0
-    val_subset_cut: 5
     data_prefilter_params:
       data_file: *p1
       norm_Q: True
   -
-    path_to_data: /home/plotnikovgp/Baikal-ML/pytorch_training/data/baikal_mc2020_multi_split_MChits-8-2_track-caskade-nue2_normed_.h5
+    path_to_data: &p3 "/home/plotnikovgp/Baikal-ML/pytorch_training/data/baikal_2019_nue2_tl100_norm_signal.h5"
+    name: "mc2019"
+    tres_cut: 10000.0
+    val_subset_cut: 3
+  -
+    path_to_data: &p2 "/home/plotnikovgp/Baikal-ML/pytorch_training/data/baikal_mc2020_multi_split_MChits-8-2_track-caskade-nue2_normed_tl100_v2.h5"
     name: "mc2020"
     tres_cut: 10000.0
-    val_subset_cut: 30
+    val_subset_cut: 3
 # Model configuration
 model_type: "cnn_domain_adaptation"
 model_params:

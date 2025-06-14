@@ -13,6 +13,10 @@ from scipy.spatial.distance import cosine as cosine_dist
 import logging
 from scipy.stats import spearmanr, pearsonr
 from pathlib import Path
+import matplotlib.pyplot as plt
+from .plots import *
+from .uncertainty_metrics import *
+from data_utils.preprocessors import DataPrefilter
 
 THRESHOLD = 0.5
 
@@ -31,9 +35,13 @@ class BaseMetrics:
         self.dataset_name = dataset_name
         self.plot_metrics = plot_metrics
         self.data_to_save = {}
+        self.dataset_name = dataset_name
 
     def set_dataset_name(self, dataset_name: str):
         self.dataset_name = dataset_name
+
+    def set_plot_metrics(self, plot_metrics: bool):
+        self.plot_metrics = plot_metrics
 
     def _calc_metrics(self, y_pred, y_true, **kwargs):
         pass
@@ -56,10 +64,11 @@ class BaseMetrics:
     def __call__(self, y_pred, y_true, **kwargs):
         metrics = self._calc_metrics(y_pred, y_true, **kwargs)
 
-        if self.save_preds:
-            self._save_preds(**kwargs)
         if self.plot_metrics:
             self._plot(**kwargs)
+
+        if self.save_preds:
+            self._save_preds(**kwargs)
 
         return metrics
 
@@ -178,23 +187,41 @@ class EnergyMetrics(BaseMetrics):
 
 
 class AngleReconstructionMetrics(BaseMetrics):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # self.uncertainty_metrics = AngleUncertaintyMetrics(**kwargs)
+        self.uncertainty_metrics = AngleUncertaintyMetricsV2(**kwargs)
+        self.data_transform = None
+
+    def set_plot_metrics(self, plot_metrics: bool):
+        super().set_plot_metrics(plot_metrics)
+        self.uncertainty_metrics.set_plot_metrics(plot_metrics)
+
+    def set_dataset_name(self, dataset_name: str):
+        super().set_dataset_name(dataset_name)
+        self.uncertainty_metrics.set_dataset_name(dataset_name)
+
     def _calc_metrics(
         self, y_pred, y_true, additional_data: dict | None = None, **kwargs
     ):
+        if self.data_transform is not None:
+            y_pred = self.data_transform[self.dataset_name].data_prefilter.postprocess(
+                y_pred
+            )
+            y_true = self.data_transform[self.dataset_name].data_prefilter.postprocess(
+                y_true
+            )
+
         y_pred = np.array(y_pred, dtype=np.float32)
         y_true = np.array(y_true, dtype=np.float32)
         metrics = {}
 
-        # TODO: check by flag
+        # TODO: fix this
         if y_pred.shape[1] == 6:
-            log_sigma2_pred = np.array(y_pred[:, 3:], dtype=np.float32)
-            sigma2_pred = np.exp(log_sigma2_pred)
-            sigma_pred = np.sqrt(sigma2_pred)
+            uncertainty_metrics = self.uncertainty_metrics(y_pred, y_true)
             y_pred = y_pred[:, :3]
-            sigma_true = (y_pred - y_true) ** 2
-
-            sigma_metrics = regression_metrics(sigma_pred.mean(1), sigma_true.mean(1))
-            metrics.update({"sigma2_" + k: v for k, v in sigma_metrics.items()})
+            y_true = y_true[:, :3]
+            metrics.update(uncertainty_metrics)
 
         kappa = None  # vmf loss
         if y_pred.shape[1] == 4:
@@ -304,130 +331,242 @@ def direction_metrics(y_pred, y_true):
     return metrics
 
 
-def angle_uncertainty_metrics(y_pred_and_log_sigma, y_true):
-    # Split predictions and log variances
-    y_pred, log_sigma = y_pred_and_log_sigma[:, :3], y_pred_and_log_sigma[:, 3:]
-    y_pred = np.array(y_pred, dtype=np.float32)
-    y_true = np.array(y_true, dtype=np.float32)
-    predicted_sigma = np.exp(
-        np.array(log_sigma, dtype=np.float32) / 2
-    )  # Convert to standard deviation
+def cartesian_to_spherical_uncertainty(pred, pred_sigma2):
+    """
+    Convert Cartesian uncertainties to spherical (theta, phi) uncertainties
+    """
+    x, y, z = pred[:, 0], pred[:, 1], pred[:, 2]
+    var_x, var_y, var_z = pred_sigma2[:, 0], pred_sigma2[:, 1], pred_sigma2[:, 2]
 
-    # Extract angles from true and predicted vectors
-    angles_true = np.array([extract_angles(vec) for vec in y_true], dtype=np.float32)
-    angles_pred = np.array([extract_angles(vec) for vec in y_pred], dtype=np.float32)
+    # Calculate intermediate values
+    r = np.sqrt(x**2 + y**2 + z**2)
+    r_sq = r**2
+    xy = np.sqrt(x**2 + y**2)  # Distance in xy-plane
 
-    # Separate theta and phi angles
-    y_true_theta_angle, y_true_phi_angle = angles_true[:, 0], angles_true[:, 1]
-    y_pred_theta_angle, y_pred_phi_angle = angles_pred[:, 0], angles_pred[:, 1]
+    # Add small epsilon to prevent division by zero
+    epsilon = 1e-10
+    r = np.maximum(r, epsilon)
+    xy = np.maximum(xy, epsilon)
 
-    # Compute directional error using dot product (same as in your function)
-    # Normalize vectors to get pure directional error
-    y_true_norm = np.linalg.norm(y_true, axis=1, keepdims=True)
-    y_pred_norm = np.linalg.norm(y_pred, axis=1, keepdims=True)
+    # Derivatives of theta with respect to x, y, z
+    # theta = arccos(z/r)
+    dtheta_dx = x * z / (r_sq * xy)
+    dtheta_dy = y * z / (r_sq * xy)
+    dtheta_dz = -xy / r_sq
 
-    # Handle zero vectors
-    valid_indices = (y_true_norm.flatten() > 1e-6) & (y_pred_norm.flatten() > 1e-6)
+    # Variance of theta using error propagation formula
+    theta_var = (dtheta_dx**2 * var_x) + (dtheta_dy**2 * var_y) + (dtheta_dz**2 * var_z)
 
-    # Initialize with maximum angle error (180 degrees)
-    dir_resolution = np.full(len(y_true), 180.0)
+    # For phi uncertainty (derivative of arctan2(y, x) with respect to x, y)
+    denom = x**2 + y**2
+    denom = np.maximum(denom, epsilon)  # Prevent division by zero
 
-    # Calculate directional error only for valid vectors
-    if np.any(valid_indices):
-        y_true_normalized = np.zeros_like(y_true)
-        y_pred_normalized = np.zeros_like(y_pred)
+    # Derivatives of phi with respect to x, y (z doesn't affect phi)
+    dphi_dx = -y / denom
+    dphi_dy = x / denom
 
-        y_true_normalized[valid_indices] = (
-            y_true[valid_indices] / y_true_norm[valid_indices]
+    # Variance of phi using error propagation formula
+    phi_var = (dphi_dx**2 * var_x) + (dphi_dy**2 * var_y)
+
+    # Convert to degrees if needed
+    rad_to_deg = 180.0 / np.pi
+    theta_var_deg = theta_var * (rad_to_deg**2)
+    phi_var_deg = phi_var * (rad_to_deg**2)
+
+    return theta_var_deg, phi_var_deg
+
+
+class AngleUncertaintyMetrics(BaseMetrics):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.plotter = AngleUncertaintyPlotter(save_dir=self.save_dir)
+
+    def _plot(self, **kwargs):
+        self.plotter.save_dir = self.save_dir / "plots" / self.dataset_name
+        if not self.plotter.save_dir.exists():
+            self.plotter.save_dir.mkdir(parents=True, exist_ok=True)
+        self.plotter.plot(data=self.data_to_save, **kwargs)
+
+    def _calc_metrics(self, y_pred_and_log_sigma, y_true):
+        y_pred, log_pred_sigma2 = (
+            y_pred_and_log_sigma[:, :3],
+            y_pred_and_log_sigma[:, 3:],
         )
-        y_pred_normalized[valid_indices] = (
-            y_pred[valid_indices] / y_pred_norm[valid_indices]
+
+        y_pred = np.array(y_pred, dtype=np.float32)
+        y_true = np.array(y_true, dtype=np.float32)
+        predicted_sigma2 = np.exp(np.array(log_pred_sigma2, dtype=np.float32))
+        true_sigma2 = (y_true - y_pred) ** 2
+
+        x_sigma_mae = np.mean(np.abs(predicted_sigma2[:, 0] - true_sigma2[:, 0]))
+        y_sigma_mae = np.mean(np.abs(predicted_sigma2[:, 1] - true_sigma2[:, 1]))
+        z_sigma_mae = np.mean(np.abs(predicted_sigma2[:, 2] - true_sigma2[:, 2]))
+
+        angles_true = np.array(
+            [extract_angles(vec) for vec in y_true], dtype=np.float32
+        )
+        angles_pred = np.array(
+            [extract_angles(vec) for vec in y_pred], dtype=np.float32
         )
 
-        dot_product = np.sum(y_true_normalized * y_pred_normalized, axis=1)
-        dot_product = np.clip(dot_product, -1.0, 1.0)
-        dir_resolution[valid_indices] = np.abs(
-            np.rad2deg(np.arccos(dot_product[valid_indices]))
+        y_true_theta_angle, y_true_phi_angle = angles_true[:, 0], angles_true[:, 1]
+        y_pred_theta_angle, y_pred_phi_angle = angles_pred[:, 0], angles_pred[:, 1]
+
+        pred_theta_sigma2, pred_phi_sigma2 = cartesian_to_spherical_uncertainty(
+            y_pred, predicted_sigma2
+        )
+        true_theta_sigma2, true_phi_sigma2 = cartesian_to_spherical_uncertainty(
+            y_true, true_sigma2
         )
 
-    # Calculate angular differences
-    theta_resolution = np.abs(y_true_theta_angle - y_pred_theta_angle)
+        true_theta_sigma2_v2 = (y_true_theta_angle - y_pred_theta_angle) ** 2
+        true_phi_sigma2_v2 = (y_true_phi_angle - y_pred_phi_angle) ** 2
 
-    # For phi, handle the circular nature (wrapping around 360°)
-    phi_resolution = np.minimum(
-        np.abs(y_true_phi_angle - y_pred_phi_angle),
-        360.0 - np.abs(y_true_phi_angle - y_pred_phi_angle),
-    )
+        theta_sigma_mae = np.mean(np.abs(pred_theta_sigma2 - true_theta_sigma2))
+        phi_sigma_mae = np.mean(np.abs(pred_phi_sigma2 - true_phi_sigma2))
 
-    # Convert Cartesian uncertainties to angular uncertainties
-    # This is where we need to compute sigma for theta and phi based on predicted_sigma
+        self.data_to_save = {
+            "y_pred": y_pred,
+            "y_true": y_true,
+            "true_theta": y_true_theta_angle,
+            "true_phi": y_true_phi_angle,
+            "pred_theta": y_pred_theta_angle,
+            "pred_phi": y_pred_phi_angle,
+            "pred_sigma2": predicted_sigma2,
+            "true_sigma2": true_sigma2,
+            "pred_theta_sigma2": pred_theta_sigma2,
+            "pred_phi_sigma2": pred_phi_sigma2,
+            "true_theta_sigma2": true_theta_sigma2,
+            "true_phi_sigma2": true_phi_sigma2,
+            "true_theta_sigma2_v2": true_theta_sigma2_v2,
+            "true_phi_sigma2_v2": true_phi_sigma2_v2,
+        }
+        metrics = {
+            "err_mae": (predicted_sigma2 - true_sigma2).mean(),
+            "x_sigma_mae": x_sigma_mae,
+            "y_sigma_mae": y_sigma_mae,
+            "z_sigma_mae": z_sigma_mae,
+            "theta_sigma_mae": theta_sigma_mae,
+            "phi_sigma_mae": phi_sigma_mae,
+            "theta_msll": calculate_msll(
+                y_true_theta_angle, y_pred_theta_angle, pred_theta_sigma2
+            ),
+            "phi_msll": calculate_msll(
+                y_true_phi_angle, y_pred_phi_angle, pred_phi_sigma2
+            ),
+            "theta_picp_68": calculate_picp(
+                y_true_theta_angle,
+                y_pred_theta_angle,
+                pred_theta_sigma2,
+                confidence=0.68,
+            ),
+            "phi_picp_68": calculate_picp(
+                y_true_phi_angle, y_pred_phi_angle, pred_phi_sigma2, confidence=0.68
+            ),
+            "theta_mce": calculate_mce(
+                y_true_theta_angle, y_pred_theta_angle, pred_theta_sigma2
+            ),
+            "phi_mce": calculate_mce(
+                y_true_phi_angle, y_pred_phi_angle, pred_phi_sigma2
+            ),
+        }
 
-    # Initialize arrays for angular uncertainties
-    sigma_theta = np.zeros(len(y_pred))
-    sigma_phi = np.zeros(len(y_pred))
+        return {k: float(v) for k, v in metrics.items()}
 
-    for i in range(len(y_pred)):
-        # Skip if predicted vector is too small for meaningful angle calculation
-        if np.linalg.norm(y_pred[i]) < 1e-6:
-            sigma_theta[i] = 90.0  # Default large uncertainty
-            sigma_phi[i] = 180.0  # Default large uncertainty
-            continue
 
-        # Normalize the prediction vector for angular calculations
-        x, y, z = y_pred[i] / np.linalg.norm(y_pred[i])
+class AngleUncertaintyMetricsV2(BaseMetrics):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.plotter = AngleUncertaintyPlotter(save_dir=self.save_dir)
 
-        # Get predicted standard deviations for each component
-        sigma_x, sigma_y, sigma_z = predicted_sigma[i]
+    def _plot(self, **kwargs):
+        self.plotter.save_dir = self.save_dir / "plots" / self.dataset_name
+        if not self.plotter.save_dir.exists():
+            self.plotter.save_dir.mkdir(parents=True, exist_ok=True)
+        self.plotter.plot(data=self.data_to_save, **kwargs)
 
-        # Convert Cartesian uncertainties to spherical uncertainties
-        # Using error propagation formulas
+    def _calc_metrics(self, y_pred_and_log_sigma, y_true):
+        y_pred, log_pred_theta_phi_sigma2 = (
+            y_pred_and_log_sigma[:, :3],
+            y_pred_and_log_sigma[:, 3:],
+        )
+        # This gives variances in radians^2 because your loss works in radians
+        pred_theta_phi_sigma2 = np.exp(
+            np.array(log_pred_theta_phi_sigma2, dtype=np.float32)
+        )
 
-        # For theta uncertainty (inclination angle)
-        # θ = arccos(z)
-        # Partial derivatives: dθ/dz = -1/sqrt(1-z²)
-        if abs(z) < 0.99:  # Avoid numerical issues near poles
-            sigma_theta[i] = np.rad2deg(np.abs(sigma_z / np.sqrt(1 - z**2)))
-        else:
-            sigma_theta[i] = 90.0  # Large uncertainty near poles
+        y_pred = np.array(y_pred, dtype=np.float32)
 
-        # For phi uncertainty (azimuth angle)
-        # φ = arctan2(y, x)
-        # Error propagation for arctan2: σ_φ² = (σ_y/(x²+y²))² + (σ_x·y/(x²+y²))²
-        xy_norm_squared = x**2 + y**2
-        if xy_norm_squared > 1e-6:  # Avoid division by near-zero
-            sigma_phi[i] = np.rad2deg(
-                np.sqrt(
-                    (sigma_y / xy_norm_squared) ** 2
-                    + (sigma_x * y / xy_norm_squared) ** 2
-                )
-            )
-        else:
-            sigma_phi[i] = 180.0  # Large uncertainty when on z-axis
+        def extract_angles_rad_vectorized(vectors):
+            x, y, z = vectors[:, 0], vectors[:, 1], vectors[:, 2]
+            theta = np.arccos(np.clip(z, -1.0, 1.0))
+            phi = np.arctan2(y, x)
 
-    # Calculate sigma differences - how well the predicted uncertainty matches the actual error
-    sigma_diff_theta_angle = np.abs(sigma_theta - theta_resolution)
-    sigma_diff_phi_angle = np.abs(sigma_phi - phi_resolution)
+            return np.column_stack((theta, phi))
 
-    # Calculate sigma magnitude difference
-    error_magnitude = np.linalg.norm(y_true - y_pred, axis=1)
-    predicted_sigma_magnitude = np.linalg.norm(predicted_sigma, axis=1)
-    sigma_diff = predicted_sigma_magnitude - error_magnitude
+        angles_true_rad = extract_angles_rad_vectorized(y_true)
+        angles_pred_rad = extract_angles_rad_vectorized(y_pred)
+        y_true_theta_rad, y_true_phi_rad = angles_true_rad[:, 0], angles_true_rad[:, 1]
+        y_pred_theta_rad, y_pred_phi_rad = angles_pred_rad[:, 0], angles_pred_rad[:, 1]
 
-    # Calculate metrics
-    dir_mae = np.mean(dir_resolution)
-    dir_q50 = np.quantile(dir_resolution, 0.5)
-    theta_q50 = np.quantile(sigma_diff_theta_angle, 0.5)
-    phi_q50 = np.quantile(sigma_diff_phi_angle, 0.5)
+        theta_diff = y_true_theta_rad - y_pred_theta_rad
+        phi_diff = y_true_phi_rad - y_pred_phi_rad
+        # Handle circular nature of phi in radians
+        phi_diff = np.arctan2(np.sin(phi_diff), np.cos(phi_diff))
 
-    metrics = {
-        "err_mae": (predicted_sigma - (y_true - y_pred) ** 2).mean(),
-        "dir_mae": dir_mae,
-        # "sigma_diff_mae": np.mean(np.abs(sigma_diff)),
-        # "thetha_q50": theta_q50,
-        # "phi_q50": phi_q50,
-    }
+        true_theta_sigma2 = theta_diff**2
+        true_phi_sigma2 = phi_diff**2
 
-    return {k: float(v) for k, v in metrics.items()}
+        pred_theta_sigma2 = pred_theta_phi_sigma2[:, 0]
+        pred_phi_sigma2 = pred_theta_phi_sigma2[:, 1]
+
+        # Convert to degrees for display purposes only
+        rad_to_deg = 180.0 / np.pi
+        y_true_theta_angle = y_true_theta_rad * rad_to_deg
+        y_true_phi_angle = y_true_phi_rad * rad_to_deg
+        y_pred_theta_angle = y_pred_theta_rad * rad_to_deg
+        y_pred_phi_angle = y_pred_phi_rad * rad_to_deg
+
+        # Store data for plotting - can be in degrees for display
+        self.data_to_save = {
+            "y_pred": y_pred,
+            "y_true": y_true,
+            "true_theta": y_true_theta_angle,
+            "true_phi": y_true_phi_angle,
+            "pred_theta": y_pred_theta_angle,
+            "pred_phi": y_pred_phi_angle,
+            "pred_theta_sigma2": pred_theta_sigma2 * rad_to_deg**2,
+            "pred_phi_sigma2": pred_phi_sigma2 * rad_to_deg**2,
+            "true_theta_sigma2": true_theta_sigma2 * rad_to_deg**2,
+            "true_phi_sigma2": true_phi_sigma2 * rad_to_deg**2,
+        }
+
+        metrics = {
+            "theta_msll": calculate_msll(
+                y_true_theta_angle, y_pred_theta_angle, pred_theta_sigma2
+            ),
+            "phi_msll": calculate_msll(
+                y_true_phi_angle, y_pred_phi_angle, pred_phi_sigma2
+            ),
+            "theta_picp_68": calculate_picp(
+                y_true_theta_angle,
+                y_pred_theta_angle,
+                pred_theta_sigma2,
+                confidence=0.68,
+            ),
+            "phi_picp_68": calculate_picp(
+                y_true_phi_angle, y_pred_phi_angle, pred_phi_sigma2, confidence=0.68
+            ),
+            "theta_mce": calculate_mce(
+                y_true_theta_angle, y_pred_theta_angle, pred_theta_sigma2
+            ),
+            "phi_mce": calculate_mce(
+                y_true_phi_angle, y_pred_phi_angle, pred_phi_sigma2
+            ),
+            "theta_sigma_mae": np.mean(np.abs(pred_theta_sigma2 - true_theta_sigma2)),
+            "phi_sigma_mae": np.mean(np.abs(pred_phi_sigma2 - true_phi_sigma2)),
+        }
+        return {k: float(v) for k, v in metrics.items()}
 
 
 def regression_and_clf_metrics(y_pred, y_true, min_recall=None):

@@ -19,6 +19,8 @@ class DataPrefilter:
         additive_gauss_noise_std: tp.Sequence[float] | None = None,
         mult_gauss_noise_fraction: float | None = None,
         norm_Q: bool = False,
+        transform_dir_vector: bool = False,
+        use_other_norm_param_file: str | None = None,
         **kwargs,
     ):
         self.additive_gauss_noise_std = additive_gauss_noise_std
@@ -28,9 +30,18 @@ class DataPrefilter:
         self.Q_upper_bound = None
 
         if data_file:
-            self.hfile = h5.File(data_file, "r")
-            self.means = np.array(self.hfile["norm_param/mean"])
-            self.stds = np.array(self.hfile["norm_param/std"])
+            self.hfile_from = h5.File(data_file, "r")
+            self.means_from = torch.tensor(self.hfile["norm_param/mean"])
+            self.stds_from = torch.tensor(self.hfile["norm_param/std"])
+
+        if use_other_norm_param_file:
+            self.use_other_norm_param = True
+            self.hfile_to = h5.File(use_other_norm_param_file, "r")
+            self.means_to = torch.tensor(self.hfile_to["norm_param/mean"])
+            self.stds_to = torch.tensor(self.hfile_to["norm_param/std"])
+        else:
+            self.use_other_norm_param = False
+
         if Q_lower_bound is not None or Q_upper_bound is not None:
             assert data_file
             if Q_lower_bound is not None:
@@ -38,9 +49,25 @@ class DataPrefilter:
             if Q_upper_bound is not None:
                 self.Q_upper_bound = (Q_upper_bound - self.means[0]) / self.stds[0]
 
-    def __call__(self, data_x):
-        if self.norm_Q:
-            data_x[0] = (data_x[0] - self.means[0]) / self.stds[0]
+        if transform_dir_vector:
+            assert data_file
+            self.transform_dir_vector = transform_dir_vector
+
+    def __call__(self, data_x, data_y=None):
+        if self.norm_Q:  # in 'reco' dataset Q was not normalized
+            data_x[0] = (data_x[0] - self.means_from[0]) / self.stds_from[0]
+
+        if self.self.hfile_to is not None:
+            data_x = data_x * self.stds_from + self.means_from
+            data_x = (data_x - self.means_to) / self.stds_to
+
+        if self.transform_dir_vector:
+            if self.use_other_norm_param:
+                data_y = data_y * self.stds_to[2:] + self.means_to[2:]
+            else:
+                data_y = (data_y - self.means_from[2:]) / self.stds_from[2:]
+            data_y = data_y / torch.norm(data_y, dim=-1, keepdim=True)
+
         if self.Q_lower_bound is not None:
             data_x[0] = data_x[0].clamp(min=self.Q_lower_bound)
         if self.Q_upper_bound is not None:
@@ -58,6 +85,15 @@ class DataPrefilter:
                 1 + (0, self.mult_gauss_noise_fraction, data_x[0].shape)
             )
         return data_x
+
+    def postprocess(self, y):
+        if self.transform_dir_vector:
+            if self.use_other_norm_param:
+                y = y * self.stds_to[2:] + self.means_to[2:]
+            else:
+                y = y * self.stds_from[2:] + self.means_from[2:]
+            y = y / torch.norm(y, dim=-1, keepdim=True)
+        return y
 
 
 class BasePreprocessor(ABC):
@@ -149,7 +185,9 @@ class AnglePreprocessor(BasePreprocessor):
 
 
 class AnglePreprocessorWithTres(BasePreprocessor):
-    def __init__(self, tres_cut: float, data_prefilter: DataPrefilter | None = None):
+    def __init__(
+        self, tres_cut: float = None, data_prefilter: DataPrefilter | None = None
+    ):
         self.tres_cut = tres_cut
         self.data_prefilter = data_prefilter
 
@@ -165,18 +203,18 @@ class AnglePreprocessorWithTres(BasePreprocessor):
         thetha = torch.deg2rad(y[:, 0])
         phi = torch.deg2rad(y[:, 1])
         # print(y.shape, thetha.min(), thetha.max(), phi.min(), phi.max())
-        angle = torch.zeros(y.shape[0], 3, dtype=torch.float32)
-        angle[:, 0] = torch.sin(thetha) * torch.cos(phi)
-        angle[:, 1] = torch.sin(thetha) * torch.sin(phi)
-        angle[:, 2] = torch.cos(thetha)
+        vector = torch.zeros(y.shape[0], 3, dtype=torch.float32)
+        vector[:, 0] = torch.sin(thetha) * torch.cos(phi)
+        vector[:, 1] = torch.sin(thetha) * torch.sin(phi)
+        vector[:, 2] = torch.cos(thetha)
 
-        track_hits = (labels < 0) | (torch.abs(tres) < 50)
+        track_hits = labels > 0  #  3#(torch.abs(tres) < 20)
         # print(track_hits.sum(), track_hits.shape[0] * track_hits.shape[1])
         if self.data_prefilter is not None:
-            x = self.data_prefilter(x)
-        mask = mask  # & (labels != 0) & track_hits
+            x = self.data_prefilter(x, vector)
+        mask = mask & track_hits
         mask[mask.sum(-1) == 0] = True
-        return x, angle, mask
+        return x, vector, mask
 
 
 class EnergyPreprocessor(BasePreprocessor):

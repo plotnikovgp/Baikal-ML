@@ -543,7 +543,7 @@ class RMSEVonMisesFisher3DLoss(EnsembleLoss):
 
 
 class NLLUncertaintyLoss(LossFunction):
-    """NLL Loss for Gaussian: log(sigma^2) + [(y - mu)^2 / (sigma^2 * mean((y - mu)^2))]"""
+    """NLL Loss for Gaussian: log(sigma^2) + [(y - mu)^2 / (sigma^2)]"""
 
     def __init__(self, pred_size: int = 3, **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -563,4 +563,50 @@ class NLLUncertaintyLoss(LossFunction):
             prediction[:, self.pred_size :],
         )
         pred_sigma2 = torch.exp(log_pred_sigma2)
-        return log_pred_sigma2 + (pred - target) ** 2 / pred_sigma2
+        true_sigma2 = (pred - target) ** 2
+        return log_pred_sigma2 + true_sigma2 / pred_sigma2
+
+
+class NLLUncertaintyLossAngular(LossFunction):
+    """NLL Loss for Gaussian: log(sigma^2) + [(y - mu)^2 / (sigma^2)]"""
+
+    def __init__(self, pred_size: int = 3, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.pred_size = pred_size
+
+    def _cartesian_to_spherical(self, xyz):
+        # Convert xyz to theta, phi
+        x, y, z = xyz[:, 0], xyz[:, 1], xyz[:, 2]
+        r = torch.sqrt(x**2 + y**2 + z**2)
+        theta = torch.acos(z / r)
+        phi = torch.atan2(y, x)
+        return torch.stack([theta, phi], dim=1)
+
+    def _forward(self, prediction: Tensor, target: Tensor) -> Tensor:
+        """
+        Args:
+            prediction: tensor with shape [N, 2 * pred_size] with stacked (prediction, log_sigma2_prediction)
+            target: Target
+
+        Returns:
+            Elementwise loss terms. Shape [N,]
+        """
+        pred, log_pred_sigma2 = (
+            prediction[:, : self.pred_size],
+            prediction[:, self.pred_size : self.pred_size + 2],
+        )
+        theta_phi_pred = self._cartesian_to_spherical(pred)
+        theta_phi_true = self._cartesian_to_spherical(target)
+        pred_sigma2 = torch.exp(log_pred_sigma2)
+
+        theta_diff = theta_phi_true[:, 0] - theta_phi_pred[:, 0]
+
+        # Phi is circular in [0, 2π]
+        phi_diff = theta_phi_true[:, 1] - theta_phi_pred[:, 1]
+        # Proper circular difference (handles wraparound at 2π)
+        phi_diff = torch.atan2(torch.sin(phi_diff), torch.cos(phi_diff))
+
+        diff = torch.stack([theta_diff, phi_diff], dim=1)
+        true_sigma2 = diff**2
+
+        return log_pred_sigma2 + true_sigma2 / pred_sigma2

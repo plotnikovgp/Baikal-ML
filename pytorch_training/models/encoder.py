@@ -108,32 +108,41 @@ class Encoder(nn.Module):
 class EncoderDomainAdaptation(nn.Module):
     def __init__(
         self,
-        freeze_encoder: bool = False,
         num_domains=2,
         domain_classifier_hidden_size=128,
         domain_classifier_layers=2,
         gradient_reversal_alpha=1.0,
-        uncertainty_head_hidden_size: (
-            int | None
-        ) = None,  # None means no uncertainty head
+        uncertainty_head_hidden_size: int | None = None,
         uncertainty_head_out_size: int | None = None,  # None means no uncertainty head
         aggregate_output: bool = True,
+        freeze_encoder: bool = False,
+        freeze_predict_head: bool = False,
         **kwargs
     ):
         super().__init__()
 
         self.encoder = Encoder(**kwargs)
-        self.encoder.return_hidden = True
+
         self.main_head = nn.Linear(self.encoder.hidden_size, self.encoder.out_size)
+
+        if freeze_predict_head:
+            for param in self.main_head.parameters():
+                param.requires_grad = False
+
         self.aggregate_output = aggregate_output
         if uncertainty_head_hidden_size is not None:
+            self.encoder.return_hiddens_by_layers = True
             self.uncertainty_head = nn.Sequential(
                 nn.Linear(self.encoder.hidden_size, uncertainty_head_hidden_size),
                 nn.ReLU(),
                 nn.Linear(uncertainty_head_hidden_size, uncertainty_head_out_size),
             )
+            self.layer_weights = nn.Parameter(
+                torch.zeros(len(self.encoder.enc.layers)), requires_grad=True
+            )
         else:
             self.uncertainty_head = None
+            self.encoder.return_hidden = True
 
         self.gradient_reversal = GradientReversal(alpha=gradient_reversal_alpha)
 
@@ -154,25 +163,34 @@ class EncoderDomainAdaptation(nn.Module):
 
         self.domain_classifier = nn.Sequential(*domain_classifier_layers_list)
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        if freeze_encoder:
-            self.freeze_encoder()
 
-    def freeze_encoder(self):
-        for param in self.encoder.parameters():
-            param.requires_grad = False
+        if freeze_encoder:
+            for param in self.encoder.parameters():
+                param.requires_grad = False
+
+        if freeze_predict_head:
+            for param in self.main_head.parameters():
+                param.requires_grad = False
 
     def forward(self, x, mask):
-        output, hidden_states = self.encoder(x, mask)
-        features = hidden_states
+        _, hidden_states = self.encoder(x, mask)
+        features = (
+            hidden_states
+            if not self.encoder.return_hiddens_by_layers
+            else hidden_states[-1]
+        )
 
-        # output = self.main_head(features)
-        # if self.aggregate_output:
-        #     output = output.mean(1)
+        output = self.main_head(features)
+        if self.aggregate_output:
+            output = output.mean(1)
 
         if self.uncertainty_head is not None:
-            uncertainty_output = self.uncertainty_head(features)
-            if self.aggregate_output:
-                uncertainty_output = uncertainty_output.mean(1)
+            weights = torch.nn.functional.softmax(self.layer_weights, dim=0)
+            features_stacked = torch.stack(hidden_states, dim=0)
+            weighted_features = torch.sum(
+                weights[:, None, None, None] * features_stacked, dim=0
+            )
+            uncertainty_output = self.uncertainty_head(weighted_features).mean(1)
             output = torch.cat([output, uncertainty_output], dim=-1)
 
         reversed_features = self.gradient_reversal(features.mean(1))

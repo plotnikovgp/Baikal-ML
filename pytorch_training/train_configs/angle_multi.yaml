@@ -9,9 +9,13 @@ num_train_steps_per_validation: 256
 train_type: "angle_reconstruction"
 is_graph: False
 
+from_checkpoint: "/home/plotnikovgp/Baikal-ML/pytorch_training/checkpoints/angle_reconstruction_combine_reco_mc_v4/encoder_vanilla_mc2020/best_ver.ckpt"
+val_mode: True
+
+use_mae_loss: True
 dataset_configs:
   -
-    path_to_data: &p1 "/home/plotnikovgp/baikal/data/baikal_reco_reco_h8s2_norm.h5"
+    path_to_data: &p1 "/home/plotnikovgp/Baikal-ML/pytorch_training/data/baikal_reco_reco_h8s2_norm.h5"
     name: "reco"
     tres_cut: 10000.0
     val_subset_cut: 5
@@ -20,7 +24,7 @@ dataset_configs:
       norm_Q: True
 
   -
-    path_to_data: "/home/plotnikovgp/baikal/data/baikal_multi_0324_flat_treck-cascade_h8_s2_pureMC_normed.h5"
+    path_to_data: "/home/plotnikovgp/Baikal-ML/pytorch_training/data/baikal_mc2020_multi_split_MChits-8-2_track-caskade-nue2_normed_.h5"
     name: "mc2020"
     tres_cut: 10000.0
     val_subset_cut: 30
