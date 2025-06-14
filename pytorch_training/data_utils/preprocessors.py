@@ -57,7 +57,7 @@ class DataPrefilter:
         if self.norm_Q:  # in 'reco' dataset Q was not normalized
             data_x[0] = (data_x[0] - self.means_from[0]) / self.stds_from[0]
 
-        if self.self.hfile_to is not None:
+        if self.use_other_norm_param:
             data_x = data_x * self.stds_from + self.means_from
             data_x = (data_x - self.means_to) / self.stds_to
 
