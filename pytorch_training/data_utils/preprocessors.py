@@ -64,7 +64,7 @@ class DataPrefilter:
 
         if self.transform_dir_vector:
             if self.use_other_norm_param:
-                data_y = data_y * self.stds_to[2:] + self.means_to[2:]
+                data_y = (data_y - self.means_to[2:]) / self.stds_to[2:]
             else:
                 data_y = (data_y - self.means_from[2:]) / self.stds_from[2:]
             data_y = data_y / torch.norm(data_y, dim=-1, keepdim=True)
