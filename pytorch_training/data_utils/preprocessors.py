@@ -57,7 +57,7 @@ class DataPrefilter:
         if self.norm_Q:  # in 'reco' dataset Q was not normalized
             data_x[0] = (data_x[0] - self.means_from[0]) / self.stds_from[0]
 
-        if self.use_other_norm_param:
+        if self.use_other_norm_param is not None:
             data_x = data_x * self.stds_from + self.means_from
             data_x = (data_x - self.means_to) / self.stds_to
 
@@ -84,9 +84,9 @@ class DataPrefilter:
             data_x[0] = data_x[0] * (
                 1 + (0, self.mult_gauss_noise_fraction, data_x[0].shape)
             )
-        return data_x
+        return data_x, data_y
 
-    def postprocess(self, y):
+    def postprocess(self, y)
         if self.transform_dir_vector:
             if self.use_other_norm_param:
                 y = y * self.stds_to[2:] + self.means_to[2:]
@@ -213,7 +213,7 @@ class AnglePreprocessorWithTres(BasePreprocessor):
         # mask = mask & track_hits
 
         if self.data_prefilter is not None:
-            x = self.data_prefilter(x, vector)
+            x, vector = self.data_prefilter(x, vector)
         mask[mask.sum(-1) == 0] = True
         return x, vector, mask
 
