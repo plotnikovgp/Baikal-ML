@@ -283,18 +283,13 @@ def calculate_distance(point1, point2, angle1, angle2):
     n = np.cross(angle1, angle2)
     norm_n = np.linalg.norm(n, axis=1, keepdims=True)
 
-    # Handle cases where angles are nearly parallel
     parallel_mask = norm_n < 1e-6
-
-    # For nearly parallel angles, use the alternative formula
     distance_parallel = np.linalg.norm(np.cross(w, angle1), axis=1, keepdims=True)
 
-    # For non-parallel angles, use the standard formula
     distance_normal = np.abs(np.sum(w * n, axis=1, keepdims=True)) / np.maximum(
         norm_n, 1e-6
     )
 
-    # Combine results based on the parallel mask
     distance_loss = np.where(parallel_mask, distance_parallel, distance_normal)
 
     return float(distance_loss.mean())
@@ -338,37 +333,28 @@ def cartesian_to_spherical_uncertainty(pred, pred_sigma2):
     x, y, z = pred[:, 0], pred[:, 1], pred[:, 2]
     var_x, var_y, var_z = pred_sigma2[:, 0], pred_sigma2[:, 1], pred_sigma2[:, 2]
 
-    # Calculate intermediate values
     r = np.sqrt(x**2 + y**2 + z**2)
     r_sq = r**2
-    xy = np.sqrt(x**2 + y**2)  # Distance in xy-plane
+    xy = np.sqrt(x**2 + y**2)
 
-    # Add small epsilon to prevent division by zero
     epsilon = 1e-10
     r = np.maximum(r, epsilon)
     xy = np.maximum(xy, epsilon)
 
-    # Derivatives of theta with respect to x, y, z
-    # theta = arccos(z/r)
     dtheta_dx = x * z / (r_sq * xy)
     dtheta_dy = y * z / (r_sq * xy)
     dtheta_dz = -xy / r_sq
 
-    # Variance of theta using error propagation formula
     theta_var = (dtheta_dx**2 * var_x) + (dtheta_dy**2 * var_y) + (dtheta_dz**2 * var_z)
 
-    # For phi uncertainty (derivative of arctan2(y, x) with respect to x, y)
     denom = x**2 + y**2
-    denom = np.maximum(denom, epsilon)  # Prevent division by zero
+    denom = np.maximum(denom, epsilon)
 
-    # Derivatives of phi with respect to x, y (z doesn't affect phi)
     dphi_dx = -y / denom
     dphi_dy = x / denom
 
-    # Variance of phi using error propagation formula
     phi_var = (dphi_dx**2 * var_x) + (dphi_dy**2 * var_y)
 
-    # Convert to degrees if needed
     rad_to_deg = 180.0 / np.pi
     theta_var_deg = theta_var * (rad_to_deg**2)
     phi_var_deg = phi_var * (rad_to_deg**2)

@@ -31,8 +31,8 @@ class DataPrefilter:
 
         if data_file:
             self.hfile_from = h5.File(data_file, "r")
-            self.means_from = torch.tensor(self.hfile["norm_param/mean"])
-            self.stds_from = torch.tensor(self.hfile["norm_param/std"])
+            self.means_from = torch.tensor(self.hfile_from["norm_param/mean"])
+            self.stds_from = torch.tensor(self.hfile_from["norm_param/std"])
 
         if use_other_norm_param_file:
             self.use_other_norm_param = True
@@ -49,15 +49,16 @@ class DataPrefilter:
             if Q_upper_bound is not None:
                 self.Q_upper_bound = (Q_upper_bound - self.means[0]) / self.stds[0]
 
+        
+        self.transform_dir_vector = transform_dir_vector
         if transform_dir_vector:
             assert data_file
-            self.transform_dir_vector = transform_dir_vector
 
     def __call__(self, data_x, data_y=None):
         if self.norm_Q:  # in 'reco' dataset Q was not normalized
             data_x[0] = (data_x[0] - self.means_from[0]) / self.stds_from[0]
 
-        if self.use_other_norm_param is not None:
+        if self.use_other_norm_param:
             data_x = data_x * self.stds_from + self.means_from
             data_x = (data_x - self.means_to) / self.stds_to
 
@@ -86,7 +87,7 @@ class DataPrefilter:
             )
         return data_x, data_y
 
-    def postprocess(self, y)
+    def postprocess(self, y):
         if self.transform_dir_vector:
             if self.use_other_norm_param:
                 y = y * self.stds_to[2:] + self.means_to[2:]
