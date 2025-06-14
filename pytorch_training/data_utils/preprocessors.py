@@ -208,11 +208,12 @@ class AnglePreprocessorWithTres(BasePreprocessor):
         vector[:, 1] = torch.sin(thetha) * torch.sin(phi)
         vector[:, 2] = torch.cos(thetha)
 
-        track_hits = labels > 0  #  3#(torch.abs(tres) < 20)
+        # track_hits = labels > 0  #  3#(torch.abs(tres) < 20)
         # print(track_hits.sum(), track_hits.shape[0] * track_hits.shape[1])
+        # mask = mask & track_hits
+
         if self.data_prefilter is not None:
             x = self.data_prefilter(x, vector)
-        mask = mask & track_hits
         mask[mask.sum(-1) == 0] = True
         return x, vector, mask
 
