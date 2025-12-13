@@ -56,6 +56,9 @@ model_params:
   out_size: 3
   dropout_p: 0.
   use_batch_norm: False
+  use_cls_token: True
+  return_only_cls_token: True
+  return_hidden: True
   num_domains: 2  # Two datasets: reco and mc2020
   domain_classifier_hidden_size: 128
   domain_classifier_layers: 2

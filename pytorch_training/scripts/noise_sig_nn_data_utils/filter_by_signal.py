@@ -17,10 +17,11 @@ def filter_events(
 ):
     splits = splits or ["train", "val", "test"]
 
-    with h5py.File(original_h5_path, "r") as src, \
-         h5py.File(predictions_h5_path, "r") as preds, \
-         h5py.File(output_h5_path, "w") as dst:
-
+    with (
+        h5py.File(original_h5_path, "r") as src,
+        h5py.File(predictions_h5_path, "r") as preds,
+        h5py.File(output_h5_path, "w") as dst,
+    ):
         for split in splits:
             if f"{split}/ev_starts/data" not in src:
                 print(f"Skipping {split}: not found in original file")
@@ -110,10 +111,16 @@ def filter_events(
 
                 if f"{split}/{key}/data" in src:
                     src_dataset = src[f"{split}/{key}/data"]
-                    if len(src_dataset.shape) == 1 and src_dataset.shape[0] == len(ev_starts_src) - 1:
+                    if (
+                        len(src_dataset.shape) == 1
+                        and src_dataset.shape[0] == len(ev_starts_src) - 1
+                    ):
                         new_arr = src_dataset[:][selected_indices]
                         dst.create_dataset(f"{split}/{key}/data", data=new_arr)
-                    elif len(src_dataset.shape) == 2 and src_dataset.shape[0] == len(ev_starts_src) - 1:
+                    elif (
+                        len(src_dataset.shape) == 2
+                        and src_dataset.shape[0] == len(ev_starts_src) - 1
+                    ):
                         new_arr = src_dataset[:][selected_indices]
                         dst.create_dataset(f"{split}/{key}/data", data=new_arr)
 
@@ -125,17 +132,29 @@ def filter_events(
 
 def main():
     parser = argparse.ArgumentParser(description="Filter H5 events by signal predictions")
-    parser.add_argument("-i", "--original", type=str, required=True, help="Path to original H5 file")
-    parser.add_argument("-p", "--predictions", type=str, required=True, help="Path to predictions H5 file")
+    parser.add_argument(
+        "-i", "--original", type=str, required=True, help="Path to original H5 file"
+    )
+    parser.add_argument(
+        "-p", "--predictions", type=str, required=True, help="Path to predictions H5 file"
+    )
     parser.add_argument("-o", "--output", type=str, default=None, help="Output H5 path")
-    parser.add_argument("-t", "--threshold", type=float, default=0.5, help="Signal probability threshold")
-    parser.add_argument("-ms", "--min-strings", type=int, default=3, help="Minimum unique signal strings")
-    parser.add_argument("-mh", "--min-signal-hits", type=int, default=10, help="Minimum signal hits")
+    parser.add_argument(
+        "-t", "--threshold", type=float, default=0.5, help="Signal probability threshold"
+    )
+    parser.add_argument(
+        "-ms", "--min-strings", type=int, default=3, help="Minimum unique signal strings"
+    )
+    parser.add_argument(
+        "-mh", "--min-signal-hits", type=int, default=10, help="Minimum signal hits"
+    )
     parser.add_argument("-s", "--splits", type=str, nargs="+", default=["train", "val", "test"])
     args = parser.parse_args()
 
     original_path = Path(args.original)
-    output_path = args.output or Path(f"{original_path.stem}_filtered_t{args.threshold}_s{args.min_strings}_h{args.min_signal_hits}.h5")
+    output_path = args.output or Path(
+        f"{original_path.stem}_filtered_t{args.threshold}_s{args.min_strings}_h{args.min_signal_hits}.h5"
+    )
 
     print(f"Original: {args.original}")
     print(f"Predictions: {args.predictions}")
@@ -159,4 +178,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

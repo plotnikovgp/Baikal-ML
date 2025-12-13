@@ -199,7 +199,7 @@ pytorch_training/
 | CNN | `cnn` | 1D Convolutional network |
 | GCN | `gcn` | Graph Convolutional Network |
 | GAT | `gat` | Graph Attention Network |
-| Graphnet | `graphnet` | Custom graph network |
+| Graphnet | `graphnet` | Based on [GraphNeT](https://github.com/graphnet-team/graphnet) |
 
 ## Logging
 
@@ -215,13 +215,32 @@ WANDB_MODE=disabled python train.py +experiment=noise_sig_2020
 
 ## Development
 
-Format code:
+### Manual Formatting
+
 ```bash
-black .
+# Run all fixes
+./scripts/lint.sh
+
+# Or manually:
+ruff format .
 ruff check . --fix
 ```
 
-Run linting:
+### Pre-commit Hooks
+
+Install pre-commit hooks to automatically format code before each commit:
+
 ```bash
-ruff check .
+./scripts/setup-hooks.sh
+```
+
+Or manually:
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+Run on all files:
+```bash
+pre-commit run --all-files
 ```

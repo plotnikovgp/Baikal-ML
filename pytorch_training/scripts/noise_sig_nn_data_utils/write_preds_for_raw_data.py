@@ -165,9 +165,7 @@ def main():
     parser.add_argument(
         "--checkpoint", "-ck", type=str, required=True, help="Path to model checkpoint"
     )
-    parser.add_argument(
-        "--config", "-c", type=str, required=True, help="Path to model config yaml"
-    )
+    parser.add_argument("--config", "-c", type=str, required=True, help="Path to model config yaml")
     parser.add_argument(
         "--raw-data", "-r", type=str, required=True, help="Path to raw (flat) H5 file"
     )
@@ -178,9 +176,7 @@ def main():
         required=True,
         help="Path to H5 file with norm_param (trained data)",
     )
-    parser.add_argument(
-        "--output", "-o", type=str, default=None, help="Output H5 path"
-    )
+    parser.add_argument("--output", "-o", type=str, default=None, help="Output H5 path")
     parser.add_argument(
         "--output-folder",
         "-f",
@@ -269,4 +265,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

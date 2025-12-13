@@ -1,5 +1,6 @@
 import argparse
 from pathlib import Path
+from typing import Optional, Tuple
 
 import h5py
 import numpy as np
@@ -7,6 +8,25 @@ import torch
 import torch.nn as nn
 import yaml
 from tqdm import tqdm
+
+
+def load_norm_params(h5_path: str) -> Tuple[np.ndarray, np.ndarray]:
+    with h5py.File(h5_path, "r") as f:
+        mean = np.array(f["norm_param/mean"])
+        std = np.array(f["norm_param/std"])
+    return mean, std
+
+
+def renormalize_data(
+    data: np.ndarray,
+    src_mean: np.ndarray,
+    src_std: np.ndarray,
+    dst_mean: np.ndarray,
+    dst_std: np.ndarray,
+) -> np.ndarray:
+    denormed = data * src_std + src_mean
+    renormed = (denormed - dst_mean) / dst_std
+    return renormed.astype(np.float32)
 
 
 class TransformerEncoder(nn.Module):
@@ -67,7 +87,13 @@ def collate_batch(ev_starts, raw_data):
     return torch.tensor(x), torch.tensor(mask)
 
 
-def batch_generator(h5_path, split, batch_size, events_limit=None):
+def batch_generator(
+    h5_path,
+    split,
+    batch_size,
+    events_limit=None,
+    renorm_params: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = None,
+):
     with h5py.File(h5_path, "r") as f:
         ev_starts = f[f"{split}/ev_starts/data"][:]
         data_dataset = f[f"{split}/data/data"]
@@ -82,7 +108,11 @@ def batch_generator(h5_path, split, batch_size, events_limit=None):
 
             global_start = int(batch_ev_starts[0])
             global_end = int(batch_ev_starts[-1])
-            batch_data = data_dataset[global_start:global_end]
+            batch_data = np.array(data_dataset[global_start:global_end], dtype=np.float32)
+
+            if renorm_params is not None:
+                src_mean, src_std, dst_mean, dst_std = renorm_params
+                batch_data = renormalize_data(batch_data, src_mean, src_std, dst_mean, dst_std)
 
             x, mask = collate_batch(batch_ev_starts, batch_data)
             yield x, mask
@@ -98,14 +128,21 @@ def count_batches(h5_path, split, batch_size, events_limit=None):
     return num_batches
 
 
-def get_predictions_for_split(model, h5_path, split, batch_size, events_limit=None):
+def get_predictions_for_split(
+    model,
+    h5_path,
+    split,
+    batch_size,
+    events_limit=None,
+    renorm_params: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = None,
+):
     all_probs = []
     total_hits = 0
     total_batches = count_batches(h5_path, split, batch_size, events_limit)
 
     with torch.no_grad():
         for x, mask in tqdm(
-            batch_generator(h5_path, split, batch_size, events_limit),
+            batch_generator(h5_path, split, batch_size, events_limit, renorm_params),
             desc=f"Processing {split}",
             total=total_batches,
         ):
@@ -157,17 +194,20 @@ def write_predictions_to_h5(input_h5_path, output_h5_path, predictions_dict):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-ck", "--checkpoint",
+        "-ck",
+        "--checkpoint",
         type=str,
         default="/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/checkpoints/noise_sig_rerun_v2/encoder_nl5_nh1_dff512_hs512_bs128/best_2020.ckpt",
     )
     parser.add_argument(
-        "-c", "--config",
+        "-c",
+        "--config",
         type=str,
         default="/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/train_configs/noise_sig.yaml",
     )
     parser.add_argument(
-        "-d", "--data",
+        "-d",
+        "--data",
         type=str,
         default="/home2/ivkhar/Baikal/data/normed/baikal_2020_sig-noise_mid-eq_normed.h5",
     )
@@ -175,7 +215,21 @@ def main():
     parser.add_argument("-b", "--batch_size", type=int, default=128)
     parser.add_argument("-s", "--splits", type=str, nargs="+", default=["train", "val", "test"])
     parser.add_argument("-o", "--output-path", type=str, default=None)
-    parser.add_argument("-l", "--events-limit", type=int, default=None, help="Limit the number of events to process")
+    parser.add_argument(
+        "-l", "--events-limit", type=int, default=None, help="Limit the number of events to process"
+    )
+    parser.add_argument(
+        "--original-h5",
+        type=str,
+        default=None,
+        help="H5 file with norm_param that the neural network was trained on (for renormalization)",
+    )
+    parser.add_argument(
+        "--renormalize",
+        action="store_true",
+        default=False,
+        help="Denormalize using current H5 params, then renormalize using original H5 params",
+    )
     args = parser.parse_args()
 
     model, config = load_model(args.checkpoint, args.config)
@@ -183,11 +237,26 @@ def main():
     data_path = Path(args.data)
     output_path = args.output_path or Path(f"{data_path.stem}_nn_v{args.version}_sig_probs.h5")
 
+    renorm_params = None
+    if args.renormalize:
+        if args.original_h5 is None:
+            raise ValueError("--original-h5 is required when --renormalize is set")
+        src_mean, src_std = load_norm_params(args.data)
+        dst_mean, dst_std = load_norm_params(args.original_h5)
+        renorm_params = (src_mean, src_std, dst_mean, dst_std)
+        print(f"Renormalizing: {args.data} -> {args.original_h5}")
+        print(f"  Source mean: {src_mean}")
+        print(f"  Source std:  {src_std}")
+        print(f"  Target mean: {dst_mean}")
+        print(f"  Target std:  {dst_std}")
+
     predictions = {}
 
     for split in args.splits:
         print(f"\nProcessing {split} split...")
-        predictions[split] = get_predictions_for_split(model, args.data, split, args.batch_size, args.events_limit)
+        predictions[split] = get_predictions_for_split(
+            model, args.data, split, args.batch_size, args.events_limit, renorm_params
+        )
 
     write_predictions_to_h5(args.data, output_path, predictions)
     print(f"\nPredictions saved to {output_path}")
