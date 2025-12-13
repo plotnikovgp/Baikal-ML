@@ -1,5 +1,5 @@
-exp_project: "angle_reconstruction_combine_reco_mc"
-exp_name: "encoder_nl5_hs512_dff512_nh1_lr1e4_bs128_nm250_wr10_wm0"
+exp_project: "angle_reconstruction_combine_reco_mc_v4"
+exp_name: "encoder_nl5_hs512_dff512_nh1_lr1e4_bs128_nm250_wr0_wm10_tl100"
 dataset_weights: [1.0, 0.0]
 
 batch_size: 128
@@ -8,23 +8,26 @@ val_subset_cut: 3
 num_train_steps_per_validation: 256
 train_type: "angle_reconstruction"
 is_graph: False
+# from_checkpoint: "/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/checkpoints/angle_reconstruction_combine_reco_mc_v4/encoder_vanilla_mc2020/best.ckpt"
+#from_checkpoint: "/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/checkpoints/angle_reconstruction_combine_reco_mc_v4/encoder_nl5_hs512_dff512_nh1_lr1e4_reco_only_Qnorm/best.ckpt"
+from_checkpoint: "/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/checkpoints/angle_reconstruction_combine_reco_mc/encoder_nl5_hs512_dff512_nh1_lr1e4_bs128_nm250_wr8_wm2/best_reco.ckpt"
+val_mode: True
 
+# _min_track_l-100
 dataset_configs:
   -
     path_to_data: &p1 "/home/plotnikovgp/baikal/data/baikal_reco_reco_h8s2_norm.h5"
     name: "reco"
     tres_cut: 10000.0
-    val_subset_cut: 5
+    val_subset_cut: 1
     data_prefilter_params:
       data_file: *p1
       norm_Q: True
-
   -
-    path_to_data: "/home/plotnikovgp/baikal/data/baikal_multi_0324_flat_treck-cascade_h8_s2_pureMC_normed.h5"
+    path_to_data: "/home/plotnikovgp/baikal/data/baikal_mc2020_multi_split_MChits-8-2_track-caskade-nue2_normed.h5"
     name: "mc2020"
     tres_cut: 10000.0
     val_subset_cut: 30
-    
     
 model_type: "encoder"
 model_params:
@@ -38,6 +41,13 @@ model_params:
   use_cls_token: True
   return_only_cls_token: True
 
+# model_type: "lstm"
+# model_params:
+#   in_features: 5
+#   hidden_size: 256
+#   num_layers: 3
+#   out_size: 2
+#   dropout_p: 0.0
 
 lr: 1.0e-4
 batch_size: &batch_size 128

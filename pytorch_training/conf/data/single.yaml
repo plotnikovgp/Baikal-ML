@@ -1,0 +1,15 @@
+path: null
+val_subset_cut: 3
+events_amount: null
+set_tres_stats: false
+cache_datasets: false
+
+num_workers: 1
+prefetch_factor: 2
+persistent_workers: true
+pin_memory: true
+
+data_prefilter:
+  additive_gauss_noise_std: null
+  norm_Q: false
+

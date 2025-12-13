@@ -1,0 +1,14 @@
+name: angle_reconstruction_domain_adaptation
+is_graph: false
+use_vmf_loss: false
+use_vmf_rmse_loss: false
+use_mae_loss: true
+use_mse_loss: false
+use_cos_loss: false
+tres_cut: 100000.0
+domain_adaptation_loss_k: 0.1
+label_dataset_name: null
+predict_sigma: false
+nll_loss_k: 0.0
+angle_loss_k: 1.0
+

@@ -1,0 +1,41 @@
+# @package _global_
+defaults:
+  - override /train_type: angle_da
+  - override /model: encoder_cls
+  - override /data: multi
+
+exp_project: angle_reconstruction_da
+exp_name: encoder_nl5_hs512_da
+
+train_type:
+  use_mae_loss: true
+  domain_adaptation_loss_k: 0.1
+  label_dataset_name: mc_2020
+
+data:
+  datasets:
+    - name: mc_2020
+      path_to_data: /path/to/mc_data.h5
+      val_subset_cut: 3
+    - name: exp_data
+      path_to_data: /path/to/exp_data.h5
+      val_subset_cut: 3
+      preprocessor: no_labels
+      DatasetType: no_labels
+  weights: [0.5, 0.5]
+
+model:
+  params:
+    hidden_size: 512
+    num_layers: 5
+    dim_feedforward_size: 512
+    n_heads: 1
+    out_size: 3
+
+training:
+  lr: 1.0e-4
+  batch_size: 128
+  warmup_steps: 10000
+  num_train_steps_per_validation: 250
+  grad_clip_value: 1.0
+

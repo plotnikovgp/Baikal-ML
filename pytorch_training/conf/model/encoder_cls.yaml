@@ -1,0 +1,12 @@
+type: encoder
+params:
+  in_features: 5
+  hidden_size: 512
+  num_layers: 5
+  dim_feedforward_size: 512
+  n_heads: 1
+  out_size: 3
+  dropout_p: 0.0
+  use_cls_token: true
+  return_only_cls_token: true
+

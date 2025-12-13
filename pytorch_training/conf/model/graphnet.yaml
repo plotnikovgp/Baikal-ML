@@ -1,0 +1,6 @@
+type: graphnet
+params:
+  knn_neighbours: 4
+  in_features: 5
+  out_size: 2
+

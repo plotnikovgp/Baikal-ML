@@ -3,28 +3,36 @@ train_type: "track_cascade"
 # path_to_data: "/home/plotnikovgp/baikal/data/baikal_multi_0324_flat_treck-cascade_h8_s2_pureMC_normed.h5"
 dataset_configs:
   -
-    path_to_data: &p1 "/home/plotnikovgp/Baikal-ML/pytorch_training/data/baikal_reco_reco_h8s2_norm.h5"
+    path_to_data: &p1 "/home/plotnikovgp/baikal/data/baikal_multi_0324_flat_treck-cascade_h8_s2_pureMC_normed-2strings.h5"
     name: "reco"
     tres_cut: 10.0
     val_subset_cut: 5
+    knn_neighbours: 4
     data_prefilter_params:
       data_file: *p1
       norm_Q: True
   
-is_graph: False
+is_graph: True
+knn_neighbours: 4
 
-model_type: "cnn_attention"
-# Model configuration
-
+model_type: "gat"
 model_params:
   in_features: 5
-  hidden_size: 512
-  num_layers: 4
-  kernel_size: 5
-  dropout_p: 0.0
-  out_size: 3
-  attention_layers: [1, 2, 3]
-  use_batch_norm: True
+  hidden_size: 256
+  out_size: 2
+  # num_layers: 2
+
+# model_type: "cnn"
+# # Model configuration
+# model_params:
+#   in_features: 5
+#   hidden_size: 128
+#   num_layers: 4
+#   kernel_size: 5
+#   dropout_p: 0.0
+#   out_size: 3
+#   # attention_layers: [1, 2, 3]
+#   use_batch_norm: True
 
 min_recall: 0.9
 tres_mse_coef: 0.0
@@ -34,5 +42,5 @@ batch_size: 128
 warmup_steps: 1
 num_train_steps_per_validation: 250
 
-exp_name: "cnnatt_hs64_nl4_ks5_att-1-2-3_reco_data"
-exp_project: "track_cascade_enc_hyps_mc_0924"
+exp_name: "cnn_hs128_nl4_ks5"
+exp_project: "track_cascade_enc_hyps_mc_0924_v2"

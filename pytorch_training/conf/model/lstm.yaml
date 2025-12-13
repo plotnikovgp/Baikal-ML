@@ -1,0 +1,8 @@
+type: lstm
+params:
+  in_features: 5
+  hidden_size: 256
+  num_layers: 3
+  out_size: 2
+  dropout_p: 0.0
+

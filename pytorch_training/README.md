@@ -1,124 +1,227 @@
-## Project for training NN's on baikal MC data based on torch and torch_geometric
+# PyTorch Training for Baikal-GVD
 
-### Currently supported training types are
-- noise-signal hits classification
-- track-cascade hits classification
-- angle-reconstruction
-- t_res
-- track-cascade & angle-reconstruction || track-cascade & t_res 
+Neural network training framework for Baikal-GVD MC data using PyTorch and PyTorch Geometric.
 
-### How to run
+## Supported Training Types
+
+- **noise_sig** - Noise-signal hits classification
+- **track_cascade** - Track-cascade hits classification  
+- **angle** - Angle reconstruction
+- **energy** - Energy reconstruction
+- **tres** - Time residual prediction
+- **direction** - Direction reconstruction
+
+All types support domain adaptation variants (`_da` suffix).
+
+## Installation
+
+```bash
+pip install -r requirements.txt
+
+# For graph neural networks (optional)
+pip install torch-geometric
 ```
-python train.py -c=train_configs/<your_config> -dw
+
+## Quick Start
+
+### Using Hydra Configuration
+
+```bash
+# Run with an experiment config
+python train.py +experiment=noise_sig_2020
+
+# Run with domain adaptation
+python train.py +experiment=noise_sig_da
+
+# Override parameters from command line
+python train.py +experiment=noise_sig_2020 training.lr=1e-4 training.batch_size=128
+
+# Run validation only
+python train.py +experiment=noise_sig_2020 val_mode=true from_checkpoint=/path/to/checkpoint.ckpt
 ```
-remove `-dw` if you want to track your run in wandb (login from terminal required before that)
 
-### Multi-Dataset Training
+### Configuration Structure
 
-The codebase now supports training on multiple datasets with different sampling probabilities. This allows you to:
+```
+conf/
+├── config.yaml          # Default configuration
+├── train_type/          # Training type configs (noise_sig, angle, etc.)
+├── model/               # Model architecture configs (encoder, lstm, etc.)
+├── data/                # Data loading configs (single, multi dataset)
+└── experiment/          # Full experiment configs
+```
+
+### Creating a New Experiment
+
+Create a new file in `conf/experiment/`:
+
+```yaml
+# @package _global_
+defaults:
+  - override /train_type: noise_sig
+  - override /model: encoder
+  - override /data: single
+
+exp_project: my_project
+exp_name: my_experiment
+
+data:
+  path: /path/to/data.h5
+  val_subset_cut: 3
+
+model:
+  params:
+    hidden_size: 512
+    num_layers: 5
+
+training:
+  lr: 1.0e-3
+  batch_size: 256
+```
+
+## Multi-Dataset Training
+
+Train on multiple datasets with different sampling probabilities:
+
+```yaml
+# @package _global_
+defaults:
+  - override /train_type: noise_sig_da
+  - override /model: encoder
+  - override /data: multi
+
+data:
+  datasets:
+    - name: mc_data
+      path_to_data: /path/to/mc.h5
+      val_subset_cut: 3
+    - name: exp_data
+      path_to_data: /path/to/exp.h5
+      val_subset_cut: 3
+      preprocessor: no_labels
+      DatasetType: no_labels
+  weights: [0.5, 0.5]
+
+train_type:
+  domain_adaptation_loss_k: 0.1
+  label_dataset_name: mc_data
+```
+
+### Features
 
 - Train on multiple datasets with controlled sampling rates
-- Validate on multiple datasets with individual metrics for each dataset
-- Save best models for each individual dataset
-- Apply custom prefilters and parameters for each dataset
-- Use custom names for each dataset
+- Individual validation metrics per dataset
+- Save best models for each dataset (`save_best_per_dataset: true`)
+- Custom prefilters and parameters per dataset
 
-To use multi-dataset training, configure your YAML file with a `dataset_configs` section as shown in the examples below.
-
-#### Performance Optimizations
-
-Several performance optimizations are available to improve data loading speed:
+### Performance Optimizations
 
 ```yaml
-# Performance optimization parameters
-num_workers: 4            # Number of data loading worker processes
-prefetch_factor: 3        # Number of batches to prefetch per worker
-persistent_workers: true  # Keep worker processes alive between iterations
-pin_memory: true          # Pin memory for faster CPU->GPU transfer
-cache_datasets: true      # Cache datasets in memory for faster access
+data:
+  num_workers: 4
+  prefetch_factor: 3
+  persistent_workers: true
+  pin_memory: true
+  cache_datasets: true
 ```
 
-These settings are especially useful for multi-dataset training to reduce loading times.
+## Utility Scripts
 
-#### Basic Multi-Dataset Setup
+### Generate Signal Predictions
 
-```yaml
-dataset_configs:
-  - # First dataset
-    path_to_data: "/path/to/dataset1.h5"
-    tres_cut: 10.0
-    
-  - # Second dataset
-    path_to_data: "/path/to/dataset2.h5"
-    tres_cut: 15.0
+Save noise-signal predictions to H5 file:
 
-# Optional sampling weights
-dataset_weights: [0.7, 0.3]  # 70% from first dataset, 30% from second
-
-# Optional: save best model for each dataset separately
-save_best_per_dataset: true
+```bash
+python scripts/noise_sig_nn_data_utils/predict_to_h5.py \
+  --checkpoint /path/to/checkpoint.ckpt \
+  --config /path/to/config.yaml \
+  --data /path/to/data.h5 \
+  --version 1 \
+  --batch_size 512 \
+  --output-path /path/to/output_predictions.h5
 ```
 
-#### Custom Named Datasets
+### Filter Events by Signal
 
-You can provide custom names for each dataset, which will be used in metric logging and saved model filenames:
+Filter H5 file to keep only events with sufficient signal hits/strings:
 
-```yaml
-dataset_configs:
-  - # First dataset with a custom name
-    name: "clean_data"
-    path_to_data: "/path/to/clean_dataset.h5"
-    tres_cut: 10.0
-    
-  - # Second dataset with a custom name
-    name: "noisy_data"
-    path_to_data: "/path/to/noisy_dataset.h5"
-    tres_cut: 15.0
+```bash
+python scripts/noise_sig_nn_data_utils/filter_by_signal.py \
+  --original /path/to/original.h5 \
+  --predictions /path/to/predictions.h5 \
+  --threshold 0.5 \
+  --min-strings 3 \
+  --min-signal-hits 10 \
+  --output /path/to/filtered.h5
 ```
 
-This will result in metrics like `clean_data_loss`, `noisy_data_loss` and checkpoint files named `best_clean_data.ckpt` and `best_noisy_data.ckpt`.
+Parameters:
+- `--threshold` - Signal probability threshold (default: 0.5)
+- `--min-strings` - Minimum unique signal strings required (default: 3)
+- `--min-signal-hits` - Minimum signal hits required (default: 10)
 
-#### Custom Prefilters for Each Dataset
+## Project Structure
 
-You can specify individual prefilters and parameters for each dataset:
-
-```yaml
-dataset_configs:
-  - # First dataset with strict prefiltering
-    name: "clean_data"
-    path_to_data: "/path/to/dataset1.h5"
-    tres_cut: 10.0
-    data_prefilter_params:
-      min_hits: 15
-      max_hits: 100
-      min_signal_percentage: 0.6
-    
-  - # Second dataset with different prefiltering
-    name: "noisy_data"
-    path_to_data: "/path/to/dataset2.h5"
-    tres_cut: 15.0
-    data_prefilter_params:
-      min_hits: 10
-      max_hits: 150
-      min_signal_percentage: 0.5
+```
+pytorch_training/
+├── conf/                 # Hydra configuration files
+├── training/
+│   └── trainer.py        # Main training loop logic
+├── train_types/          # Training type implementations
+│   ├── base.py           # BaseTrainType abstract class
+│   ├── noise_sig.py      # Noise-signal classification
+│   ├── angle.py          # Angle reconstruction
+│   └── ...
+├── data_utils/
+│   ├── dataloaders.py    # Dataset/DataLoader creation
+│   ├── preprocessors.py  # Data preprocessing
+│   └── readers.py        # H5 file readers
+├── models/
+│   ├── encoder.py        # Transformer encoder
+│   ├── lstm.py           # LSTM model
+│   ├── graphnet.py       # Graph neural networks
+│   └── ...
+├── metrics/              # Metric calculation classes
+├── scripts/              # Utility scripts
+│   └── noise_sig_nn_data_utils/
+│       ├── predict_to_h5.py      # Generate signal predictions
+│       └── filter_by_signal.py   # Filter events by signal
+└── train.py              # Main entry point
 ```
 
-See the example config files in `train_configs/` for complete examples:
-- `multi_dataset_prefilters_example.yaml` - example with custom prefilters
-- `multi_dataset_named_example.yaml` - example with named datasets and performance optimizations
+## Available Models
 
-### Project structure
+| Model | Config | Description |
+|-------|--------|-------------|
+| Encoder | `encoder` | Transformer encoder |
+| EncoderCLS | `encoder_cls` | Transformer with CLS token |
+| LSTM | `lstm` | Bidirectional LSTM |
+| CNN | `cnn` | 1D Convolutional network |
+| GCN | `gcn` | Graph Convolutional Network |
+| GAT | `gat` | Graph Attention Network |
+| Graphnet | `graphnet` | Custom graph network |
 
-- trainining
-    - train_utils.py - all high-level logic for model training & evaluation
+## Logging
 
-- data_utils
-    - dataloaders.py - create torch datasets and dataloaders, collator logic
-    - preprocessors.py - preparing data for different tasks, add noise, filter etc
-    - readers.py - read data from H5 file and run preprocessor
-    - MultiDatasetSampler - combines multiple datasets with specified probabilities
-    - CachingDatasetWrapper - caches dataset items in memory for faster access
+Training logs to:
+- Console output
+- TensorBoard (in checkpoint directory)
+- Weights & Biases (if not disabled)
 
-- metrics - all logic for metrics calculation 
+```bash
+# Disable W&B logging
+WANDB_MODE=disabled python train.py +experiment=noise_sig_2020
+```
 
-- models - each file contains some architecture
+## Development
+
+Format code:
+```bash
+black .
+ruff check . --fix
+```
+
+Run linting:
+```bash
+ruff check .
+```

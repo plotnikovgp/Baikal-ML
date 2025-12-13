@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "baikal-training"
+version = "0.1.0"
+description = "PyTorch training framework for Baikal neutrino telescope"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.0.0",
+    "numpy",
+    "h5py",
+    "pyyaml",
+    "tqdm",
+    "scikit-learn",
+    "scipy",
+    "matplotlib",
+    "wandb",
+    "pytorch-warmup",
+    "hydra-core>=1.3.0",
+    "omegaconf>=2.3.0",
+    "tensorboard",
+]
+
+[project.optional-dependencies]
+graph = ["torch-geometric"]
+dev = ["pytest", "black", "ruff"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["data_utils*", "metrics*", "models*", "training*", "train_types*", "utils*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+
+[tool.ruff]
+line-length = 100
+exclude = ["__pycache__", "wandb", "runs", "checkpoints", "notebooks"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501", "F401", "F403", "F405"]
+

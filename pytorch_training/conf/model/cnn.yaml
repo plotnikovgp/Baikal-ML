@@ -1,0 +1,9 @@
+type: cnn
+params:
+  in_features: 5
+  hidden_size: 128
+  num_layers: 3
+  kernel_size: 5
+  out_size: 2
+  dropout_p: 0.0
+

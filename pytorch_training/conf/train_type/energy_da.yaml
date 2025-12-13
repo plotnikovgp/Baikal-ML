@@ -1,0 +1,6 @@
+name: energy_reconstruction_domain_adaptation
+is_graph: false
+use_cosh_loss: false
+domain_adaptation_loss_k: 0.1
+label_dataset_name: null
+

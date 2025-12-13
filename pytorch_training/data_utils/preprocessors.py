@@ -1,11 +1,11 @@
-import torch
+import typing as tp
 from abc import ABC, abstractmethod
-import logging
+
 import h5py as h5
 import numpy as np
-from torch_geometric.data import Data as GData
+import torch
 import torch_geometric.nn as gnn
-import typing as tp
+from torch_geometric.data import Data as GData
 
 EPS = 1e-8
 
@@ -41,7 +41,6 @@ class DataPrefilter:
     def __call__(self, data_x):
         if self.norm_Q:
             data_x[0] = (data_x[0] - self.means[0]) / self.stds[0]
-            print(data_x.shape, data_x[0].mean(), data_x[0].std())
         if self.Q_lower_bound is not None:
             data_x[0] = data_x[0].clamp(min=self.Q_lower_bound)
         if self.Q_upper_bound is not None:
@@ -55,38 +54,78 @@ class DataPrefilter:
             data_x = data_x + noise
             data_x[:, :1] = 0
         if self.mult_gauss_noise_fraction is not None:
-            data_x[0] = data_x[0] * (
-                1 + (0, self.mult_gauss_noise_fraction, data_x[0].shape)
-            )
+            data_x[0] = data_x[0] * (1 + (0, self.mult_gauss_noise_fraction, data_x[0].shape))
         return data_x
 
+    def denormalize(self, data_x):
+        return data_x * self.stds + self.means
 
-class BasePreprocessor(ABC):
+
+class BasePreprocessor:
     def __init__(self, data_prefilter: DataPrefilter | None = None, *args, **kwargs):
         self.data_prefilter = data_prefilter
 
-    @abstractmethod
-    def __call__(self, *args, **kwargs) -> tuple[torch.Tensor, torch.Tensor]:
-        pass
+    def __call__(self, x, y, **kwargs) -> tuple[torch.Tensor, torch.Tensor]:
+        return x, y
 
 
 class NoiseSigPreprocessor(BasePreprocessor):
+    def __init__(
+        self,
+        data_prefilter: DataPrefilter | None = None,
+        tres_cut_for_track_hit: float = 20.0,
+        **kwargs,
+    ):
+        super().__init__(data_prefilter, **kwargs)
+        self.tres_cut_for_track_hit = tres_cut_for_track_hit
+
     def __call__(
-        self, x: torch.Tensor, y: torch.Tensor, mask: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        y[(y != 0) & mask] = 1
+        self, x: torch.Tensor, y: torch.Tensor, t_res: torch.Tensor, mask: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        if self.data_prefilter is not None:
+            x = self.data_prefilter(x)
+        signal_mask = torch.abs(t_res) < self.tres_cut_for_track_hit
+        y[signal_mask] = 1
+        y[~signal_mask] = 0
         y = y.long()
         return x, y, mask
 
 
+# class NoiseSigPreprocessor(BasePreprocessor):
+#     def __init__(self, data_prefilter: DataPrefilter | None = None, tres_cut_for_track_hit: float = 20.0):
+#         self.tres_cut_for_track_hit = tres_cut_for_track_hit
+
+
+#     def __call__(
+#         self, x: torch.Tensor, y: torch.Tensor, t_res: torch.Tensor, mask: torch.Tensor
+#     ) -> tuple[torch.Tensor, torch.Tensor]:
+#         y[(y != 0)] = 1
+#         y = y.long()
+#         return x, y, mask
+
+
 class NoLabelsPreprocessor(BasePreprocessor):
-    def __call__(
-        self, x: torch.Tensor, mask: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def __call__(self, x: torch.Tensor, mask: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         if self.data_prefilter is not None:
             x = self.data_prefilter(x)
-        # return x, torch.zeros(x.shape[0], dtype=torch.float32), mask
         return x, torch.zeros(x.shape[0], dtype=torch.float32), mask
+
+
+class NoLabelsPerHitPreprocessor(BasePreprocessor):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def __call__(
+        self, x: torch.Tensor, mask: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        if self.data_prefilter is not None:
+            x = self.data_prefilter(x)
+        batch_size, seq_len = x.shape[:2]
+        y = torch.zeros(batch_size, seq_len, dtype=torch.float32)
+        return x, y, mask
 
 
 class TrackCascadePreprocessor(BasePreprocessor):
@@ -113,10 +152,13 @@ class TresPreprocessor(BasePreprocessor):
         self.tres_std = tres_std
 
     def __call__(
-        self, x: torch.Tensor, tres: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+        self,
+        x: torch.Tensor,
+        tres: torch.Tensor,
+        mask: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]:
         tres = (tres - self.tres_mean) / (self.tres_std + EPS)
-        return x, tres
+        return x, tres, mask
 
 
 class TresAndTrackCascadePreprocessor(TresPreprocessor):
@@ -159,8 +201,8 @@ class AnglePreprocessorWithTres(BasePreprocessor):
         x: torch.Tensor,
         y: torch.Tensor,
         mask: torch.Tensor,
-        tres: torch.Tensor,
-        labels: torch.Tensor,
+        tres: torch.Tensor | None = None,
+        labels: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         y = y[:, :2]
         thetha = torch.deg2rad(y[:, 0])
@@ -171,8 +213,6 @@ class AnglePreprocessorWithTres(BasePreprocessor):
         angle[:, 1] = torch.sin(thetha) * torch.sin(phi)
         angle[:, 2] = torch.cos(thetha)
 
-        track_hits = (labels < 0) | (torch.abs(tres) < 50)
-        # print(track_hits.sum(), track_hits.shape[0] * track_hits.shape[1])
         if self.data_prefilter is not None:
             x = self.data_prefilter(x)
         mask = mask  # & (labels != 0) & track_hits
@@ -187,7 +227,6 @@ class EnergyPreprocessor(BasePreprocessor):
     def __call__(
         self, x: torch.Tensor, y: torch.Tensor, mask: torch.Tensor, **kwargs
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-
         # print(y.shape, thetha.min(), thetha.max(), phi.min(), phi.max())
         energy = torch.log10(y)
 
@@ -267,7 +306,6 @@ class TrackCascadeGraphPreprocessor(BaseGraphPreprocessor):
         self.tres_cut = tres_cut
 
     def __call__(self, x: torch.Tensor, y: torch.Tensor, tres: torch.Tensor) -> GData:
-
         y[y > 0] = 1  # cascade
         y[y < 0] = 0  # track
         y[torch.abs(tres) < self.tres_cut] = 0

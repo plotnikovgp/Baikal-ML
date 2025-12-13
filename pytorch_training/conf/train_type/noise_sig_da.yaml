@@ -1,0 +1,5 @@
+name: noise_sig_domain_adaptation
+is_graph: false
+domain_adaptation_loss_k: 0.1
+label_dataset_name: null
+

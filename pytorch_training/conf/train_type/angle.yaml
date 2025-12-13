@@ -1,0 +1,8 @@
+name: angle_reconstruction
+is_graph: false
+use_vmf_loss: false
+use_vmf_rmse_loss: false
+use_mae_loss: true
+use_mse_loss: false
+tres_cut: 100000.0
+

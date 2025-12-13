@@ -1,0 +1,32 @@
+defaults:
+  - train_type: noise_sig
+  - model: encoder
+  - data: single
+  - _self_
+
+hydra:
+  run:
+    dir: checkpoints/${exp_project}/${exp_name}
+  sweep:
+    dir: checkpoints/${exp_project}
+    subdir: ${exp_name}
+
+exp_project: default_project
+exp_name: default_exp
+
+training:
+  lr: 1.0e-3
+  batch_size: 128
+  warmup_steps: 10000
+  num_train_steps_per_validation: 100
+  grad_clip_value: null
+  accumulate_grad_steps: 1
+  scheduler_patience: 1000
+  min_recall: null
+  valid_main_metric: loss
+  save_best_per_dataset: false
+
+val_mode: false
+from_checkpoint: null
+random_seed: 42
+

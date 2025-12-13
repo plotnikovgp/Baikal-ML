@@ -1,9 +1,36 @@
+# Python
 **/__pycache__/
-**/*.pth
+*.py[cod]
+*.egg-info/
+.eggs/
+
 checkpoints/
-wandb/
-**/data/*.h5
-**/.ipynb_checkpoints/
-notebooks/
+**/*.pth
 **/*.ckpt
-**/*.txt
+
+**/data/*.h5
+*.h5
+*.tar.gz
+
+wandb/
+runs/
+prediction_cache/
+*.log
+
+**/.ipynb_checkpoints/
+
+# TensorFlow saved models
+tf_encoder_model/
+tf_noise_sig_model/
+
+# Temporary configs
+temp_configs/
+
+# Plots (generated)
+plots/
+**/*.png
+
+# IDE
+.idea/
+.vscode/
+*.swp

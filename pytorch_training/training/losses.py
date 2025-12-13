@@ -1,15 +1,15 @@
 # reference https://github.com/graphnet-team/graphnet/blob/main/src/graphnet/training/loss_functions.py
 
 from abc import abstractmethod
-from typing import Any, Optional, Union, List, Dict
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import scipy.special
 import torch
-from torch import Tensor
+from torch import Tensor, nn
 from torch.nn.functional import (
-    one_hot,
     binary_cross_entropy,
+    one_hot,
     softplus,
 )
 
@@ -141,20 +141,14 @@ class CrossEntropyLoss(LossFunction):
         self._nb_classes: int
         if isinstance(self._options, int):
             assert self._options in [torch.int32, torch.int64]
-            assert (
-                self._options >= 2
-            ), f"Minimum of two classes required. Got {self._options}."
+            assert self._options >= 2, f"Minimum of two classes required. Got {self._options}."
             self._nb_classes = options  # type: ignore
         elif isinstance(self._options, list):
             self._nb_classes = len(self._options)  # type: ignore
         elif isinstance(self._options, dict):
-            self._nb_classes = len(
-                np.unique(list(self._options.values()))
-            )  # type: ignore
+            self._nb_classes = len(np.unique(list(self._options.values())))  # type: ignore
         else:
-            raise ValueError(
-                f"Class options of type {type(self._options)} not supported"
-            )
+            raise ValueError(f"Class options of type {type(self._options)} not supported")
 
         self._loss = nn.CrossEntropyLoss(reduction="none")
 
@@ -178,25 +172,19 @@ class CrossEntropyLoss(LossFunction):
             # (0, nb_classes - 1). Example:
             #    Given options: [1, 12, 13, ...]
             #    Yields: [1, 13, 12] -> [0, 2, 1, ...]
-            target_integer = torch.tensor(
-                [self._options.index(value) for value in target]
-            )
+            target_integer = torch.tensor([self._options.index(value) for value in target])
 
         elif isinstance(self._options, dict):
             # Dictionary of classes: Mapping target classes in dict onto
             # (0, nb_classes - 1). Example:
             #     Given options: {1: 0, -1: 0, 12: 1, -12: 1, ...}
             #     Yields: [1, -1, -12, ...] -> [0, 0, 1, ...]
-            target_integer = torch.tensor(
-                [self._options[int(value)] for value in target]
-            )
+            target_integer = torch.tensor([self._options[int(value)] for value in target])
 
         else:
             assert False, "Shouldn't reach here."
 
-        target_one_hot: Tensor = one_hot(target_integer, self._nb_classes).to(
-            prediction.device
-        )
+        target_one_hot: Tensor = one_hot(target_integer, self._nb_classes).to(prediction.device)
 
         return self._loss(prediction.float(), target_one_hot.float())
 
@@ -209,9 +197,7 @@ class BinaryCrossEntropyLoss(LossFunction):
     """
 
     def _forward(self, prediction: Tensor, target: Tensor) -> Tensor:
-        return binary_cross_entropy(
-            prediction.float(), target.float(), reduction="none"
-        )
+        return binary_cross_entropy(prediction.float(), target.float(), reduction="none")
 
 
 class LogCMK(torch.autograd.Function):
@@ -256,13 +242,9 @@ class LogCMK(torch.autograd.Function):
         ctx.m = m
         ctx.dtype = dtype
         kappa = kappa.double()
-        iv = torch.from_numpy(scipy.special.iv(m / 2.0 - 1, kappa.cpu().numpy())).to(
-            kappa.device
-        )
+        iv = torch.from_numpy(scipy.special.iv(m / 2.0 - 1, kappa.cpu().numpy())).to(kappa.device)
         return (
-            (m / 2.0 - 1) * torch.log(kappa)
-            - torch.log(iv)
-            - (m / 2) * np.log(2 * np.pi)
+            (m / 2.0 - 1) * torch.log(kappa) - torch.log(iv) - (m / 2) * np.log(2 * np.pi)
         ).type(dtype)
 
     @staticmethod
@@ -274,9 +256,7 @@ class LogCMK(torch.autograd.Function):
         m = ctx.m
         dtype = ctx.dtype
         kappa = kappa.double().cpu().numpy()
-        grads = -(
-            (scipy.special.iv(m / 2.0, kappa)) / (scipy.special.iv(m / 2.0 - 1, kappa))
-        )
+        grads = -((scipy.special.iv(m / 2.0, kappa)) / (scipy.special.iv(m / 2.0 - 1, kappa)))
         return (
             None,
             grad_output * torch.from_numpy(grads).to(grad_output.device).type(dtype),
@@ -291,16 +271,12 @@ class VonMisesFisherLoss(LossFunction):
     """
 
     @classmethod
-    def log_cmk_exact(
-        cls, m: int, kappa: Tensor
-    ) -> Tensor:  # pylint: disable=invalid-name
+    def log_cmk_exact(cls, m: int, kappa: Tensor) -> Tensor:  # pylint: disable=invalid-name
         """Calculate $log C_{m}(k)$ term in von Mises-Fisher loss exactly."""
         return LogCMK.apply(m, kappa)
 
     @classmethod
-    def log_cmk_approx(
-        cls, m: int, kappa: Tensor
-    ) -> Tensor:  # pylint: disable=invalid-name
+    def log_cmk_approx(cls, m: int, kappa: Tensor) -> Tensor:  # pylint: disable=invalid-name
         """Calculate $log C_{m}(k)$ term in von Mises-Fisher loss approx.
 
         [https://arxiv.org/abs/1812.04616] Sec. 8.2 with additional minus sign.
@@ -325,9 +301,7 @@ class VonMisesFisherLoss(LossFunction):
         mask_exact = kappa < kappa_switch
 
         # Ensure continuity at `kappa_switch`
-        offset = cls.log_cmk_approx(m, kappa_switch) - cls.log_cmk_exact(
-            m, kappa_switch
-        )
+        offset = cls.log_cmk_approx(m, kappa_switch) - cls.log_cmk_exact(m, kappa_switch)
         ret = cls.log_cmk_approx(m, kappa) - offset
         ret[mask_exact] = cls.log_cmk_exact(m, kappa[mask_exact])
         return ret
@@ -504,9 +478,7 @@ class EnsembleLoss(LossFunction):
             Elementwise loss terms. Shape [N,]
         """
         if self._prediction_keys is None:
-            prediction_keys = [list(range(prediction.size(1)))] * len(
-                self._loss_functions
-            )
+            prediction_keys = [list(range(prediction.size(1)))] * len(self._loss_functions)
         else:
             prediction_keys = self._prediction_keys
         for k, (loss_function, prediction_key) in enumerate(
@@ -563,4 +535,6 @@ class NLLUncertaintyLoss(LossFunction):
             prediction[:, self.pred_size :],
         )
         pred_sigma2 = torch.exp(log_pred_sigma2)
-        return log_pred_sigma2 + (pred - target) ** 2 / pred_sigma2
+        true_sigma2 = (pred - target) ** 2
+
+        return (pred_sigma2 - true_sigma2).square().mean()

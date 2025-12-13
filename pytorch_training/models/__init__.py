@@ -1,13 +1,16 @@
+import typing as tp
+
+import torch.nn as nn
+
+from .cnn import CNNDomainAdaptation, CNNModel, CNNModelWithAttention
 from .encoder import *
-from .graphnet import GraphnetDynedge, GraphnetAndEncoderStack
-from .lstm import LSTM
 from .gat import GAT
+from .gcn import GCN
 from .gincn import GINCN
+from .graphnet import GraphnetAndEncoderStack, GraphnetDynedge
+from .lstm import LSTM
 from .uncertainty_predictor import UncertaintyPredictor
 from .unet import UNetModel
-from .cnn import CNNModel, CNNModelWithAttention, CNNDomainAdaptation
-import torch.nn as nn
-import typing as tp
 
 
 def load_model(model_type: str, model_kwargs: dict[str, tp.Any]) -> nn.Module:
@@ -23,6 +26,8 @@ def load_model(model_type: str, model_kwargs: dict[str, tp.Any]) -> nn.Module:
         return LSTM(**model_kwargs)
     elif model_type == "gat":
         return GAT(**model_kwargs)
+    elif model_type == "gcn":
+        return GCN(**model_kwargs)
     elif model_type == "gin":
         return GINCN(**model_kwargs)
     elif model_type == "uncertainty_predictor":
