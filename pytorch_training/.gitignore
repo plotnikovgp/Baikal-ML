@@ -17,6 +17,9 @@ runs/
 prediction_cache/
 *.log
 
+# ClearML
+clearml.conf
+
 **/.ipynb_checkpoints/
 
 # TensorFlow saved models

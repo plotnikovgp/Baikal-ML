@@ -1,7 +1,7 @@
 # @package _global_
 defaults:
   - override /train_type: noise_sig_da
-  - override /model: encoder
+  - override /model: encoder_da
   - override /data: multi
 
 exp_project: noise_sig_domain_adaptation
@@ -17,11 +17,12 @@ data:
       path_to_data: /home2/ivkhar/Baikal/data/normed/baikal_2020_sig-noise_mid-eq_normed.h5
       val_subset_cut: 3
     - name: exp_data
-      path_to_data: /path/to/experimental_data.h5
-      val_subset_cut: 3
-      preprocessor: no_labels
+      path_to_data: /home/plotnikovgp/baikal/Baikal-ML/pytorch_training/data/baikal_exp_filtered_norm.h5
+      val_subset_cut: 10
+      preprocessor: no_labels_per_hit
       DatasetType: no_labels
   weights: [0.5, 0.5]
+  num_workers: 0
 
 model:
   params:
@@ -30,11 +31,12 @@ model:
     dim_feedforward_size: 512
     n_heads: 1
     out_size: 2
+    aggregate_output: false
 
 training:
-  lr: 1.0e-3
+  lr: 1.0e-4
   batch_size: 256
-  warmup_steps: 10000
-  num_train_steps_per_validation: 100
+  warmup_steps: 1000
+  num_train_steps_per_validation: 250
   min_recall: 0.9
 

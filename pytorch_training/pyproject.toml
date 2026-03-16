@@ -17,11 +17,10 @@ dependencies = [
     "scikit-learn",
     "scipy",
     "matplotlib",
-    "wandb",
     "pytorch-warmup",
     "hydra-core>=1.3.0",
     "omegaconf>=2.3.0",
-    "tensorboard",
+    "clearml>=1.14.0",
 ]
 
 [project.optional-dependencies]

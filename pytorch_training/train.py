@@ -5,10 +5,9 @@ import hydra
 import numpy as np
 import pytorch_warmup as warmup
 import torch
+from clearml import Task
 from omegaconf import DictConfig, OmegaConf
-from torch.utils.tensorboard import SummaryWriter
 
-import wandb
 from data_utils import BaikalDatasetNoLabels, create_dataloaders, create_multi_dataset_dataloader
 from data_utils.preprocessors import NoLabelsPerHitPreprocessor, NoLabelsPreprocessor
 from models import load_model
@@ -125,28 +124,27 @@ def create_dataloaders_from_config(cfg: DictConfig, train_type_handler):
     return dataloaders, dataset_names
 
 
-def setup_logging(cfg: DictConfig, is_val_mode: bool):
-    writer = None
-    use_wandb = cfg.get("use_wandb", False)
+def setup_logging(cfg: DictConfig, is_val_mode: bool) -> Task | None:
+    if is_val_mode:
+        return None
 
-    if use_wandb and not is_val_mode:
+    use_clearml = cfg.get("use_clearml", True)
+
+    if use_clearml:
         try:
-            wandb.init(
-                project=cfg.exp_project,
-                name=cfg.exp_name,
-                config=OmegaConf.to_container(cfg, resolve=True),
+            task = Task.init(
+                project_name=cfg.exp_project,
+                task_name=cfg.exp_name,
+                auto_connect_frameworks={"pytorch": True, "matplotlib": True},
             )
+            task.connect(OmegaConf.to_container(cfg, resolve=True))
+            print(f"ClearML task initialized: {task.id}")
+            return task
         except Exception as e:
-            print(f"WandB initialization failed: {e}")
-            print("Falling back to TensorBoard...")
-            use_wandb = False
-
-    if not use_wandb and not is_val_mode:
-        log_dir = f"runs/{cfg.exp_name}"
-        writer = SummaryWriter(log_dir=log_dir)
-        print(f"TensorBoard logs will be saved to: {log_dir}")
-
-    return writer, use_wandb
+            print(f"ClearML initialization failed: {e}")
+            print("Training will continue without experiment tracking.")
+            return None
+    return None
 
 
 @hydra.main(version_base=None, config_path="conf", config_name="config")
@@ -161,7 +159,7 @@ def main(cfg: DictConfig):
     save_dir = Path(hydra.core.hydra_config.HydraConfig.get().runtime.output_dir)
 
     train_params = OmegaConf.to_container(cfg, resolve=True)
-    train_params["train_type"] = train_type_name
+    train_params["train_type_name"] = train_type_name
     train_params["is_graph"] = cfg.train_type.is_graph
     train_params["val_mode"] = is_val_mode
 
@@ -196,7 +194,7 @@ def main(cfg: DictConfig):
         optimizer, warmup_period=training_cfg.get("warmup_steps", 0)
     )
 
-    writer, use_wandb = setup_logging(cfg, is_val_mode)
+    clearml_task = setup_logging(cfg, is_val_mode)
 
     trainer = Trainer(
         model=model,
@@ -207,8 +205,7 @@ def main(cfg: DictConfig):
         scheduler=scheduler,
         accumulate_grad_steps=training_cfg.get("accumulate_grad_steps", 1),
         grad_clip_value=training_cfg.get("grad_clip_value"),
-        use_wandb=use_wandb,
-        tensorboard_writer=writer,
+        clearml_task=clearml_task,
         model_save_dir=str(save_dir),
         valid_main_metric=training_cfg.get("valid_main_metric", "loss"),
     )

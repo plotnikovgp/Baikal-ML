@@ -2,9 +2,9 @@ import json
 from pathlib import Path
 
 import torch
+from clearml import Logger, Task
 from tqdm import tqdm
 
-import wandb
 from metrics import BaseMetrics, BinaryClassificationMetrics
 
 
@@ -19,8 +19,7 @@ class Trainer:
         scheduler=None,
         accumulate_grad_steps=1,
         grad_clip_value=None,
-        use_wandb=False,
-        tensorboard_writer=None,
+        clearml_task: Task | None = None,
         model_save_dir="models",
         valid_main_metric="loss",
     ):
@@ -32,8 +31,8 @@ class Trainer:
         self.scheduler = scheduler
         self.accumulate_grad_steps = accumulate_grad_steps
         self.grad_clip_value = grad_clip_value
-        self.use_wandb = use_wandb
-        self.tensorboard_writer = tensorboard_writer
+        self.clearml_task = clearml_task
+        self.clearml_logger = Logger.current_logger() if clearml_task else None
         self.model_save_dir = model_save_dir
         self.valid_main_metric = valid_main_metric
 
@@ -323,12 +322,13 @@ class Trainer:
                     train_logs_["train/epoch"] = cur_epoch
                     total_steps += 1
 
-                    if self.use_wandb and not self.tensorboard_writer:
-                        wandb.log(train_logs_)
-                    elif self.tensorboard_writer is not None:
+                    if self.clearml_logger:
                         for key, value in train_logs_.items():
                             if value is not None and isinstance(value, (int, float)):
-                                self.tensorboard_writer.add_scalar(key, value, total_steps)
+                                series, title = key.split("/", 1) if "/" in key else ("train", key)
+                                self.clearml_logger.report_scalar(
+                                    title=title, series=series, value=value, iteration=total_steps
+                                )
 
                     to_print = {
                         k: train_logs_[k] for k in train_logs_ if "loss" in k or k in ["epoch"]
@@ -346,12 +346,13 @@ class Trainer:
                     )
                     val_logs_ = {"val/" + k: v for k, v in val_logs.items()}
 
-                    if self.use_wandb and not self.tensorboard_writer:
-                        wandb.log(val_logs_)
-                    elif self.tensorboard_writer is not None:
+                    if self.clearml_logger:
                         for key, value in val_logs_.items():
                             if value is not None and isinstance(value, (int, float)):
-                                self.tensorboard_writer.add_scalar(key, value, total_steps)
+                                series, title = key.split("/", 1) if "/" in key else ("val", key)
+                                self.clearml_logger.report_scalar(
+                                    title=title, series=series, value=value, iteration=total_steps
+                                )
 
                     if save_best_model or save_best_per_dataset:
                         Path(self.model_save_dir).mkdir(parents=True, exist_ok=True)

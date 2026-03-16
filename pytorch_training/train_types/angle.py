@@ -39,7 +39,7 @@ class AngleReconstructionTrainType(BaseTrainType):
         super().__init__(train_params, device)
         self.save_dir = save_dir
         self.is_val_mode = train_params.get("val_mode", False)
-        self.use_old = "old" in train_params.get("train_type", "")
+        self.use_old = "old" in train_params.get("train_type_name", "")
         self._setup_criterion()
 
     def _setup_criterion(self):
@@ -250,7 +250,9 @@ class AngleAndTrackCascadeTrainType(BaseTrainType):
         return criterion
 
     def get_metrics_function(self):
-        return BinaryClassificationMetrics(save_preds=self.is_val_mode, save_dir=self.save_dir)
+        return BinaryClassificationMetrics(
+            min_recall=0.9, save_preds=self.is_val_mode, save_dir=self.save_dir
+        )
 
     def _process_batch(self, model, data, dataset_idx=None) -> Dict[str, torch.Tensor]:
         if len(data) == 4:

@@ -7,6 +7,7 @@ python write_preds_for_raw_data.py \
   --output-folder preds \
   --particles muatm nuatm nue2 \
   --batch-size 256 \
-  --prefix raw
+  --prefix raw \
+  --events-limit 2000
 
 # further use in filter_data_multiprocessing.py

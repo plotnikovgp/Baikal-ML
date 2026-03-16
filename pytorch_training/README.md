@@ -201,17 +201,41 @@ pytorch_training/
 | GAT | `gat` | Graph Attention Network |
 | Graphnet | `graphnet` | Based on [GraphNeT](https://github.com/graphnet-team/graphnet) |
 
-## Logging
+## Experiment Tracking with ClearML
 
-Training logs to:
-- Console output
-- TensorBoard (in checkpoint directory)
-- Weights & Biases (if not disabled)
+Training uses [ClearML](https://clear.ml/) for experiment tracking.
+
+### First-time Setup
 
 ```bash
-# Disable W&B logging
-WANDB_MODE=disabled python train.py +experiment=noise_sig_2020
+# Install ClearML
+pip install clearml
+
+# Configure your ClearML credentials
+clearml-init
 ```
+
+Follow the prompts to enter your ClearML server URL and credentials.
+
+### Usage
+
+ClearML is enabled by default. To disable:
+
+```bash
+# Disable via config
+python train.py +experiment=noise_sig_2020 use_clearml=false
+
+# Or via environment variable
+CLEARML_TASK_NO_REUSE=1 python train.py +experiment=noise_sig_2020
+```
+
+### Features
+
+- Automatic experiment tracking and metric logging
+- Hyperparameter logging
+- Console output capture
+- Model artifact management
+- Comparison of experiments in web UI
 
 ## Development
 

@@ -34,7 +34,7 @@ class NoiseSigTrainType(BaseTrainType):
         return self._criterion
 
     def get_metrics_function(self):
-        return BinaryClassificationMetrics()
+        return BinaryClassificationMetrics(min_recall=0.9)
 
 
 class NoiseSigDomainAdaptationTrainType(DomainAdaptationMixin, BaseTrainType):
@@ -47,8 +47,9 @@ class NoiseSigDomainAdaptationTrainType(DomainAdaptationMixin, BaseTrainType):
         self.is_classification = True
         self.loss_fn = torch.nn.CrossEntropyLoss()
         self.domain_loss_fn = torch.nn.CrossEntropyLoss()
-        self.domain_adaptation_loss_k = train_params.get("domain_adaptation_loss_k", 0.1)
-        self.label_dataset_name = train_params.get("label_dataset_name", None)
+        tt_params = train_params.get("train_type", train_params)
+        self.domain_adaptation_loss_k = tt_params.get("domain_adaptation_loss_k", 0.1)
+        self.label_dataset_name = tt_params.get("label_dataset_name", None)
 
     def get_dataset_type(self):
         if self.is_graph:
@@ -98,7 +99,7 @@ class NoiseSigDomainAdaptationTrainType(DomainAdaptationMixin, BaseTrainType):
         return criterion
 
     def get_metrics_function(self):
-        return BinaryClassificationMetrics()
+        return BinaryClassificationMetrics(min_recall=0.9)
 
     def get_train_kwargs(self) -> Dict[str, Any]:
         kwargs = super().get_train_kwargs()

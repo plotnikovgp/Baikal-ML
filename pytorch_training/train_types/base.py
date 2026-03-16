@@ -98,14 +98,17 @@ class BaseTrainType(ABC):
 
 class DomainAdaptationMixin:
     def _process_batch_with_domain(self, model, data, dataset_idx) -> Dict[str, torch.Tensor]:
-        if isinstance(data, tuple) and len(data) > 3:
-            dataset_idx = data[-1]
-            data = data[:-1]
-
-        if len(data) == 4:
-            data = data[:3]
-
-        x, y_true, mask = data
+        if isinstance(data, (tuple, list)):
+            if len(data) == 4:
+                x, y_true, mask, dataset_idx = data
+            elif len(data) == 3:
+                x, y_true, mask = data
+                if dataset_idx is None:
+                    dataset_idx = 0
+            else:
+                raise ValueError(f"Unexpected data format: {len(data)} elements")
+        else:
+            raise ValueError(f"Expected tuple/list data, got {type(data)}")
         x = x.to(self.device)
         y_true = y_true.to(self.device) if y_true is not None else None
         mask = mask.to(self.device)

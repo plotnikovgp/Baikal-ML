@@ -1,0 +1,15 @@
+type: encoder_domain_adaptation
+params:
+  in_features: 5
+  hidden_size: 512
+  num_layers: 5
+  dim_feedforward_size: 512
+  n_heads: 1
+  out_size: 2
+  dropout_p: 0.0
+  num_domains: 2
+  domain_classifier_hidden_size: 128
+  domain_classifier_layers: 2
+  gradient_reversal_alpha: 1.0
+  aggregate_output: false
+

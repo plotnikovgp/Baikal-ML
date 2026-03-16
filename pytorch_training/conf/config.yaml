@@ -29,4 +29,5 @@ training:
 val_mode: false
 from_checkpoint: null
 random_seed: 42
+use_clearml: true
 

@@ -7,10 +7,11 @@ Raw data structure:
     {particle}/{prefix}/ev_starts/{part}/data - event boundaries
 
 Output structure:
-    {folder}/{particle}/{part}/preds - predictions [N_hits, 1]
+    {folder}/{particle}/{part}/nn_noise_hit_prob - predictions [N_hits, 1]
 """
 
 import argparse
+import random
 from pathlib import Path
 
 import h5py
@@ -70,6 +71,25 @@ def load_norm_params(norm_h5_path):
 
 def normalize_data(data, mean, std):
     return (data - mean) / std
+
+
+def parse_kv_ints(items):
+    if items is None:
+        return {}
+    limits = {}
+    for item in items:
+        if "=" not in item:
+            raise argparse.ArgumentTypeError(
+                f"Expected key=value for --limit-num-parts, got: {item}"
+            )
+        key, value = item.split("=", 1)
+        try:
+            limits[key] = int(value)
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError(
+                f"Expected integer value for --limit-num-parts, got: {item}"
+            ) from exc
+    return limits
 
 
 def collate_batch(ev_starts, raw_data):
@@ -202,7 +222,27 @@ def main():
     parser.add_argument(
         "--events-limit", "-l", type=int, default=None, help="Limit events per part"
     )
+    parser.add_argument(
+        "--limit-num-parts",
+        type=str,
+        nargs="+",
+        default=None,
+        help="Limit number of parts per particle: muatm=400 nuatm=260",
+    )
+    parser.add_argument(
+        "--sample-parts",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Sample parts instead of taking first N (default: True)",
+    )
+    parser.add_argument(
+        "--nn-threshold",
+        type=float,
+        default=None,
+        help="Store NN threshold in metadata (not used here)",
+    )
     args = parser.parse_args()
+    limit_num_parts = parse_kv_ints(args.limit_num_parts)
 
     print(f"Loading model from {args.checkpoint}")
     model, config = load_model(args.checkpoint, args.config)
@@ -220,6 +260,25 @@ def main():
     print(f"Output folder: {args.output_folder}")
 
     with h5py.File(args.raw_data, "r") as src, h5py.File(output_path, "w") as dst:
+        meta = dst.create_group("meta")
+        meta.attrs["checkpoint_path"] = str(args.checkpoint)
+        meta.attrs["config_path"] = str(args.config)
+        meta.attrs["raw_data"] = str(args.raw_data)
+        meta.attrs["norm_data"] = str(args.norm_data)
+        meta.attrs["output_folder"] = str(args.output_folder)
+        meta.attrs["prefix"] = str(args.prefix)
+        meta.attrs["particles"] = ",".join(args.particles)
+        meta.attrs["batch_size"] = int(args.batch_size)
+        meta.attrs["events_limit"] = int(args.events_limit) if args.events_limit is not None else -1
+        meta.attrs["nn_threshold"] = (
+            float(args.nn_threshold) if args.nn_threshold is not None else -1.0
+        )
+        meta.attrs["limit_num_parts"] = ",".join(f"{k}={v}" for k, v in limit_num_parts.items())
+        with open(args.config, "r") as f:
+            meta.create_dataset(
+                "config_yaml",
+                data=np.string_(f.read()),
+            )
         for particle in args.particles:
             if particle not in src:
                 print(f"\nSkipping {particle}: not found in file")
@@ -233,6 +292,12 @@ def main():
                 continue
 
             parts = list(src[data_key].keys())
+            limit_parts = limit_num_parts.get(particle)
+            if limit_parts is not None and limit_parts > 0:
+                if args.sample_parts:
+                    parts = random.sample(parts, k=min(limit_parts, len(parts)))
+                else:
+                    parts = parts[:limit_parts]
             print(f"  Found {len(parts)} parts")
 
             for part in tqdm(parts, desc=f"  {particle} parts"):
@@ -249,7 +314,7 @@ def main():
                 )
 
                 if probs is not None:
-                    preds_path = f"{args.output_folder}/{particle}/{part}/preds"
+                    preds_path = f"{args.output_folder}/{particle}/{part}/`preds`"
                     dst.create_dataset(
                         preds_path,
                         data=probs.reshape(-1, 1),
