@@ -268,3 +268,9 @@ Run on all files:
 ```bash
 pre-commit run --all-files
 ```
+
+
+
+# TODO
+1. проверить распределение z при разных порогах сети сигнал-шум
+2. 

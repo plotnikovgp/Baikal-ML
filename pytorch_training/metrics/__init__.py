@@ -142,6 +142,9 @@ class AngleReconstructionMetrics(BaseMetrics):
                 sigma_pred.mean(1), sigma_true.mean(1)
             )
             metrics.update({"sigma2_" + k: v for k, v in sigma_metrics.items()})
+            has_sigma = True
+        else:
+            has_sigma = False
 
         kappa = None
         if y_pred.shape[1] == 4:
@@ -183,6 +186,10 @@ class AngleReconstructionMetrics(BaseMetrics):
                     "theta_resolution": theta_res,
                     "phi_resolution": phi_res,
                 }
+                if has_sigma:
+                    self.data_to_save["log_sigma2"] = log_sigma2
+                    self.data_to_save["y_pred_xyz"] = y_pred
+                    self.data_to_save["y_true_xyz"] = y_true
 
         if kappa is not None:
             cos_sim = np.sum(y_true * y_pred, axis=1)

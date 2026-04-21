@@ -4,16 +4,18 @@ defaults:
   - override /model: encoder
   - override /data: single
 
-exp_project: noise_sig_rerun
-exp_name: encoder_nl5_hs512
+exp_project: noise_sig_experiments
+exp_name: a_tres10_smaller_hs128
 
 data:
-  path: /home/plotnikovgp/baikal/data/baikal_mc_merged_m50-na15-nue15_norm.h5
+  path: /home/plotnikovgp/baikal/data/baikal_mc_merged_m50-na15-nue15_all_smaller_norm.h5
   val_subset_cut: 3
+
+tres_cut_for_track_hit: 10.0
 
 model:
   params:
-    hidden_size: 512
+    hidden_size: 128
     num_layers: 5
     dim_feedforward_size: 512
     n_heads: 1
@@ -21,8 +23,7 @@ model:
 
 training:
   lr: 1.0e-3
-  batch_size: 256
-  warmup_steps: 10000
+  batch_size: 128
+  warmup_steps: 5000
   num_train_steps_per_validation: 100
   min_recall: 0.9
-

@@ -151,9 +151,9 @@ def get_hidden_states(model, val_loader, max_samples=10000):
 
 def load_model_predictions(checkpoint_path, config, model_name):
     """Helper function to load a model and get predictions"""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Loading {model_name} from {Path(checkpoint_path).name}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     model, _ = load_checkpoint_and_config(checkpoint_path, config)
 
     # Load config

@@ -1,5 +1,7 @@
+import logging
 import typing as tp
 
+import torch
 import torch.nn as nn
 
 from .cnn import CNNDomainAdaptation, CNNModel, CNNModelWithAttention
@@ -31,7 +33,14 @@ def load_model(model_type: str, model_kwargs: dict[str, tp.Any]) -> nn.Module:
     elif model_type == "gin":
         return GINCN(**model_kwargs)
     elif model_type == "uncertainty_predictor":
-        return UncertaintyPredictor(**model_kwargs)
+        encoder_params = model_kwargs.pop("encoder_params", {})
+        encoder_checkpoint = model_kwargs.pop("encoder_checkpoint", None)
+        encoder = Encoder(**encoder_params)
+        if encoder_checkpoint:
+            state_dict = torch.load(encoder_checkpoint, map_location="cpu", weights_only=False)
+            encoder.load_state_dict(state_dict)
+            logging.info(f"Loaded encoder weights from {encoder_checkpoint}")
+        return UncertaintyPredictor(model=encoder, **model_kwargs)
     elif model_type == "unet":
         return UNetModel(**model_kwargs)
     elif model_type == "cnn":

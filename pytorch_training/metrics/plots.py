@@ -147,6 +147,7 @@ class AngleUncertaintyPlotter(BasePlotter):
 
         sigma_phi = np.sqrt(data["pred_phi_sigma2"])
         error_phi = data["true_phi"] - data["pred_phi"]
+        error_phi = (error_phi + 180) % 360 - 180
 
         # Create figure
         fig, axs = plt.subplots(1, 2, figsize=(14, 6))
@@ -336,6 +337,184 @@ class AngleUncertaintyPlotter(BasePlotter):
 
         plt.close()
 
+    def _plot_uncertainty_cut_curve(self, data: dict):
+        """
+        For a range of uncertainty thresholds, compute the median (and 68th percentile)
+        angular error among events passing the cut, and the fraction of events that pass.
+        Result: X = fraction of events passing the cut, Y = error metric.
+        """
+        pred_xyz = data["y_pred"]
+        true_xyz = data["y_true"]
+
+        if "pred_sigma2" in data:
+            sigma_xyz = np.sqrt(data["pred_sigma2"])
+        elif "log_sigma2" in data:
+            sigma_xyz = np.sqrt(np.exp(data["log_sigma2"]))
+        else:
+            return
+
+        dot = np.clip(np.sum(true_xyz * pred_xyz, axis=1), -1.0, 1.0)
+        angular_error = np.rad2deg(np.arccos(dot))
+
+        uncertainty = sigma_xyz.mean(axis=1)
+
+        valid = ~(np.isnan(uncertainty) | np.isnan(angular_error))
+        uncertainty = uncertainty[valid]
+        angular_error = angular_error[valid]
+
+        n_total = len(angular_error)
+        thresholds = np.percentile(uncertainty, np.linspace(0, 100, 200))
+        thresholds = np.unique(thresholds)
+
+        fractions = []
+        median_errors = []
+        q68_errors = []
+
+        for thr in thresholds:
+            mask = uncertainty <= thr
+            n_pass = mask.sum()
+            if n_pass < 10:
+                continue
+            fractions.append(n_pass / n_total)
+            median_errors.append(np.median(angular_error[mask]))
+            q68_errors.append(np.percentile(angular_error[mask], 68))
+
+        fractions = np.array(fractions)
+        median_errors = np.array(median_errors)
+        q68_errors = np.array(q68_errors)
+
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.plot(fractions, median_errors, "-", linewidth=2.5, label="Median error", color="#1f77b4")
+        ax.plot(
+            fractions,
+            q68_errors,
+            "--",
+            linewidth=2.5,
+            label="68th percentile error",
+            color="#ff7f0e",
+        )
+
+        ax.set_xlabel("Fraction of events passing cut", fontsize=LABEL_FONT_SIZE, fontweight="bold")
+        ax.set_ylabel("Angular error [deg]", fontsize=LABEL_FONT_SIZE, fontweight="bold")
+        ax.set_title(
+            "Angular Error vs. Uncertainty Cut",
+            fontsize=TITILE_FONT_SIZE,
+            fontweight="bold",
+        )
+
+        ax.set_xlim(0, 1.02)
+        ax.set_ylim(bottom=0)
+        ax.grid(True, linestyle=":", alpha=0.7)
+        ax.legend(fontsize=LEGEND_FONT_SIZE, frameon=True, fancybox=True, framealpha=0.9)
+
+        full_median = np.median(angular_error)
+        full_q68 = np.percentile(angular_error, 68)
+        ax.axhline(full_median, color="#1f77b4", alpha=0.3, linestyle=":")
+        ax.axhline(full_q68, color="#ff7f0e", alpha=0.3, linestyle=":")
+
+        plt.tight_layout()
+        plt.savefig(
+            self.save_dir / "uncertainty_cut_curve.png",
+            dpi=300,
+            bbox_inches="tight",
+        )
+        plt.close()
+
+    def _plot_error_vs_uncertainty_binned(self, data: dict):
+        """
+        Binned plot: for bins of predicted uncertainty, show the median true error.
+        Helps evaluate whether higher predicted sigma truly corresponds to worse events.
+        """
+        import matplotlib.colors as colors
+
+        pred_xyz = data["y_pred"]
+        true_xyz = data["y_true"]
+
+        if "pred_sigma2" in data:
+            sigma_xyz = np.sqrt(data["pred_sigma2"])
+        elif "log_sigma2" in data:
+            sigma_xyz = np.sqrt(np.exp(data["log_sigma2"]))
+        else:
+            return
+
+        dot = np.clip(np.sum(true_xyz * pred_xyz, axis=1), -1.0, 1.0)
+        angular_error = np.rad2deg(np.arccos(dot))
+        uncertainty = sigma_xyz.mean(axis=1)
+
+        valid = ~(np.isnan(uncertainty) | np.isnan(angular_error))
+        uncertainty = uncertainty[valid]
+        angular_error = angular_error[valid]
+
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+
+        sigma_max = np.percentile(uncertainty, 97)
+        error_max = np.percentile(angular_error, 97)
+        hist = ax1.hist2d(
+            uncertainty,
+            angular_error,
+            bins=60,
+            range=[[0, sigma_max], [0, error_max]],
+            density=True,
+            norm=colors.LogNorm(vmin=1e-4),
+            cmap=CMAP,
+        )
+        fig.colorbar(hist[3], ax=ax1)
+
+        bin_edges = np.linspace(0, sigma_max, 30)
+        medians, q68s, bin_centers = [], [], []
+
+        for lo, hi in zip(bin_edges[:-1], bin_edges[1:]):
+            mask = (uncertainty >= lo) & (uncertainty < hi)
+            if mask.sum() < 10:
+                continue
+            bin_centers.append((lo + hi) / 2)
+            medians.append(np.median(angular_error[mask]))
+            q68s.append(np.percentile(angular_error[mask], 68))
+
+        if bin_centers:
+            ax1.plot(
+                bin_centers,
+                medians,
+                "-o",
+                color=PERCENTILE_COLOR,
+                linewidth=2.5,
+                markersize=4,
+                label="Median error",
+            )
+            ax1.plot(
+                bin_centers,
+                q68s,
+                "--s",
+                color="cyan",
+                linewidth=2,
+                markersize=3,
+                label="68% error",
+            )
+
+        ax1.set_xlabel("Mean predicted $\\sigma$", fontsize=LABEL_FONT_SIZE, fontweight="bold")
+        ax1.set_ylabel("Angular error [deg]", fontsize=LABEL_FONT_SIZE, fontweight="bold")
+        ax1.set_title("Error vs. Uncertainty", fontsize=TITILE_FONT_SIZE, fontweight="bold")
+        ax1.legend(fontsize=LEGEND_FONT_SIZE)
+        ax1.set_xlim(0, sigma_max)
+        ax1.set_ylim(0, error_max)
+        ax1.grid(True, linestyle=":", alpha=0.7)
+
+        ax2.hist(
+            uncertainty, bins=80, range=[0, sigma_max], density=True, color="#4c72b0", alpha=0.8
+        )
+        ax2.set_xlabel("Mean predicted $\\sigma$", fontsize=LABEL_FONT_SIZE, fontweight="bold")
+        ax2.set_ylabel("Density", fontsize=LABEL_FONT_SIZE, fontweight="bold")
+        ax2.set_title("Uncertainty Distribution", fontsize=TITILE_FONT_SIZE, fontweight="bold")
+        ax2.grid(True, linestyle=":", alpha=0.7)
+
+        plt.tight_layout()
+        plt.savefig(
+            self.save_dir / "error_vs_uncertainty.png",
+            dpi=300,
+            bbox_inches="tight",
+        )
+        plt.close()
+
     def plot(self, data: dict):
         sns.set_style("whitegrid")
         plt.rcParams.update(
@@ -354,3 +533,5 @@ class AngleUncertaintyPlotter(BasePlotter):
         self._plot_angle_uncertainty_metrics(data)
         # self._plot_coordinate_uncertainties(data)
         self._plot_angle_uncertainties(data)
+        self._plot_uncertainty_cut_curve(data)
+        self._plot_error_vs_uncertainty_binned(data)

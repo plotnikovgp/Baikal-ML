@@ -1,0 +1,34 @@
+# @package _global_
+defaults:
+  - override /train_type: angle_sigma
+  - override /model: uncertainty_predictor
+  - override /data: single
+
+exp_project: angle_reconstruction_sigma_mc2020_tl100
+exp_name: sigma_nh2
+
+data:
+  path: /home/plotnikovgp/baikal/data/baikal_mc2020_multi_split_0924h8s2_tl100_norm.h5
+
+model:
+  params:
+    encoder_checkpoint: /home/plotnikovgp/baikal/Baikal-ML/pytorch_training/checkpoints/angle_reconstruction_track_length_exp_mc_2020_0924/encoder_nl5_hs128_dff512_nh2_lr1e4_tl-100_new_data/best.ckpt
+    encoder_params:
+      in_features: 5
+      hidden_size: 512
+      num_layers: 5
+      dim_feedforward_size: 512
+      n_heads: 2
+      out_size: 3
+      dropout_p: 0.0
+      use_cls_token: true
+      return_only_cls_token: true
+
+training:
+  lr: 1.0e-3
+  batch_size: 512
+  accumulate_grad_steps: 1
+  num_train_steps_per_validation: 100
+  grad_clip_value: 1.0
+  warmup_steps: 100
+  valid_main_metric: loss

@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 
+import h5py
 import hydra
 import numpy as np
 import pytorch_warmup as warmup
@@ -82,6 +83,17 @@ def create_dataloaders_from_config(cfg: DictConfig, train_type_handler):
                 preproc_cfg = OmegaConf.to_container(cfg, resolve=True)
                 preproc_cfg.update(ds_config)
                 ds_config["preprocessor"] = train_type_handler.get_preprocessor(preproc_cfg)
+
+            renorm_to = ds_config.pop("renorm_to", None)
+            if renorm_to:
+                with h5py.File(ds_config["path_to_data"], "r") as f:
+                    src_mean = torch.tensor(f["norm_param/mean"][:].astype(np.float32))
+                    src_std = torch.tensor(f["norm_param/std"][:].astype(np.float32))
+                with h5py.File(renorm_to, "r") as f:
+                    dst_mean = torch.tensor(f["norm_param/mean"][:].astype(np.float32))
+                    dst_std = torch.tensor(f["norm_param/std"][:].astype(np.float32))
+                ds_config["renorm_params"] = (src_mean, src_std, dst_mean, dst_std)
+                logging.info(f"Renormalization enabled: {ds_config['path_to_data']} -> {renorm_to}")
 
             dataset_configs.append(ds_config)
 

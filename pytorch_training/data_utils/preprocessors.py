@@ -64,6 +64,13 @@ class DataPrefilter:
 class BasePreprocessor:
     def __init__(self, data_prefilter: DataPrefilter | None = None, *args, **kwargs):
         self.data_prefilter = data_prefilter
+        self.training = True
+
+    def train(self):
+        self.training = True
+
+    def eval(self):
+        self.training = False
 
     def __call__(self, x, y, **kwargs) -> tuple[torch.Tensor, torch.Tensor]:
         return x, y
@@ -74,21 +81,95 @@ class NoiseSigPreprocessor(BasePreprocessor):
         self,
         data_prefilter: DataPrefilter | None = None,
         tres_cut_for_track_hit: float = 20.0,
+        z_mirror: bool = False,
         **kwargs,
     ):
         super().__init__(data_prefilter, **kwargs)
         self.tres_cut_for_track_hit = tres_cut_for_track_hit
+        self.z_mirror = z_mirror
 
     def __call__(
         self, x: torch.Tensor, y: torch.Tensor, t_res: torch.Tensor, mask: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if self.data_prefilter is not None:
             x = self.data_prefilter(x)
+        if self.z_mirror and self.training and torch.rand(1).item() < 0.5:
+            x = x.clone()
+            x[:, :, 4] = -x[:, :, 4]
         signal_mask = torch.abs(t_res) < self.tres_cut_for_track_hit
         y[signal_mask] = 1
         y[~signal_mask] = 0
         y = y.long()
         return x, y, mask
+
+
+class NoiseSigOriginalLabelsPreprocessor(BasePreprocessor):
+    """Use original MC labels: positive label -> signal (1), negative -> noise (0)."""
+
+    def __call__(
+        self, x: torch.Tensor, y: torch.Tensor, t_res: torch.Tensor, mask: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        if self.data_prefilter is not None:
+            x = self.data_prefilter(x)
+        y = (y > 0).long()
+        return x, y, mask
+
+
+class NoiseSigOrLabelsPreprocessor(BasePreprocessor):
+    """Signal = |t_res| < tres_cut OR original label > 0."""
+
+    def __init__(
+        self,
+        data_prefilter: DataPrefilter | None = None,
+        tres_cut_for_track_hit: float = 10.0,
+        z_mirror: bool = False,
+        **kwargs,
+    ):
+        super().__init__(data_prefilter, **kwargs)
+        self.tres_cut_for_track_hit = tres_cut_for_track_hit
+        self.z_mirror = z_mirror
+
+    def __call__(
+        self, x: torch.Tensor, y: torch.Tensor, t_res: torch.Tensor, mask: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        if self.data_prefilter is not None:
+            x = self.data_prefilter(x)
+        if self.z_mirror and self.training and torch.rand(1).item() < 0.5:
+            x = x.clone()
+            x[:, :, 4] = -x[:, :, 4]
+        signal_mask = (torch.abs(t_res) < self.tres_cut_for_track_hit) | (y > 0)
+        y[signal_mask] = 1
+        y[~signal_mask] = 0
+        y = y.long()
+        return x, y, mask
+
+
+class TresRegressionPreprocessor(BasePreprocessor):
+    """Predict |t_res|. Noise hits capped at max_tres."""
+
+    def __init__(
+        self,
+        data_prefilter: DataPrefilter | None = None,
+        max_tres: float = 100.0,
+        z_mirror: bool = False,
+        **kwargs,
+    ):
+        super().__init__(data_prefilter, **kwargs)
+        self.max_tres = max_tres
+        self.z_mirror = z_mirror
+
+    def __call__(
+        self, x: torch.Tensor, y: torch.Tensor, t_res: torch.Tensor, mask: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        if self.data_prefilter is not None:
+            x = self.data_prefilter(x)
+        if self.z_mirror and self.training and torch.rand(1).item() < 0.5:
+            x = x.clone()
+            x[:, :, 4] = -x[:, :, 4]
+        t_res = t_res.abs().clone()
+        noise_mask = y < 0
+        t_res[noise_mask] = t_res[noise_mask].clamp(max=self.max_tres)
+        return x, t_res, mask
 
 
 # class NoiseSigPreprocessor(BasePreprocessor):
@@ -326,9 +407,9 @@ class TresGraphPreprocessor(BaseGraphPreprocessor):
         self.tres_std = tres_std
 
     def __call__(self, x: torch.Tensor, tres: torch.Tensor) -> GData:
-        assert (
-            self.tres_mean is not None and self.tres_std is not None
-        ), "stats for preproccesor weren't not set"
+        assert self.tres_mean is not None and self.tres_std is not None, (
+            "stats for preproccesor weren't not set"
+        )
         tres = (tres - self.tres_mean) / (self.tres_std + EPS)
         edge_index = gnn.knn_graph(x[:, 1], k=self.n_neighbours)
         graph = GData(x=x, edge_index=edge_index, y=tres)

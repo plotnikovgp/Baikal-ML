@@ -18,6 +18,7 @@ from data_utils.preprocessors import (
     DataPrefilter,
 )
 from metrics import AngleReconstructionMetrics, BinaryClassificationMetrics
+from metrics.plots import AngleUncertaintyPlotter
 from training.losses import (
     CosSimLoss,
     MAELoss,
@@ -28,6 +29,67 @@ from training.losses import (
 )
 
 from .base import BaseTrainType, DomainAdaptationMixin
+
+
+class AngleReconstructionSigmaTrainType(BaseTrainType):
+    """Angle reconstruction using UncertaintyPredictor (frozen encoder + sigma head).
+
+    The model outputs 6 values: [x, y, z, log_sigma_x, log_sigma_y, log_sigma_z].
+    Direction is already normalized inside UncertaintyPredictor, so we don't renormalize here.
+    """
+
+    @property
+    def name(self) -> str:
+        return "angle_reconstruction_sigma"
+
+    def __init__(self, train_params: Dict[str, Any], device: str = "cuda", save_dir: Path = None):
+        super().__init__(train_params, device)
+        self.save_dir = save_dir
+        self.is_val_mode = train_params.get("val_mode", False)
+        self.nll_loss_fn = NLLUncertaintyLoss(pred_size=3)
+
+    def get_dataset_type(self):
+        return BaikalDatasetAngles
+
+    def get_preprocessor(self, config: Dict[str, Any]):
+        train_type_cfg = config.get("train_type", config)
+        data_cfg = config.get("data", config)
+        data_prefilter_params = data_cfg.get(
+            "data_prefilter_params", data_cfg.get("data_prefilter", {})
+        )
+        data_prefilter = DataPrefilter(**data_prefilter_params)
+        tres_cut = train_type_cfg.get("tres_cut", config.get("tres_cut", 100000.0))
+        return AnglePreprocessorWithTres(tres_cut, data_prefilter)
+
+    def get_criterion(self):
+        nll_loss_fn = self.nll_loss_fn
+
+        def criterion(y_pred, y_true):
+            return nll_loss_fn(y_pred, y_true)
+
+        return criterion
+
+    def get_metrics_function(self):
+        return AngleReconstructionMetrics(save_preds=self.is_val_mode, save_dir=self.save_dir)
+
+    def _process_batch(self, model, data, dataset_idx=None) -> Dict[str, torch.Tensor]:
+        if len(data) == 4:
+            data = data[:3]
+
+        x, y_true, mask = data
+        x = x.to(self.device)
+        y_true = y_true.to(self.device) if y_true is not None else None
+        mask = mask.to(self.device)
+
+        output = model(x, mask)
+        return {"output": output, "y_pred": output, "y_true": y_true}
+
+    def get_val_plot_callback(self):
+        if self.save_dir is None:
+            return None
+        plotter = AngleUncertaintyPlotter(save_dir=self.save_dir / "plots")
+        plotter.save_dir.mkdir(parents=True, exist_ok=True)
+        return plotter
 
 
 class AngleReconstructionTrainType(BaseTrainType):

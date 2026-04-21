@@ -1,11 +1,17 @@
+import csv
 import json
 from pathlib import Path
 
 import torch
-from clearml import Logger, Task
 from tqdm import tqdm
 
 from metrics import BaseMetrics, BinaryClassificationMetrics
+
+try:
+    from clearml import Logger, Task
+except ImportError:
+    Logger = None
+    Task = None
 
 
 class Trainer:
@@ -32,7 +38,7 @@ class Trainer:
         self.accumulate_grad_steps = accumulate_grad_steps
         self.grad_clip_value = grad_clip_value
         self.clearml_task = clearml_task
-        self.clearml_logger = Logger.current_logger() if clearml_task else None
+        self.clearml_logger = Logger.current_logger() if clearml_task and Logger else None
         self.model_save_dir = model_save_dir
         self.valid_main_metric = valid_main_metric
 
@@ -43,8 +49,53 @@ class Trainer:
         metrics_to_maximize = ["auc", "precision", "recall", "accuracy", "domain_accuracy"]
         self.maximize_metric = any(m in valid_main_metric for m in metrics_to_maximize)
 
+        self._csv_path = None
+        self._csv_columns = None
+
+    def _log_to_csv(self, step: int, metrics: dict):
+        row = {"step": step}
+        row.update({k: v for k, v in sorted(metrics.items()) if isinstance(v, (int, float))})
+
+        if self._csv_path is None:
+            Path(self.model_save_dir).mkdir(parents=True, exist_ok=True)
+            self._csv_path = Path(self.model_save_dir) / "metrics.csv"
+            self._csv_columns = list(row.keys())
+            with open(self._csv_path, "w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=self._csv_columns)
+                writer.writeheader()
+
+        new_cols = [c for c in row if c not in self._csv_columns]
+        if new_cols:
+            self._csv_columns.extend(new_cols)
+            existing_rows = []
+            with open(self._csv_path, "r", newline="") as f:
+                reader = csv.DictReader(f)
+                existing_rows = list(reader)
+            with open(self._csv_path, "w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=self._csv_columns)
+                writer.writeheader()
+                writer.writerows(existing_rows)
+
+        with open(self._csv_path, "a", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=self._csv_columns)
+            writer.writerow(row)
+
+    @staticmethod
+    def _set_preprocessor_mode(loader, training: bool):
+        dataset = getattr(loader, "dataset", None)
+        if dataset is None:
+            return
+        datasets = [dataset]
+        if hasattr(dataset, "datasets"):
+            datasets = dataset.datasets
+        for ds in datasets:
+            pp = getattr(ds, "preprocessor", None)
+            if pp is not None:
+                pp.train() if training else pp.eval()
+
     def train_iters(self, train_loader, num_iters=1, min_recall=None):
         self.model.train()
+        self._set_preprocessor_mode(train_loader, training=True)
         y_pred_hist = None
         y_true_hist = None
         domain_pred_hist = None
@@ -165,6 +216,7 @@ class Trainer:
         is_domain_adaptation = self.train_type.get_train_kwargs().get("is_domain_adaptation", False)
 
         self.model.eval()
+        self._set_preprocessor_mode(val_loader, training=False)
         with torch.no_grad():
             for data in val_loader:
                 result = self.train_type.process_batch(self.model, data, dataset_idx=dataset_idx)
@@ -353,6 +405,11 @@ class Trainer:
                                 self.clearml_logger.report_scalar(
                                     title=title, series=series, value=value, iteration=total_steps
                                 )
+
+                    all_logs = {}
+                    all_logs.update(train_logs_)
+                    all_logs.update(val_logs_)
+                    self._log_to_csv(total_steps, all_logs)
 
                     if save_best_model or save_best_per_dataset:
                         Path(self.model_save_dir).mkdir(parents=True, exist_ok=True)

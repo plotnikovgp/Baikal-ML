@@ -9,13 +9,26 @@ from .angle import (
 from .base import BaseTrainType
 from .direction import DirectionTrainType
 from .energy import EnergyReconstructionDomainAdaptationTrainType, EnergyReconstructionTrainType
-from .noise_sig import NoiseSigDomainAdaptationTrainType, NoiseSigTrainType
+from .noise_sig import (
+    NoiseSigDomainAdaptationTrainType,
+    NoiseSigOriginalLabelsDomainAdaptationTrainType,
+    NoiseSigOriginalLabelsTrainType,
+    NoiseSigOrLabelsTrainType,
+    NoiseSigTrainType,
+    TresRegressionSoftLossTrainType,
+    TresRegressionTrainType,
+)
 from .track_cascade import TrackCascadeDomainAdaptationTrainType, TrackCascadeTrainType
 from .tres import TresAndTrackCascadeTrainType, TresDomainAdaptationTrainType, TresTrainType
 
 TRAIN_TYPE_REGISTRY: Dict[str, Type[BaseTrainType]] = {
     "noise_sig": NoiseSigTrainType,
     "noise_sig_domain_adaptation": NoiseSigDomainAdaptationTrainType,
+    "noise_sig_original_labels": NoiseSigOriginalLabelsTrainType,
+    "noise_sig_original_labels_da": NoiseSigOriginalLabelsDomainAdaptationTrainType,
+    "noise_sig_or_labels": NoiseSigOrLabelsTrainType,
+    "tres_regression": TresRegressionTrainType,
+    "tres_regression_soft": TresRegressionSoftLossTrainType,
     "track_cascade": TrackCascadeTrainType,
     "track_cascade_domain_adaptation": TrackCascadeDomainAdaptationTrainType,
     "tres": TresTrainType,

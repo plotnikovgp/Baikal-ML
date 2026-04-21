@@ -23,6 +23,7 @@ class BaikalDataset(Dataset):
         set_tres_stats: bool = False,
         is_graph: bool = False,
         events_amount: int | None = None,
+        renorm_params: tuple | None = None,
         *args,
         **kwargs,
     ) -> None:
@@ -32,6 +33,7 @@ class BaikalDataset(Dataset):
         self.batch_size = batch_size
         self.is_graph = is_graph
         self.preprocessor = preprocessor
+        self.renorm_params = renorm_params
 
         print(f"Loading {data_file}, keys: {list(self.hfile.keys())}")
 
@@ -70,13 +72,16 @@ class BaikalDataset(Dataset):
         event_starts = self.hfile[f"{self.split_type}/ev_starts/data"][batch_start : batch_end + 1]
         global_start, global_end = event_starts[0], event_starts[-1]
 
+        data = torch.tensor(self.hfile[f"{self.split_type}/data/data"][global_start:global_end])
+        if self.renorm_params is not None:
+            src_mean, src_std, dst_mean, dst_std = self.renorm_params
+            data = (data.float() * src_std + src_mean - dst_mean) / dst_std
+
         return {
             "event_starts": event_starts,
             "global_start": global_start,
             "global_end": global_end,
-            "data": torch.tensor(
-                self.hfile[f"{self.split_type}/data/data"][global_start:global_end]
-            ),
+            "data": data,
         }
 
     def _collate(

@@ -43,9 +43,9 @@ class LossFunction(torch.nn.Module):
         elements = self._forward(prediction, target)
         if weights is not None:
             elements = elements * weights
-        assert elements.size(dim=0) == target.size(
-            dim=0
-        ), "`_forward` should return elementwise loss terms."
+        assert elements.size(dim=0) == target.size(dim=0), (
+            "`_forward` should return elementwise loss terms."
+        )
 
         return elements if return_elements else torch.mean(elements)
 
@@ -233,9 +233,7 @@ class LogCMK(torch.autograd.Function):
     """
 
     @staticmethod
-    def forward(
-        ctx: Any, m: int, kappa: Tensor
-    ) -> Tensor:  # pylint: disable=invalid-name,arguments-differ
+    def forward(ctx: Any, m: int, kappa: Tensor) -> Tensor:  # pylint: disable=invalid-name,arguments-differ
         """Forward pass."""
         dtype = kappa.dtype
         ctx.save_for_backward(kappa)
@@ -248,9 +246,7 @@ class LogCMK(torch.autograd.Function):
         ).type(dtype)
 
     @staticmethod
-    def backward(
-        ctx: Any, grad_output: Tensor
-    ) -> Tensor:  # pylint: disable=invalid-name,arguments-differ
+    def backward(ctx: Any, grad_output: Tensor) -> Tensor:  # pylint: disable=invalid-name,arguments-differ
         """Backward pass."""
         kappa = ctx.saved_tensors[0]
         m = ctx.m
@@ -287,9 +283,7 @@ class VonMisesFisherLoss(LossFunction):
         return -a + b * torch.log(b + a)
 
     @classmethod
-    def log_cmk(
-        cls, m: int, kappa: Tensor, kappa_switch: float = 100.0
-    ) -> Tensor:  # pylint: disable=invalid-name
+    def log_cmk(cls, m: int, kappa: Tensor, kappa_switch: float = 100.0) -> Tensor:  # pylint: disable=invalid-name
         """Calculate $log C_{m}(k)$ term in von Mises-Fisher loss.
 
         Since `log_cmk_exact` is diverges for `kappa` >~ 700 (using float64
@@ -537,4 +531,4 @@ class NLLUncertaintyLoss(LossFunction):
         pred_sigma2 = torch.exp(log_pred_sigma2)
         true_sigma2 = (pred - target) ** 2
 
-        return (pred_sigma2 - true_sigma2).square().mean()
+        return (pred_sigma2 - true_sigma2).square().mean(dim=-1)
