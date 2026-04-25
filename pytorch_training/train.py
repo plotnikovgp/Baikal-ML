@@ -17,15 +17,36 @@ from training.trainer import Trainer
 
 DEVICE = "cuda"
 
-torch.autograd.set_detect_anomaly(True)
 torch.set_num_threads(4)
 
 
-def fix_seed(seed: int):
+def fix_seed(seed: int, deterministic: bool = False):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
-    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.deterministic = deterministic
+    torch.backends.cudnn.benchmark = not deterministic
+
+
+def setup_perf(cfg: DictConfig) -> None:
+    perf = cfg.get("perf") or {}
+    torch.autograd.set_detect_anomaly(bool(perf.get("detect_anomaly", False)))
+    allow_tf32 = bool(perf.get("allow_tf32", True))
+    torch.backends.cuda.matmul.allow_tf32 = allow_tf32
+    torch.backends.cudnn.allow_tf32 = allow_tf32
+    matmul_precision = perf.get("matmul_precision", "high")
+    if matmul_precision:
+        torch.set_float32_matmul_precision(matmul_precision)
+
+
+def create_optimizer(model: torch.nn.Module, cfg: DictConfig) -> torch.optim.Optimizer:
+    use_fused = bool(cfg.get("perf", {}).get("fused_adamw", False)) and torch.cuda.is_available()
+    if use_fused:
+        try:
+            return torch.optim.AdamW(model.parameters(), lr=cfg.training.lr, fused=True)
+        except TypeError:
+            pass
+    return torch.optim.AdamW(model.parameters(), lr=cfg.training.lr)
 
 
 def load_state_dict_partial(model: torch.nn.Module, state_dict: dict, strict: bool = False) -> None:
@@ -54,6 +75,16 @@ def load_state_dict_partial(model: torch.nn.Module, state_dict: dict, strict: bo
         logging.warning(f"Unexpected keys in state_dict: {unexpected_keys}")
 
     model.load_state_dict(model_state_dict, strict=strict)
+
+
+def get_renorm_params(source_path: str, target_path: str):
+    with h5py.File(source_path, "r") as f:
+        src_mean = torch.tensor(f["norm_param/mean"][:].astype(np.float32))
+        src_std = torch.tensor(f["norm_param/std"][:].astype(np.float32))
+    with h5py.File(target_path, "r") as f:
+        dst_mean = torch.tensor(f["norm_param/mean"][:].astype(np.float32))
+        dst_std = torch.tensor(f["norm_param/std"][:].astype(np.float32))
+    return src_mean, src_std, dst_mean, dst_std
 
 
 def create_dataloaders_from_config(cfg: DictConfig, train_type_handler):
@@ -86,14 +117,23 @@ def create_dataloaders_from_config(cfg: DictConfig, train_type_handler):
 
             renorm_to = ds_config.pop("renorm_to", None)
             if renorm_to:
-                with h5py.File(ds_config["path_to_data"], "r") as f:
-                    src_mean = torch.tensor(f["norm_param/mean"][:].astype(np.float32))
-                    src_std = torch.tensor(f["norm_param/std"][:].astype(np.float32))
-                with h5py.File(renorm_to, "r") as f:
-                    dst_mean = torch.tensor(f["norm_param/mean"][:].astype(np.float32))
-                    dst_std = torch.tensor(f["norm_param/std"][:].astype(np.float32))
-                ds_config["renorm_params"] = (src_mean, src_std, dst_mean, dst_std)
+                ds_config["renorm_params"] = get_renorm_params(ds_config["path_to_data"], renorm_to)
                 logging.info(f"Renormalization enabled: {ds_config['path_to_data']} -> {renorm_to}")
+
+            if ds_config.get("val_path"):
+                ds_config["val_renorm_params"] = get_renorm_params(
+                    ds_config["val_path"], ds_config["path_to_data"]
+                )
+                logging.info(
+                    f"Validation renormalization enabled: {ds_config['val_path']} -> {ds_config['path_to_data']}"
+                )
+            if ds_config.get("test_path"):
+                ds_config["test_renorm_params"] = get_renorm_params(
+                    ds_config["test_path"], ds_config["path_to_data"]
+                )
+                logging.info(
+                    f"Test renormalization enabled: {ds_config['test_path']} -> {ds_config['path_to_data']}"
+                )
 
             dataset_configs.append(ds_config)
 
@@ -115,10 +155,24 @@ def create_dataloaders_from_config(cfg: DictConfig, train_type_handler):
         preproc_cfg = OmegaConf.to_container(cfg, resolve=True)
         default_preprocessor = train_type_handler.get_preprocessor(preproc_cfg)
         DatasetType = train_type_handler.get_dataset_type()
+        val_renorm_params = None
+        test_renorm_params = None
+        if data_cfg.get("val_path"):
+            val_renorm_params = get_renorm_params(data_cfg.val_path, data_cfg.path)
+            logging.info(
+                f"Validation renormalization enabled: {data_cfg.val_path} -> {data_cfg.path}"
+            )
+        if data_cfg.get("test_path"):
+            test_renorm_params = get_renorm_params(data_cfg.test_path, data_cfg.path)
+            logging.info(f"Test renormalization enabled: {data_cfg.test_path} -> {data_cfg.path}")
 
         dataloaders = create_dataloaders(
             DatasetType=DatasetType,
             path_to_data=data_cfg.path,
+            val_path=data_cfg.get("val_path"),
+            test_path=data_cfg.get("test_path"),
+            val_renorm_params=val_renorm_params,
+            test_renorm_params=test_renorm_params,
             is_graph=is_graph,
             batch_size=training_cfg.batch_size,
             val_subset_cut=data_cfg.val_subset_cut,
@@ -163,7 +217,8 @@ def setup_logging(cfg: DictConfig, is_val_mode: bool) -> Task | None:
 def main(cfg: DictConfig):
     print(OmegaConf.to_yaml(cfg))
 
-    fix_seed(cfg.random_seed)
+    fix_seed(cfg.random_seed, deterministic=bool(cfg.get("perf", {}).get("deterministic", False)))
+    setup_perf(cfg)
 
     is_val_mode = cfg.val_mode
     train_type_name = cfg.train_type.name
@@ -195,12 +250,12 @@ def main(cfg: DictConfig):
     print(model)
 
     training_cfg = cfg.training
-    optimizer = torch.optim.AdamW(model.parameters(), lr=training_cfg.lr)
+    optimizer = create_optimizer(model, cfg)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
         patience=training_cfg.get("scheduler_patience", 1000),
         factor=0.5,
-        min_lr=1e-4,
+        min_lr=training_cfg.get("lr_min", 1e-4),
     )
     warmup_scheduler = warmup.ExponentialWarmup(
         optimizer, warmup_period=training_cfg.get("warmup_steps", 0)
@@ -220,6 +275,11 @@ def main(cfg: DictConfig):
         clearml_task=clearml_task,
         model_save_dir=str(save_dir),
         valid_main_metric=training_cfg.get("valid_main_metric", "loss"),
+        tensorboard_log_dir=(
+            str(save_dir / "tensorboard")
+            if bool(cfg.get("monitoring", {}).get("tensorboard", True))
+            else None
+        ),
     )
 
     if "train_datasets" in dataloaders:

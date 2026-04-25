@@ -16,13 +16,25 @@ def create_datasets(
     batch_size: int = 128,
     is_graph: bool = False,
     val_subset_cut: int = 3,
+    val_path: str | None = None,
+    test_path: str | None = None,
+    val_renorm_params: tuple | None = None,
+    test_renorm_params: tuple | None = None,
     use_val_subset: bool = True,
     **kwargs,
 ):
     datasets = {}
     for split_type in SPLIT_TYPES:
+        split_path = path_to_data
+        split_kwargs = dict(kwargs)
+        if split_type == "val" and val_path is not None:
+            split_path = val_path
+            split_kwargs["renorm_params"] = val_renorm_params
+        elif split_type == "test" and test_path is not None:
+            split_path = test_path
+            split_kwargs["renorm_params"] = test_renorm_params
         datasets[split_type] = DatasetType(
-            path_to_data, split_type, batch_size=batch_size, is_graph=is_graph, **kwargs
+            split_path, split_type, batch_size=batch_size, is_graph=is_graph, **split_kwargs
         )
     if use_val_subset and val_subset_cut > 1:
         datasets["val_subset"] = Subset(
@@ -81,6 +93,10 @@ def create_dataloaders(
     batch_size: int = 128,
     is_graph: bool = False,
     val_subset_cut: int = 3,
+    val_path: str | None = None,
+    test_path: str | None = None,
+    val_renorm_params: tuple | None = None,
+    test_renorm_params: tuple | None = None,
     num_workers: int = 1,
     prefetch_factor: int = 2,
     persistent_workers: bool = True,
@@ -93,6 +109,10 @@ def create_dataloaders(
         batch_size=batch_size,
         is_graph=is_graph,
         val_subset_cut=val_subset_cut,
+        val_path=val_path,
+        test_path=test_path,
+        val_renorm_params=val_renorm_params,
+        test_renorm_params=test_renorm_params,
         **kwargs,
     )
 
@@ -139,6 +159,10 @@ def create_multi_dataset_dataloader(
             batch_size=batch_size,
             is_graph=config.get("is_graph", False),
             val_subset_cut=config.get("val_subset_cut", 3),
+            val_path=config.get("val_path"),
+            test_path=config.get("test_path"),
+            val_renorm_params=config.get("val_renorm_params"),
+            test_renorm_params=config.get("test_renorm_params"),
             preprocessor=config.get("preprocessor"),
             **kwargs,
         )

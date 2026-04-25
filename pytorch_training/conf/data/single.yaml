@@ -4,8 +4,8 @@ events_amount: null
 set_tres_stats: false
 cache_datasets: false
 
-num_workers: 1
-prefetch_factor: 2
+num_workers: 4
+prefetch_factor: 4
 persistent_workers: true
 pin_memory: true
 

@@ -13,6 +13,11 @@ except ImportError:
     Logger = None
     Task = None
 
+try:
+    from torch.utils.tensorboard import SummaryWriter
+except ImportError:
+    SummaryWriter = None
+
 
 class Trainer:
     def __init__(
@@ -28,6 +33,7 @@ class Trainer:
         clearml_task: Task | None = None,
         model_save_dir="models",
         valid_main_metric="loss",
+        tensorboard_log_dir: str | None = None,
     ):
         self.model = model
         self.train_type = train_type
@@ -41,6 +47,11 @@ class Trainer:
         self.clearml_logger = Logger.current_logger() if clearml_task and Logger else None
         self.model_save_dir = model_save_dir
         self.valid_main_metric = valid_main_metric
+        self.tb_writer = (
+            SummaryWriter(tensorboard_log_dir)
+            if SummaryWriter is not None and tensorboard_log_dir is not None
+            else None
+        )
 
         self.criterion = train_type.get_criterion()
         self.metrics_fn = train_type.get_metrics_function()
@@ -80,6 +91,85 @@ class Trainer:
             writer = csv.DictWriter(f, fieldnames=self._csv_columns)
             writer.writerow(row)
 
+        try:
+            self._dump_training_plots()
+        except Exception as exc:
+            print(f"[plot dump] skipped: {exc}")
+
+    def _log_to_tensorboard(self, metrics: dict, step: int):
+        if self.tb_writer is None:
+            return
+        for key, value in sorted(metrics.items()):
+            if value is not None and isinstance(value, (int, float)):
+                self.tb_writer.add_scalar(key, value, step)
+        self.tb_writer.flush()
+
+    def _dump_training_plots(self):
+        if self._csv_path is None or not Path(self._csv_path).exists():
+            return
+
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        steps = []
+        series: dict[str, list] = {}
+        with open(self._csv_path, "r", newline="") as f:
+            reader = csv.DictReader(f)
+            for r in reader:
+                try:
+                    steps.append(int(r["step"]))
+                except (KeyError, ValueError):
+                    continue
+                for k, v in r.items():
+                    if k == "step" or v in (None, ""):
+                        continue
+                    try:
+                        fv = float(v)
+                    except (TypeError, ValueError):
+                        continue
+                    series.setdefault(k, [None] * (len(steps) - 1)).append(fv)
+                for k in list(series.keys()):
+                    if len(series[k]) < len(steps):
+                        series[k].append(None)
+
+        groups = [
+            ("losses", [k for k in series if k.endswith("loss")]),
+            ("auc", [k for k in series if k.endswith("auc")]),
+            ("precision", [k for k in series if k.endswith("precision")]),
+            ("recall", [k for k in series if k.endswith("recall")]),
+            ("domain_accuracy", [k for k in series if "domain_accuracy" in k]),
+            ("lr", [k for k in series if k.endswith("lr")]),
+        ]
+        groups = [(name, cols) for name, cols in groups if cols]
+        if not steps or not groups:
+            return
+
+        n_cols = 2 if len(groups) > 1 else 1
+        n_rows = (len(groups) + n_cols - 1) // n_cols
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(7 * n_cols, 3.2 * n_rows), squeeze=False)
+        for idx, (name, cols) in enumerate(groups):
+            ax = axes[idx // n_cols][idx % n_cols]
+            for col in sorted(cols):
+                ys = series[col]
+                xs = [s for s, y in zip(steps, ys) if y is not None]
+                ys = [y for y in ys if y is not None]
+                if xs:
+                    ax.plot(xs, ys, label=col, linewidth=1.2)
+            ax.set_title(name)
+            ax.set_xlabel("step")
+            ax.grid(alpha=0.3)
+            ax.legend(fontsize=7, loc="best")
+        for idx in range(len(groups), n_rows * n_cols):
+            axes[idx // n_cols][idx % n_cols].axis("off")
+
+        fig.tight_layout()
+        out_dir = Path(self.model_save_dir) / "history"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        fig.savefig(out_dir / "training_curves.png", dpi=110)
+        plt.close(fig)
+
     @staticmethod
     def _set_preprocessor_mode(loader, training: bool):
         dataset = getattr(loader, "dataset", None)
@@ -96,12 +186,13 @@ class Trainer:
     def train_iters(self, train_loader, num_iters=1, min_recall=None):
         self.model.train()
         self._set_preprocessor_mode(train_loader, training=True)
-        y_pred_hist = None
-        y_true_hist = None
-        domain_pred_hist = None
-        domain_true_hist = None
-        loss_hist = {}
-        loss_accum = 0.0
+        y_pred_parts = []
+        y_true_parts = []
+        domain_pred_parts = []
+        domain_true_parts = []
+        loss_sums = {}
+        loss_counts = {}
+        loss_accum = None
         is_domain_adaptation = self.train_type.get_train_kwargs().get("is_domain_adaptation", False)
 
         for iter_idx in range(num_iters):
@@ -117,16 +208,8 @@ class Trainer:
                 domain_true_event = (
                     domain_true[0] if isinstance(domain_true, tuple) else domain_true
                 )
-                domain_pred_hist = (
-                    torch.cat((domain_pred_hist, domain_pred.detach()), dim=0)
-                    if domain_pred_hist is not None
-                    else domain_pred.detach()
-                )
-                domain_true_hist = (
-                    torch.cat((domain_true_hist, domain_true_event.detach()), dim=0)
-                    if domain_true_hist is not None
-                    else domain_true_event.detach()
-                )
+                domain_pred_parts.append(domain_pred.detach())
+                domain_true_parts.append(domain_true_event.detach())
             else:
                 loss = self.criterion(output, y_true)
                 domain_true_event = None
@@ -135,20 +218,21 @@ class Trainer:
                 loss = {"loss": loss}
 
             for k, v in loss.items():
-                if k not in loss_hist:
-                    loss_hist[k] = []
-                loss_hist[k].append(v.item())
+                detached = v.detach()
+                loss_sums[k] = loss_sums.get(k, detached.new_zeros(())) + detached
+                loss_counts[k] = loss_counts.get(k, 0) + 1
 
             loss_to_backward = loss["loss"]
             loss_to_backward.backward()
-            loss_accum += loss_to_backward.item()
+            detached_loss = loss_to_backward.detach()
+            loss_accum = detached_loss if loss_accum is None else loss_accum + detached_loss
 
             if self.grad_clip_value is not None:
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip_value)
 
             if iter_idx % self.accumulate_grad_steps == 0:
                 self.optimizer.step()
-                self.optimizer.zero_grad()
+                self.optimizer.zero_grad(set_to_none=True)
 
                 if self.warmup_scheduler is not None:
                     with self.warmup_scheduler.dampening():
@@ -156,8 +240,8 @@ class Trainer:
                             if isinstance(
                                 self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
                             ):
-                                self.scheduler.step(loss_accum)
-                                loss_accum = 0.0
+                                self.scheduler.step(float(loss_accum.detach().cpu()))
+                                loss_accum = None
                             elif self.scheduler is not None:
                                 self.scheduler.step()
                 elif self.scheduler is not None and not isinstance(
@@ -172,30 +256,28 @@ class Trainer:
             )
 
             if not is_unlabeled_batch:
-                y_pred_hist = (
-                    torch.cat((y_pred_hist, y_pred), dim=0) if y_pred_hist is not None else y_pred
-                )
-                y_true_hist = (
-                    torch.cat((y_true_hist, y_true), dim=0) if y_true_hist is not None else y_true
-                )
+                y_pred_parts.append(y_pred.detach())
+                y_true_parts.append(y_true.detach())
 
-        if y_pred_hist is not None and y_true_hist is not None:
+        if y_pred_parts and y_true_parts:
+            y_pred_hist = torch.cat(y_pred_parts, dim=0)
+            y_true_hist = torch.cat(y_true_parts, dim=0)
             if min_recall is not None:
                 train_metrics = self.metrics_fn(
-                    y_pred_hist.detach().cpu(), y_true_hist.detach().cpu(), min_recall=min_recall
+                    y_pred_hist.cpu(), y_true_hist.cpu(), min_recall=min_recall
                 )
             else:
-                train_metrics = self.metrics_fn(
-                    y_pred_hist.detach().cpu(), y_true_hist.detach().cpu()
-                )
+                train_metrics = self.metrics_fn(y_pred_hist.cpu(), y_true_hist.cpu())
         else:
             train_metrics = {}
 
-        for k, v in loss_hist.items():
-            train_metrics[k] = sum(v) / len(v) if v else None
+        for k, v in loss_sums.items():
+            train_metrics[k] = float((v / loss_counts[k]).detach().cpu())
         train_metrics["lr"] = self.optimizer.param_groups[0]["lr"]
 
-        if is_domain_adaptation:
+        if is_domain_adaptation and domain_pred_parts and domain_true_parts:
+            domain_pred_hist = torch.cat(domain_pred_parts, dim=0)
+            domain_true_hist = torch.cat(domain_true_parts, dim=0)
             domain_preds = domain_pred_hist.argmax(dim=1)
             domain_labels = domain_true_hist
             domain_accuracy = (domain_preds == domain_labels).float().mean().item()
@@ -208,11 +290,12 @@ class Trainer:
         return train_metrics
 
     def validate_single(self, val_loader, dataset_idx=0, min_recall=None, val_mode=False):
-        y_pred_hist = None
-        y_true_hist = None
-        domain_pred_hist = None
-        domain_true_hist = None
-        loss_hist = {}
+        y_pred_parts = []
+        y_true_parts = []
+        domain_pred_parts = []
+        domain_true_parts = []
+        loss_sums = {}
+        loss_counts = {}
         is_domain_adaptation = self.train_type.get_train_kwargs().get("is_domain_adaptation", False)
 
         self.model.eval()
@@ -228,16 +311,8 @@ class Trainer:
                     domain_true_event = (
                         domain_true[0] if isinstance(domain_true, tuple) else domain_true
                     )
-                    domain_pred_hist = (
-                        torch.cat((domain_pred_hist, domain_pred.detach()), dim=0)
-                        if domain_pred_hist is not None
-                        else domain_pred.detach()
-                    )
-                    domain_true_hist = (
-                        torch.cat((domain_true_hist, domain_true_event.detach()), dim=0)
-                        if domain_true_hist is not None
-                        else domain_true_event.detach()
-                    )
+                    domain_pred_parts.append(domain_pred.detach())
+                    domain_true_parts.append(domain_true_event.detach())
                     if (
                         len(y_true.shape) == 1
                         and len(output.shape) > 1
@@ -253,21 +328,15 @@ class Trainer:
                     loss = {"loss": loss}
 
                 for k, v in loss.items():
-                    if k not in loss_hist:
-                        loss_hist[k] = []
-                    loss_hist[k].append(v.item())
+                    detached = v.detach()
+                    loss_sums[k] = loss_sums.get(k, detached.new_zeros(())) + detached
+                    loss_counts[k] = loss_counts.get(k, 0) + 1
 
-                y_pred_hist = (
-                    torch.cat((y_pred_hist, y_pred.detach().cpu()), dim=0)
-                    if y_pred_hist is not None
-                    else y_pred.detach().cpu()
-                )
-                y_true_hist = (
-                    torch.cat((y_true_hist, y_true.detach().cpu()), dim=0)
-                    if y_true_hist is not None
-                    else y_true.detach().cpu()
-                )
+                y_pred_parts.append(y_pred.detach().cpu())
+                y_true_parts.append(y_true.detach().cpu())
 
+        y_pred_hist = torch.cat(y_pred_parts, dim=0)
+        y_true_hist = torch.cat(y_true_parts, dim=0)
         has_real_labels = not (len(y_true_hist.shape) == 1 and torch.all(y_true_hist == 0))
 
         if not has_real_labels:
@@ -277,7 +346,9 @@ class Trainer:
         else:
             val_metrics = self.metrics_fn(y_pred_hist, y_true_hist)
 
-        if is_domain_adaptation and not val_mode:
+        if is_domain_adaptation and not val_mode and domain_pred_parts and domain_true_parts:
+            domain_pred_hist = torch.cat(domain_pred_parts, dim=0)
+            domain_true_hist = torch.cat(domain_true_parts, dim=0)
             domain_preds = domain_pred_hist.argmax(dim=1)
             domain_labels = domain_true_hist
             domain_accuracy = (domain_preds == domain_labels).float().mean().item()
@@ -287,8 +358,8 @@ class Trainer:
             )
             val_metrics.update({"domain_" + k: v for k, v in domain_bin_metrics.items()})
 
-        for k, v in loss_hist.items():
-            val_metrics[k] = sum(v) / len(v) if v else None
+        for k, v in loss_sums.items():
+            val_metrics[k] = float((v / loss_counts[k]).detach().cpu())
 
         return val_metrics
 
@@ -410,6 +481,7 @@ class Trainer:
                     all_logs.update(train_logs_)
                     all_logs.update(val_logs_)
                     self._log_to_csv(total_steps, all_logs)
+                    self._log_to_tensorboard(all_logs, total_steps)
 
                     if save_best_model or save_best_per_dataset:
                         Path(self.model_save_dir).mkdir(parents=True, exist_ok=True)

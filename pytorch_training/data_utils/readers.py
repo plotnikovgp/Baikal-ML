@@ -28,7 +28,7 @@ class BaikalDataset(Dataset):
         **kwargs,
     ) -> None:
         self.path_to_data_file = data_file
-        self.hfile = h5.File(data_file, "r")
+        self._hfile = None
         self.split_type = split_type
         self.batch_size = batch_size
         self.is_graph = is_graph
@@ -47,6 +47,23 @@ class BaikalDataset(Dataset):
 
         if set_tres_stats:
             self._set_tres_stats()
+        if self._hfile is not None:
+            self._hfile.close()
+            self._hfile = None
+
+    @property
+    def hfile(self):
+        if self._hfile is None:
+            self._hfile = h5.File(self.path_to_data_file, "r")
+        return self._hfile
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state["_hfile"] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
 
     def _set_tres_stats(self):
         logging.info(f"Computing tres stats for {self.split_type}...")

@@ -10,7 +10,9 @@ from .base import BaseTrainType
 from .direction import DirectionTrainType
 from .energy import EnergyReconstructionDomainAdaptationTrainType, EnergyReconstructionTrainType
 from .noise_sig import (
+    NoiseSigAndTresTrainType,
     NoiseSigDomainAdaptationTrainType,
+    NoiseSigOriginalLabelsAndTresTrainType,
     NoiseSigOriginalLabelsDomainAdaptationTrainType,
     NoiseSigOriginalLabelsTrainType,
     NoiseSigOrLabelsTrainType,
@@ -26,7 +28,9 @@ TRAIN_TYPE_REGISTRY: Dict[str, Type[BaseTrainType]] = {
     "noise_sig_domain_adaptation": NoiseSigDomainAdaptationTrainType,
     "noise_sig_original_labels": NoiseSigOriginalLabelsTrainType,
     "noise_sig_original_labels_da": NoiseSigOriginalLabelsDomainAdaptationTrainType,
+    "noise_sig_original_labels_and_tres": NoiseSigOriginalLabelsAndTresTrainType,
     "noise_sig_or_labels": NoiseSigOrLabelsTrainType,
+    "noise_sig_and_tres": NoiseSigAndTresTrainType,
     "tres_regression": TresRegressionTrainType,
     "tres_regression_soft": TresRegressionSoftLossTrainType,
     "track_cascade": TrackCascadeTrainType,

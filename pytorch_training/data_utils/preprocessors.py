@@ -28,9 +28,9 @@ class DataPrefilter:
         self.Q_upper_bound = None
 
         if data_file:
-            self.hfile = h5.File(data_file, "r")
-            self.means = np.array(self.hfile["norm_param/mean"])
-            self.stds = np.array(self.hfile["norm_param/std"])
+            with h5.File(data_file, "r") as hfile:
+                self.means = np.array(hfile["norm_param/mean"])
+                self.stds = np.array(hfile["norm_param/std"])
         if Q_lower_bound is not None or Q_upper_bound is not None:
             assert data_file
             if Q_lower_bound is not None:
@@ -38,23 +38,26 @@ class DataPrefilter:
             if Q_upper_bound is not None:
                 self.Q_upper_bound = (Q_upper_bound - self.means[0]) / self.stds[0]
 
-    def __call__(self, data_x):
+    def __call__(self, data_x, training: bool = True):
         if self.norm_Q:
-            data_x[0] = (data_x[0] - self.means[0]) / self.stds[0]
+            data_x = data_x.clone()
+            data_x[..., 0] = (data_x[..., 0] - self.means[0]) / self.stds[0]
         if self.Q_lower_bound is not None:
-            data_x[0] = data_x[0].clamp(min=self.Q_lower_bound)
+            data_x = data_x.clone()
+            data_x[..., 0] = data_x[..., 0].clamp(min=self.Q_lower_bound)
         if self.Q_upper_bound is not None:
-            data_x[0] = data_x[0].clamp(max=self.Q_upper_bound)
+            data_x = data_x.clone()
+            data_x[..., 0] = data_x[..., 0].clamp(max=self.Q_upper_bound)
 
-        if self.additive_gauss_noise_std is not None:
-            # data_x: [batch_size, 5], additive_gauss_noise_std: [5], add noise to each feature with corresponding std
+        if training and self.additive_gauss_noise_std is not None:
             noise = torch.randn_like(data_x) * torch.tensor(
-                self.additive_gauss_noise_std, device=data_x.device
+                self.additive_gauss_noise_std, device=data_x.device, dtype=data_x.dtype
             )
             data_x = data_x + noise
-            data_x[:, :1] = 0
-        if self.mult_gauss_noise_fraction is not None:
-            data_x[0] = data_x[0] * (1 + (0, self.mult_gauss_noise_fraction, data_x[0].shape))
+        if training and self.mult_gauss_noise_fraction is not None:
+            q_noise = torch.randn_like(data_x[..., 0]) * self.mult_gauss_noise_fraction
+            data_x = data_x.clone()
+            data_x[..., 0] = data_x[..., 0] * (1 + q_noise)
         return data_x
 
     def denormalize(self, data_x):
@@ -92,7 +95,7 @@ class NoiseSigPreprocessor(BasePreprocessor):
         self, x: torch.Tensor, y: torch.Tensor, t_res: torch.Tensor, mask: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if self.data_prefilter is not None:
-            x = self.data_prefilter(x)
+            x = self.data_prefilter(x, training=self.training)
         if self.z_mirror and self.training and torch.rand(1).item() < 0.5:
             x = x.clone()
             x[:, :, 4] = -x[:, :, 4]
@@ -104,15 +107,51 @@ class NoiseSigPreprocessor(BasePreprocessor):
 
 
 class NoiseSigOriginalLabelsPreprocessor(BasePreprocessor):
-    """Use original MC labels: positive label -> signal (1), negative -> noise (0)."""
+    """Use original MC labels: non-zero label -> signal (1)."""
+
+    def __init__(
+        self,
+        data_prefilter: DataPrefilter | None = None,
+        z_mirror: bool = False,
+        **kwargs,
+    ):
+        super().__init__(data_prefilter, **kwargs)
+        self.z_mirror = z_mirror
 
     def __call__(
         self, x: torch.Tensor, y: torch.Tensor, t_res: torch.Tensor, mask: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if self.data_prefilter is not None:
-            x = self.data_prefilter(x)
-        y = (y > 0).long()
+            x = self.data_prefilter(x, training=self.training)
+        if self.z_mirror and self.training and torch.rand(1).item() < 0.5:
+            x = x.clone()
+            x[:, :, 4] = -x[:, :, 4]
+        y = (y != 0).long()
         return x, y, mask
+
+
+class NoiseSigOriginalLabelsAndTresPreprocessor(BasePreprocessor):
+    """Signal/noise by original labels plus t_res target for signal-hit regression."""
+
+    def __init__(
+        self,
+        data_prefilter: DataPrefilter | None = None,
+        z_mirror: bool = False,
+        **kwargs,
+    ):
+        super().__init__(data_prefilter, **kwargs)
+        self.z_mirror = z_mirror
+
+    def __call__(
+        self, x: torch.Tensor, y: torch.Tensor, t_res: torch.Tensor, mask: torch.Tensor
+    ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor], torch.Tensor]:
+        if self.data_prefilter is not None:
+            x = self.data_prefilter(x, training=self.training)
+        if self.z_mirror and self.training and torch.rand(1).item() < 0.5:
+            x = x.clone()
+            x[:, :, 4] = -x[:, :, 4]
+        y_cls = (y != 0).long()
+        return x, (y_cls, t_res.float().clone()), mask
 
 
 class NoiseSigOrLabelsPreprocessor(BasePreprocessor):
@@ -133,7 +172,7 @@ class NoiseSigOrLabelsPreprocessor(BasePreprocessor):
         self, x: torch.Tensor, y: torch.Tensor, t_res: torch.Tensor, mask: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if self.data_prefilter is not None:
-            x = self.data_prefilter(x)
+            x = self.data_prefilter(x, training=self.training)
         if self.z_mirror and self.training and torch.rand(1).item() < 0.5:
             x = x.clone()
             x[:, :, 4] = -x[:, :, 4]
@@ -162,7 +201,7 @@ class TresRegressionPreprocessor(BasePreprocessor):
         self, x: torch.Tensor, y: torch.Tensor, t_res: torch.Tensor, mask: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if self.data_prefilter is not None:
-            x = self.data_prefilter(x)
+            x = self.data_prefilter(x, training=self.training)
         if self.z_mirror and self.training and torch.rand(1).item() < 0.5:
             x = x.clone()
             x[:, :, 4] = -x[:, :, 4]
@@ -191,7 +230,7 @@ class NoLabelsPreprocessor(BasePreprocessor):
 
     def __call__(self, x: torch.Tensor, mask: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         if self.data_prefilter is not None:
-            x = self.data_prefilter(x)
+            x = self.data_prefilter(x, training=self.training)
         return x, torch.zeros(x.shape[0], dtype=torch.float32), mask
 
 
@@ -203,7 +242,7 @@ class NoLabelsPerHitPreprocessor(BasePreprocessor):
         self, x: torch.Tensor, mask: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if self.data_prefilter is not None:
-            x = self.data_prefilter(x)
+            x = self.data_prefilter(x, training=self.training)
         batch_size, seq_len = x.shape[:2]
         y = torch.zeros(batch_size, seq_len, dtype=torch.float32)
         return x, y, mask
@@ -295,7 +334,7 @@ class AnglePreprocessorWithTres(BasePreprocessor):
         angle[:, 2] = torch.cos(thetha)
 
         if self.data_prefilter is not None:
-            x = self.data_prefilter(x)
+            x = self.data_prefilter(x, training=self.training)
         mask = mask  # & (labels != 0) & track_hits
         mask[mask.sum(-1) == 0] = True
         return x, angle, mask
@@ -312,7 +351,7 @@ class EnergyPreprocessor(BasePreprocessor):
         energy = torch.log10(y)
 
         if self.data_prefilter is not None:
-            x = self.data_prefilter(x)
+            x = self.data_prefilter(x, training=self.training)
         mask = mask
         mask[mask.sum(-1) == 0] = True
         return x, energy, mask

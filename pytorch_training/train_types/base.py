@@ -71,9 +71,15 @@ class BaseTrainType(ABC):
             data = data[:3]
 
         x, y_true, mask = data
-        x = x.to(self.device)
-        y_true = y_true.to(self.device) if y_true is not None else None
-        mask = mask.to(self.device)
+        x = x.to(self.device, non_blocking=True)
+        if y_true is not None:
+            if isinstance(y_true, (tuple, list)):
+                y_true = tuple(
+                    y.to(self.device, non_blocking=True) if y is not None else None for y in y_true
+                )
+            else:
+                y_true = y_true.to(self.device, non_blocking=True)
+        mask = mask.to(self.device, non_blocking=True)
 
         output = model(x, mask)
 
@@ -109,9 +115,9 @@ class DomainAdaptationMixin:
                 raise ValueError(f"Unexpected data format: {len(data)} elements")
         else:
             raise ValueError(f"Expected tuple/list data, got {type(data)}")
-        x = x.to(self.device)
-        y_true = y_true.to(self.device) if y_true is not None else None
-        mask = mask.to(self.device)
+        x = x.to(self.device, non_blocking=True)
+        y_true = y_true.to(self.device, non_blocking=True) if y_true is not None else None
+        mask = mask.to(self.device, non_blocking=True)
 
         output, domain_pred = model(x, mask)
         batch_size = x.shape[0]

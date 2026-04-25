@@ -6,6 +6,7 @@ from data_utils import BaikalDataset, BaikalDatasetSingle
 from data_utils.preprocessors import (
     DataPrefilter,
     NoiseSigGraphPreprocessor,
+    NoiseSigOriginalLabelsAndTresPreprocessor,
     NoiseSigOriginalLabelsPreprocessor,
     NoiseSigOrLabelsPreprocessor,
     NoiseSigPreprocessor,
@@ -14,6 +15,15 @@ from data_utils.preprocessors import (
 from metrics import BinaryClassificationMetrics, RegressionMetrics
 
 from .base import BaseTrainType, DomainAdaptationMixin
+
+
+def _get_data_prefilter(config: Dict[str, Any]) -> DataPrefilter:
+    params = config.get("data_prefilter_params")
+    if params is None:
+        params = config.get("data_prefilter")
+    if params is None and isinstance(config.get("data"), dict):
+        params = config["data"].get("data_prefilter")
+    return DataPrefilter(**(params or {}))
 
 
 class NoiseSigTrainType(BaseTrainType):
@@ -32,7 +42,7 @@ class NoiseSigTrainType(BaseTrainType):
         return BaikalDataset
 
     def get_preprocessor(self, config: Dict[str, Any]):
-        prefilter = DataPrefilter(**(config.get("data_prefilter_params", {})))
+        prefilter = _get_data_prefilter(config)
         tres_cut = config.get("tres_cut_for_track_hit", 20.0)
         z_mirror = config.get("z_mirror", False)
         if self.is_graph:
@@ -66,7 +76,7 @@ class NoiseSigDomainAdaptationTrainType(DomainAdaptationMixin, BaseTrainType):
         return BaikalDataset
 
     def get_preprocessor(self, config: Dict[str, Any]):
-        prefilter = DataPrefilter(**(config.get("data_prefilter_params", {})))
+        prefilter = _get_data_prefilter(config)
         if self.is_graph:
             return NoiseSigGraphPreprocessor(prefilter, config["knn_neighbours"])
         return NoiseSigPreprocessor(prefilter)
@@ -135,8 +145,9 @@ class NoiseSigOriginalLabelsTrainType(BaseTrainType):
         return BaikalDataset
 
     def get_preprocessor(self, config: Dict[str, Any]):
-        prefilter = DataPrefilter(**(config.get("data_prefilter_params", {})))
-        return NoiseSigOriginalLabelsPreprocessor(prefilter)
+        prefilter = _get_data_prefilter(config)
+        z_mirror = config.get("z_mirror", False)
+        return NoiseSigOriginalLabelsPreprocessor(prefilter, z_mirror=z_mirror)
 
     def get_criterion(self):
         return self._criterion
@@ -161,7 +172,7 @@ class NoiseSigOrLabelsTrainType(BaseTrainType):
         return BaikalDataset
 
     def get_preprocessor(self, config: Dict[str, Any]):
-        prefilter = DataPrefilter(**(config.get("data_prefilter_params", {})))
+        prefilter = _get_data_prefilter(config)
         tres_cut = config.get("tres_cut_for_track_hit", 10.0)
         z_mirror = config.get("z_mirror", False)
         return NoiseSigOrLabelsPreprocessor(
@@ -195,8 +206,9 @@ class NoiseSigOriginalLabelsDomainAdaptationTrainType(DomainAdaptationMixin, Bas
         return BaikalDataset
 
     def get_preprocessor(self, config: Dict[str, Any]):
-        prefilter = DataPrefilter(**(config.get("data_prefilter_params", {})))
-        return NoiseSigOriginalLabelsPreprocessor(prefilter)
+        prefilter = _get_data_prefilter(config)
+        z_mirror = config.get("z_mirror", False)
+        return NoiseSigOriginalLabelsPreprocessor(prefilter, z_mirror=z_mirror)
 
     def get_criterion(self):
         dataset_names = self.dataset_names
@@ -244,6 +256,102 @@ class NoiseSigOriginalLabelsDomainAdaptationTrainType(DomainAdaptationMixin, Bas
 
     def process_batch(self, model, data, dataset_idx=None) -> Dict[str, torch.Tensor]:
         return self._process_batch_with_domain(model, data, dataset_idx)
+
+
+class NoiseSigAndTresTrainType(BaseTrainType):
+    """Multi-task: signal/noise classification + t_res regression for signal hits."""
+
+    @property
+    def name(self) -> str:
+        return "noise_sig_and_tres"
+
+    def __init__(self, train_params: Dict[str, Any], device: str = "cuda"):
+        super().__init__(train_params, device)
+        self.is_classification = True
+        tt = train_params.get("train_type", train_params)
+        self.tres_loss_k = float(tt.get("tres_loss_k", 1.0))
+        self.tres_loss_threshold = float(tt.get("tres_loss_threshold", 20.0))
+        self.tres_loss_type = str(tt.get("tres_loss_type", "sfmse")).lower()
+        self._cls_loss = torch.nn.CrossEntropyLoss()
+        if self.tres_loss_type == "sfmse":
+            self._tres_loss = SignalFocusedMSELoss(threshold=self.tres_loss_threshold)
+        elif self.tres_loss_type == "mse":
+            self._tres_loss = torch.nn.MSELoss()
+        else:
+            raise ValueError(
+                f"Unknown tres_loss_type '{self.tres_loss_type}'. Use 'sfmse' or 'mse'."
+            )
+
+    def get_dataset_type(self):
+        return BaikalDataset
+
+    def get_preprocessor(self, config: Dict[str, Any]):
+        prefilter = _get_data_prefilter(config)
+        z_mirror = config.get("z_mirror", False)
+        return NoiseSigOriginalLabelsAndTresPreprocessor(prefilter, z_mirror=z_mirror)
+
+    def get_criterion(self):
+        cls_loss_fn = self._cls_loss
+        tres_loss_fn = self._tres_loss
+        tres_loss_k = self.tres_loss_k
+
+        def criterion(output, y_true):
+            cls_logits, tres_pred, tres_target = output
+            cls_loss = cls_loss_fn(cls_logits, y_true)
+
+            signal_mask = y_true == 1
+            if signal_mask.any():
+                tres_loss = tres_loss_fn(
+                    tres_pred[signal_mask].abs(),
+                    tres_target[signal_mask].abs(),
+                )
+            else:
+                tres_loss = torch.tensor(0.0, device=cls_logits.device)
+
+            total = cls_loss + tres_loss_k * tres_loss
+            return {
+                "loss": total,
+                "cls_loss": cls_loss.detach(),
+                "tres_loss": tres_loss.detach(),
+            }
+
+        return criterion
+
+    def get_metrics_function(self):
+        return BinaryClassificationMetrics(min_recall=0.9)
+
+    def _process_batch(self, model, data, dataset_idx=None) -> Dict[str, torch.Tensor]:
+        x, y_tuple, mask = data[0], data[1], data[2]
+        y_cls, t_res_target = y_tuple
+
+        x = x.to(self.device, non_blocking=True)
+        mask = mask.to(self.device, non_blocking=True)
+        y_cls = y_cls.to(self.device, non_blocking=True)
+        t_res_target = t_res_target.to(self.device, non_blocking=True)
+
+        output = model(x, mask)
+
+        mask_flat = mask.reshape(-1) != 0
+        output_flat = output.reshape(-1, output.shape[-1])[mask_flat]
+        y_cls_flat = y_cls.reshape(-1)[mask_flat]
+        t_res_flat = t_res_target.reshape(-1)[mask_flat]
+
+        cls_logits = output_flat[:, :2]
+        tres_pred = output_flat[:, 2]
+
+        y_pred_prob = torch.sigmoid(cls_logits[:, 1])
+
+        return {
+            "output": (cls_logits, tres_pred, t_res_flat),
+            "y_pred": y_pred_prob,
+            "y_true": y_cls_flat,
+        }
+
+
+class NoiseSigOriginalLabelsAndTresTrainType(NoiseSigAndTresTrainType):
+    @property
+    def name(self) -> str:
+        return "noise_sig_original_labels_and_tres"
 
 
 class SignalFocusedMSELoss(torch.nn.Module):
@@ -320,7 +428,7 @@ class TresRegressionTrainType(BaseTrainType):
         return BaikalDataset
 
     def get_preprocessor(self, config: Dict[str, Any]):
-        prefilter = DataPrefilter(**(config.get("data_prefilter_params", {})))
+        prefilter = _get_data_prefilter(config)
         max_tres = config.get("max_tres", 100.0)
         z_mirror = config.get("z_mirror", False)
         return TresRegressionPreprocessor(prefilter, max_tres=max_tres, z_mirror=z_mirror)
@@ -359,7 +467,7 @@ class TresRegressionSoftLossTrainType(BaseTrainType):
         return BaikalDataset
 
     def get_preprocessor(self, config: Dict[str, Any]):
-        prefilter = DataPrefilter(**(config.get("data_prefilter_params", {})))
+        prefilter = _get_data_prefilter(config)
         max_tres = config.get("max_tres", 100.0)
         z_mirror = config.get("z_mirror", False)
         return TresRegressionPreprocessor(prefilter, max_tres=max_tres, z_mirror=z_mirror)

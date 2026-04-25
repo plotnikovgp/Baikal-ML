@@ -17,7 +17,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from matplotlib.backends.backend_pdf import PdfPages
-from scipy.stats import wasserstein_distance
 from tqdm import tqdm
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -25,7 +24,7 @@ from models.encoder import Encoder, EncoderDomainAdaptation
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-MC_2020 = "/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/data/baikal_2020_sig-noise_mid-eq_normed.h5"
+MC_DEFAULT = "/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/data/baikal_2020_sig-noise_mid-eq_normed.h5"
 EXP_DATA = "/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/data/baikal_exp_filtered_norm_w_model_enc_v2_fix_q.h5"
 CKPT = "checkpoints/noise_sig_rerun_v2/encoder_nl5_nh1_dff128_hs128_bs128/best_2020.ckpt"
 
@@ -35,6 +34,8 @@ FEAT_Z = 4
 MC_COL = "#2ca02c"
 EXP_COL = "#1f77b4"
 EVTYPE_COLS = {"muatm": "#d62728", "nuatm": "#ff7f0e", "nue2": "#9467bd"}
+
+P_LS, R_LS = "-", "--"
 
 plt.rcParams.update(
     {
@@ -65,8 +66,8 @@ def denormalize(data, mean, std):
     return data * std + mean
 
 
-def load_mc_events(h5_path, split, max_per_type, batch_size=128):
-    """Load MC events with labels and t_res, sampling each event type."""
+def load_mc_events(h5_path, split, max_per_type, batch_size=128, load_labels=False):
+    """Load MC events with t_res (and optionally labels), sampling each event type."""
     src_mean, src_std = load_norm_params(h5_path)
     with h5py.File(h5_path, "r") as f:
         ev_starts = f[f"{split}/ev_starts/data"][:]
@@ -74,6 +75,7 @@ def load_mc_events(h5_path, split, max_per_type, batch_size=128):
         channels_all = f[f"{split}/channels/data"]
         t_res_all = f[f"{split}/t_res/data"]
         ev_ids = f[f"{split}/ev_ids/data"][:]
+        labels_all = f[f"{split}/labels/data"] if load_labels and f"{split}/labels" in f else None
         n_total = len(ev_starts) - 1
 
         type_indices = {}
@@ -90,7 +92,7 @@ def load_mc_events(h5_path, split, max_per_type, batch_size=128):
 
         for bs_start in range(0, len(indices), batch_size):
             batch_idx = indices[bs_start : bs_start + batch_size]
-            evs_norm, evs_raw, evs_ch, evs_tres, evs_type = [], [], [], [], []
+            evs_norm, evs_raw, evs_ch, evs_tres, evs_type, evs_lab = [], [], [], [], [], []
             for idx in batch_idx:
                 s, e = int(ev_starts[idx]), int(ev_starts[idx + 1])
                 hits = data_all[s:e].astype(np.float32)
@@ -100,6 +102,8 @@ def load_mc_events(h5_path, split, max_per_type, batch_size=128):
                 evs_ch.append(channels_all[s:e])
                 evs_tres.append(t_res_all[s:e])
                 evs_type.append(ev_ids[idx].decode().split("_")[0])
+                if labels_all is not None:
+                    evs_lab.append(labels_all[s:e])
 
             max_len = max(len(ev) for ev in evs_norm)
             bs = len(evs_norm)
@@ -108,6 +112,7 @@ def load_mc_events(h5_path, split, max_per_type, batch_size=128):
             mask = np.zeros((bs, max_len), dtype=np.float32)
             ch = np.zeros((bs, max_len), dtype=np.int32)
             tr = np.zeros((bs, max_len), dtype=np.float32)
+            lab = np.zeros((bs, max_len), dtype=np.float32) if labels_all is not None else None
             for i in range(bs):
                 L = len(evs_norm[i])
                 x_n[i, :L] = evs_norm[i]
@@ -115,8 +120,18 @@ def load_mc_events(h5_path, split, max_per_type, batch_size=128):
                 mask[i, :L] = 1.0
                 ch[i, :L] = evs_ch[i]
                 tr[i, :L] = evs_tres[i]
+                if lab is not None:
+                    lab[i, :L] = evs_lab[i]
 
-            yield (torch.tensor(x_n), torch.tensor(x_r), torch.tensor(mask), ch, tr, evs_type)
+            yield (
+                torch.tensor(x_n),
+                torch.tensor(x_r),
+                torch.tensor(mask),
+                ch,
+                tr,
+                evs_type,
+                lab,
+            )
 
 
 def load_exp_events(h5_path, split, max_events, renorm_fn, batch_size=128):
@@ -156,7 +171,7 @@ def load_exp_events(h5_path, split, max_events, renorm_fn, batch_size=128):
             yield torch.tensor(x_n), torch.tensor(x_r), torch.tensor(mask), ch
 
 
-def load_model(ckpt_path, hs=128, dff=128, model_type="encoder", da_kwargs=None):
+def load_model(ckpt_path, hs=128, dff=512, model_type="encoder", da_kwargs=None):
     if model_type == "encoder_da":
         da_kw = da_kwargs or {}
         model = EncoderDomainAdaptation(
@@ -195,25 +210,29 @@ def _get_output(model, x, mask):
     return out
 
 
-def infer_mc(model, data_iter):
+def infer_mc(model, data_iter, signal_definition="tres"):
     events = []
     with torch.no_grad():
-        for x_n, x_r, mask, ch, tr, ev_types in tqdm(data_iter, desc="MC inference"):
+        for x_n, x_r, mask, ch, tr, ev_types, lab in tqdm(data_iter, desc="MC inference"):
             out = _get_output(model, x_n.to(DEVICE), mask.to(DEVICE).bool())
             probs = torch.sigmoid(out[:, :, 1]).cpu().numpy()
             m_np = mask.numpy().astype(bool)
             r_np = x_r.numpy()
             for i in range(x_n.shape[0]):
                 m = m_np[i]
+                tres_i = tr[i][m]
+                true_sig = np.abs(tres_i) < 10
+                if signal_definition == "tres_or_labels" and lab is not None:
+                    true_sig = true_sig | (lab[i][m] != 0)
                 events.append(
                     {
                         "probs": probs[i][m],
                         "charge": r_np[i, m, FEAT_CHARGE],
                         "z": r_np[i, m, FEAT_Z],
                         "channels": ch[i][m],
-                        "t_res": tr[i][m],
+                        "t_res": tres_i,
                         "ev_type": ev_types[i],
-                        "true_sig": np.abs(tr[i][m]) < 10,
+                        "true_sig": true_sig,
                     }
                 )
     return events
@@ -273,6 +292,15 @@ def add_section_page(pdf, title, subtitle=""):
 # ── PLOT FUNCTIONS ──
 
 
+def _balance(mc_list, ex_list, seed=0):
+    """Truncate both lists to the minimum length for a fair MC/EXP comparison."""
+    n = min(len(mc_list), len(ex_list))
+    rng = np.random.default_rng(seed)
+    mc_idx = rng.choice(len(mc_list), n, replace=False) if len(mc_list) > n else np.arange(n)
+    ex_idx = rng.choice(len(ex_list), n, replace=False) if len(ex_list) > n else np.arange(n)
+    return [mc_list[i] for i in mc_idx], [ex_list[i] for i in ex_idx]
+
+
 def plot_score_distributions(pdf, mc_muon, exp_evs, cuts_list, threshold):
     """P(signal) score distributions: MC muon vs EXP (log y)."""
     n_cuts = len(cuts_list)
@@ -290,9 +318,9 @@ def plot_score_distributions(pdf, mc_muon, exp_evs, cuts_list, threshold):
         if not mc_p or not ex_p:
             ax.set_title(f"{cl}: insufficient events")
             continue
+        mc_p, ex_p = _balance(mc_p, ex_p)
         mc_all = np.concatenate([e["all_probs"] for e in mc_p])
         ex_all = np.concatenate([e["all_probs"] for e in ex_p])
-        wd = wasserstein_distance(mc_all, ex_all)
         ax.hist(
             mc_all,
             bins=bins,
@@ -300,7 +328,7 @@ def plot_score_distributions(pdf, mc_muon, exp_evs, cuts_list, threshold):
             histtype="step",
             lw=2,
             color=MC_COL,
-            label=f"MC muon ({len(mc_p)} ev)",
+            label="MC muon",
         )
         ax.hist(
             ex_all,
@@ -309,27 +337,41 @@ def plot_score_distributions(pdf, mc_muon, exp_evs, cuts_list, threshold):
             histtype="step",
             lw=2,
             color=EXP_COL,
-            label=f"EXP ({len(ex_p)} ev)",
+            label="EXP",
         )
         ax.set_yscale("log")
-        ax.axvline(threshold, color="red", ls="--", lw=1.2, alpha=0.6)
         ax.set_xlabel("P(signal)")
         ax.set_ylabel("Density")
-        ax.set_title(f"{cl}  (W={wd:.4f})")
+        ax.set_title(f"{cl}")
         ax.legend()
         ax.grid(True)
 
     for j in range(n_cuts, len(axes)):
         axes[j].set_visible(False)
 
-    fig.suptitle(f"Score distribution: MC muon vs EXP  (threshold={threshold})", fontweight="bold")
+    fig.suptitle("Score distribution: MC muon vs EXP", fontweight="bold")
     plt.tight_layout()
     pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
 
 
-def plot_pr_curves(pdf, mc_events):
-    """Precision-Recall vs threshold by event type."""
+def _compute_micro_pr(evs, thresholds):
+    all_probs = np.concatenate([e["probs"] for e in evs])
+    all_true = np.concatenate([e["true_sig"].astype(float) for e in evs])
+    prec_vals, rec_vals = [], []
+    for t in thresholds:
+        pred = all_probs > t
+        tp = ((pred == 1) & (all_true == 1)).sum()
+        fp = ((pred == 1) & (all_true == 0)).sum()
+        fn = ((pred == 0) & (all_true == 1)).sum()
+        p = tp / (tp + fp) if (tp + fp) > 0 else 1.0
+        r = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        prec_vals.append(p)
+        rec_vals.append(r)
+    return np.asarray(prec_vals), np.asarray(rec_vals)
+
+
+def _plot_pr_panels(pdf, mc_events, ylim, suptitle):
     thresholds = np.linspace(0.01, 0.99, 200)
     ev_types = ["muatm", "nuatm", "nue2"]
 
@@ -340,79 +382,53 @@ def plot_pr_curves(pdf, mc_events):
         if not evs:
             ax.set_title(f"{evtype}: no events")
             continue
-        all_probs = np.concatenate([e["probs"] for e in evs])
-        all_true = np.concatenate([e["true_sig"].astype(float) for e in evs])
+        prec_vals, rec_vals = _compute_micro_pr(evs, thresholds)
+        color = EVTYPE_COLS[evtype]
 
-        prec_vals, rec_vals = [], []
-        for t in thresholds:
-            pred = all_probs > t
-            tp = ((pred == 1) & (all_true == 1)).sum()
-            fp = ((pred == 1) & (all_true == 0)).sum()
-            fn = ((pred == 0) & (all_true == 1)).sum()
-            p = tp / (tp + fp) if (tp + fp) > 0 else 1.0
-            r = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-            prec_vals.append(p)
-            rec_vals.append(r)
+        ax.plot(thresholds, prec_vals, lw=2.2, ls=P_LS, color=color, label="Precision")
+        ax.plot(thresholds, rec_vals, lw=2.2, ls=R_LS, color=color, label="Recall")
 
-        ax.plot(thresholds, prec_vals, lw=2, label="Precision", color="#d62728")
-        ax.plot(thresholds, rec_vals, lw=2, label="Recall", color="#1f77b4")
+        idx = int(np.argmin(np.abs(thresholds - 0.5)))
+        ax.axvline(0.5, color="k", ls=":", lw=1.0, alpha=0.5)
+        ax.annotate(
+            f"@0.5: P={prec_vals[idx]:.3f}  R={rec_vals[idx]:.3f}",
+            xy=(0.5, ylim[0] + 0.02 * (ylim[1] - ylim[0])),
+            xytext=(0.02, 0.05),
+            textcoords="axes fraction",
+            fontsize=10,
+            bbox=dict(boxstyle="round,pad=0.3", fc="white", ec=color, alpha=0.85),
+        )
+
         ax.set_xlabel("Threshold")
         ax.set_ylabel("Precision / Recall")
         ax.set_title(f"{evtype} ({len(evs)} events)")
         ax.set_xlim(0, 1)
-        ax.set_ylim(0, 1.05)
+        ax.set_ylim(*ylim)
         ax.legend(loc="lower center")
         ax.grid(True)
 
-    fig.suptitle(
-        "Precision & Recall vs threshold by event type  (signal = |t_res| < 10 ns)",
-        fontweight="bold",
+    fig.suptitle(suptitle, fontweight="bold")
+    plt.tight_layout()
+    pdf.savefig(fig, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_pr_curves(pdf, mc_events, signal_desc):
+    _plot_pr_panels(
+        pdf,
+        mc_events,
+        ylim=(0.0, 1.05),
+        suptitle=f"Precision & Recall vs threshold by event type (micro, signal = {signal_desc})",
     )
-    plt.tight_layout()
-    pdf.savefig(fig, bbox_inches="tight")
-    plt.close(fig)
 
 
-def plot_pr_zoomed(pdf, mc_events):
-    """PR curves zoomed to high-quality region (P,R > 0.8)."""
-    thresholds = np.linspace(0.01, 0.99, 200)
-    ev_types = ["muatm", "nuatm", "nue2"]
-
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5.5))
-
-    for ax, evtype in zip(axes, ev_types):
-        evs = [e for e in mc_events if e["ev_type"] == evtype]
-        if not evs:
-            ax.set_title(f"{evtype}: no events")
-            continue
-        all_probs = np.concatenate([e["probs"] for e in evs])
-        all_true = np.concatenate([e["true_sig"].astype(float) for e in evs])
-
-        prec_vals, rec_vals = [], []
-        for t in thresholds:
-            pred = all_probs > t
-            tp = ((pred == 1) & (all_true == 1)).sum()
-            fp = ((pred == 1) & (all_true == 0)).sum()
-            fn = ((pred == 0) & (all_true == 1)).sum()
-            p = tp / (tp + fp) if (tp + fp) > 0 else 1.0
-            r = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-            prec_vals.append(p)
-            rec_vals.append(r)
-
-        ax.plot(thresholds, prec_vals, lw=2, label="Precision", color="#d62728")
-        ax.plot(thresholds, rec_vals, lw=2, label="Recall", color="#1f77b4")
-        ax.set_xlabel("Threshold")
-        ax.set_ylabel("Precision / Recall")
-        ax.set_title(f"{evtype} ({len(evs)} events)")
-        ax.set_xlim(0, 1)
-        ax.set_ylim(0.8, 1.005)
-        ax.legend(loc="lower center")
-        ax.grid(True)
-
-    fig.suptitle("Precision & Recall (zoomed ≥0.8) by event type", fontweight="bold")
-    plt.tight_layout()
-    pdf.savefig(fig, bbox_inches="tight")
-    plt.close(fig)
+def plot_pr_zoomed(pdf, mc_events, signal_desc):
+    _plot_pr_panels(
+        pdf,
+        mc_events,
+        ylim=(0.8, 1.005),
+        suptitle=f"Precision & Recall (zoomed ≥ 0.8) by event type (micro, signal = {signal_desc})",
+    )
 
 
 def plot_hit_distributions(pdf, mc_muon, exp_evs, cuts_list, threshold):
@@ -423,39 +439,39 @@ def plot_hit_distributions(pdf, mc_muon, exp_evs, cuts_list, threshold):
         ex_p = get_sig_data(exp_evs, threshold, mh, ms)
         if not mc_p or not ex_p:
             continue
+        mc_p, ex_p = _balance(mc_p, ex_p)
         mc_q = np.concatenate([e["sig_charge"] for e in mc_p])
         ex_q = np.concatenate([e["sig_charge"] for e in ex_p])
         mc_z = np.concatenate([e["sig_z"] for e in mc_p])
         ex_z = np.concatenate([e["sig_z"] for e in ex_p])
-        mc_lbl = f"MC muon ({len(mc_p)} ev, {len(mc_q):,} hits)"
-        ex_lbl = f"EXP ({len(ex_p)} ev, {len(ex_q):,} hits)"
+        mc_lbl = "MC muon"
+        ex_lbl = "EXP"
 
         fig, axes = plt.subplots(1, 3, figsize=(18, 5.5))
 
-        # Charge
+        # Charge (log y)
         ax = axes[0]
         q_max = np.percentile(np.concatenate([mc_q, ex_q]), 99)
         bins_q = np.linspace(0, q_max, 60)
         ax.hist(mc_q, bins=bins_q, density=True, histtype="step", lw=2, color=MC_COL, label=mc_lbl)
         ax.hist(ex_q, bins=bins_q, density=True, histtype="step", lw=2, color=EXP_COL, label=ex_lbl)
-        wd_q = wasserstein_distance(mc_q, ex_q)
+        ax.set_yscale("log")
         ax.set_xlabel("Charge")
-        ax.set_ylabel("Density")
-        ax.set_title(f"Charge on signal hits (W={wd_q:.2f})")
+        ax.set_ylabel("Density (log)")
+        ax.set_title("Charge on signal hits")
         ax.legend()
-        ax.grid(True)
+        ax.grid(True, which="both")
 
         # Z unweighted
         ax = axes[1]
-        bins_z = np.linspace(-300, 300, 30)
+        bins_z = np.linspace(-300, 300, 22)
         ax.hist(
             mc_z, bins=bins_z, density=True, histtype="step", lw=2, color=MC_COL, label="MC muon"
         )
         ax.hist(ex_z, bins=bins_z, density=True, histtype="step", lw=2, color=EXP_COL, label="EXP")
-        wd_z = wasserstein_distance(mc_z, ex_z)
         ax.set_xlabel("Z [m]")
         ax.set_ylabel("Density")
-        ax.set_title(f"Z distribution (W={wd_z:.1f})")
+        ax.set_title("Z distribution")
         ax.legend()
         ax.grid(True)
 
@@ -501,12 +517,13 @@ def plot_event_distributions(pdf, mc_muon, exp_evs, cuts_list, threshold):
         ex_p = get_sig_data(exp_evs, threshold, mh, ms)
         if not mc_p or not ex_p:
             continue
+        mc_p, ex_p = _balance(mc_p, ex_p)
         mc_nh = np.array([e["n_sig"] for e in mc_p])
         ex_nh = np.array([e["n_sig"] for e in ex_p])
         mc_qs = np.array([e["q_sum"] for e in mc_p])
         ex_qs = np.array([e["q_sum"] for e in ex_p])
-        mc_lbl = f"MC muon ({len(mc_p)} ev)"
-        ex_lbl = f"EXP ({len(ex_p)} ev)"
+        mc_lbl = "MC muon"
+        ex_lbl = "EXP"
 
         fig, axes = plt.subplots(1, 2, figsize=(14, 5.5))
 
@@ -520,10 +537,9 @@ def plot_event_distributions(pdf, mc_muon, exp_evs, cuts_list, threshold):
         ax.hist(
             ex_nh, bins=bins_nh, density=True, histtype="step", lw=2, color=EXP_COL, label=ex_lbl
         )
-        wd_nh = wasserstein_distance(mc_nh, ex_nh)
         ax.set_xlabel("N signal hits per event")
         ax.set_ylabel("Density")
-        ax.set_title(f"Signal hit multiplicity (W={wd_nh:.2f})")
+        ax.set_title("Signal hit multiplicity")
         ax.legend()
         ax.grid(True)
 
@@ -537,10 +553,9 @@ def plot_event_distributions(pdf, mc_muon, exp_evs, cuts_list, threshold):
         ax.hist(
             ex_qs, bins=bins_qs, density=True, histtype="step", lw=2, color=EXP_COL, label=ex_lbl
         )
-        wd_qs = wasserstein_distance(mc_qs, ex_qs)
         ax.set_xlabel("Total charge of signal hits per event")
         ax.set_ylabel("Density")
-        ax.set_title(f"Charge sum per event (W={wd_qs:.2f})")
+        ax.set_title("Charge sum per event")
         ax.legend()
         ax.grid(True)
 
@@ -552,7 +567,19 @@ def plot_event_distributions(pdf, mc_muon, exp_evs, cuts_list, threshold):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--max-events", type=int, default=10_000)
+    parser.add_argument(
+        "--max-events",
+        type=int,
+        default=10_000,
+        help="Deprecated: fallback default for mc-events-per-type and exp-max-events",
+    )
+    parser.add_argument(
+        "--mc-events-per-type",
+        type=int,
+        default=None,
+        help="Max MC events per event-type to load (should be large enough so >=10k survive cuts)",
+    )
+    parser.add_argument("--exp-max-events", type=int, default=None, help="Max EXP events to load")
     parser.add_argument("--threshold", type=float, default=0.5)
     parser.add_argument("--mc-split", default="val")
     parser.add_argument("--exp-split", default="train")
@@ -560,34 +587,54 @@ def main():
     parser.add_argument("--checkpoint", default=CKPT)
     parser.add_argument("--model-type", default="encoder", choices=["encoder", "encoder_da"])
     parser.add_argument("--model-name", default=None, help="Display name for title")
+    parser.add_argument("--mc-data-path", default=MC_DEFAULT, help="MC h5 file for inference")
+    parser.add_argument("--hs", type=int, default=128)
+    parser.add_argument("--dff", type=int, default=512)
+    parser.add_argument(
+        "--signal-definition",
+        default="tres",
+        choices=["tres", "tres_or_labels"],
+        help="GT signal definition: |t_res|<10 (tres) or |t_res|<10 OR |label|!=0 (tres_or_labels)",
+    )
     args = parser.parse_args()
+
+    mc_per_type = args.mc_events_per_type or args.max_events
+    exp_max = args.exp_max_events or args.max_events
 
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     exp_mean, exp_std = load_norm_params(EXP_DATA)
-    mc_mean, mc_std = load_norm_params(MC_2020)
+    mc_mean, mc_std = load_norm_params(args.mc_data_path)
 
     def renorm_exp(data):
         return renormalize(data, exp_mean, exp_std, mc_mean, mc_std)
 
-    print(f"Loading model from {args.checkpoint} (type={args.model_type})...")
-    model = load_model(args.checkpoint, model_type=args.model_type)
+    signal_desc = "|t_res| < 10 ns"
+    if args.signal_definition == "tres_or_labels":
+        signal_desc = "|t_res| < 10 ns OR |label| > 0"
+    load_labels = args.signal_definition == "tres_or_labels"
 
-    print(f"Loading MC events ({args.mc_split}, max {args.max_events} per type)...")
-    mc_batches = list(load_mc_events(MC_2020, args.mc_split, args.max_events))
-    n_mc = sum(x.shape[0] for x, _, _, _, _, _ in mc_batches)
+    print(
+        f"Loading model from {args.checkpoint} (type={args.model_type}, hs={args.hs}, dff={args.dff})..."
+    )
+    print(f"Signal definition: {signal_desc}")
+    model = load_model(args.checkpoint, hs=args.hs, dff=args.dff, model_type=args.model_type)
+
+    print(f"Loading MC events ({args.mc_split}, max {mc_per_type} per type)...")
+    mc_batches = list(
+        load_mc_events(args.mc_data_path, args.mc_split, mc_per_type, load_labels=load_labels)
+    )
+    n_mc = sum(x.shape[0] for x, *_ in mc_batches)
     print(f"  {n_mc} MC events total")
 
-    print(f"Loading EXP events ({args.exp_split}, max {args.max_events})...")
-    exp_batches = list(
-        load_exp_events(EXP_DATA, args.exp_split, args.max_events, renorm_fn=renorm_exp)
-    )
+    print(f"Loading EXP events ({args.exp_split}, max {exp_max})...")
+    exp_batches = list(load_exp_events(EXP_DATA, args.exp_split, exp_max, renorm_fn=renorm_exp))
     n_exp = sum(x.shape[0] for x, _, _, _ in exp_batches)
     print(f"  {n_exp} EXP events")
 
     print("Inference on MC...")
-    mc_events = infer_mc(model, iter(mc_batches))
+    mc_events = infer_mc(model, iter(mc_batches), signal_definition=args.signal_definition)
     print("Inference on EXP...")
     exp_events = infer_exp(model, iter(exp_batches))
     del model, mc_batches, exp_batches
@@ -600,6 +647,21 @@ def main():
     cuts = [(0, 0), (8, 2)]
     thr = args.threshold
 
+    for mh, ms in cuts:
+        mc_keep = sum(
+            1
+            for e in mc_muon
+            if ((e["probs"] > thr).sum() >= mh)
+            and (len(np.unique(e["channels"][e["probs"] > thr] // 36)) >= ms)
+        )
+        ex_keep = sum(
+            1
+            for e in exp_events
+            if ((e["probs"] > thr).sum() >= mh)
+            and (len(np.unique(e["channels"][e["probs"] > thr] // 36)) >= ms)
+        )
+        print(f"  After cut ≥{mh}h ≥{ms}s (@thr={thr}): MC muon={mc_keep}, EXP={ex_keep}")
+
     print(f"\nGenerating PDF report: {out_path}")
     with PdfPages(str(out_path)) as pdf:
         # Title
@@ -607,8 +669,9 @@ def main():
         add_section_page(
             pdf,
             "Noise/Signal Classification Report",
-            f"Model: {model_name}  |  MC 2020 val vs EXP  |  "
-            f"{len(mc_events)} MC / {len(exp_events)} EXP events  |  threshold={thr}",
+            f"Model: {model_name}  |  MC val vs EXP  |  "
+            f"{len(mc_events)} MC / {len(exp_events)} EXP events  |  threshold={thr}\n"
+            f"Signal definition: {signal_desc}",
         )
 
         # Section 1: Score distributions
@@ -623,10 +686,10 @@ def main():
         add_section_page(
             pdf,
             "2. Precision & Recall Curves",
-            "By event type (muatm / nuatm / nue2), signal = |t_res| < 10 ns",
+            f"By event type (muatm / nuatm / nue2), signal = {signal_desc}",
         )
-        plot_pr_curves(pdf, mc_events)
-        plot_pr_zoomed(pdf, mc_events)
+        plot_pr_curves(pdf, mc_events, signal_desc)
+        plot_pr_zoomed(pdf, mc_events, signal_desc)
 
         # Section 3: Hit-level
         add_section_page(

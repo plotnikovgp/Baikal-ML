@@ -31,3 +31,13 @@ from_checkpoint: null
 random_seed: 42
 use_clearml: true
 
+monitoring:
+  tensorboard: true
+
+perf:
+  detect_anomaly: false
+  deterministic: false
+  allow_tf32: true
+  matmul_precision: high
+  fused_adamw: false
+
