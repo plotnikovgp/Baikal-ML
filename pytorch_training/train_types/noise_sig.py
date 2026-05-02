@@ -369,6 +369,7 @@ class TresSignalOnlyTrainType(BaseTrainType):
         self.is_classification = False
         tt = train_params.get("train_type", train_params)
         self.tres_cut = float(tt.get("tres_cut_for_track_hit", 10.0))
+        self.predict_abs = bool(tt.get("predict_abs", False))
         self._criterion = torch.nn.L1Loss()
 
     def get_dataset_type(self):
@@ -403,6 +404,9 @@ class TresSignalOnlyTrainType(BaseTrainType):
         mask = mask.to(self.device, non_blocking=True)
         y_cls = y_cls.to(self.device, non_blocking=True)
         t_res_target = t_res_target.to(self.device, non_blocking=True)
+
+        if self.predict_abs:
+            t_res_target = t_res_target.abs()
 
         output = model(x, mask)
 
