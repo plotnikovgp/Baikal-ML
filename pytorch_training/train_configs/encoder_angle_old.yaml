@@ -1,0 +1,33 @@
+---
+model_type: "encoder"
+train_type: "angle_reconstruction_old"
+
+dataset_configs:
+  -
+    path_to_data: &p1 "/home/plotnikovgp/baikal/data/mc_baikal_norm_cut-8_ordered_with_MCarlo.h5"
+    name: "reco"
+    tres_cut: 10000.0
+    val_subset_cut: 30
+    
+is_graph: False
+from_checkpoint: "/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/checkpoints/angle_reconstruction_v4_mc_old/encoder_nl5_hs512_dff128_nh1_lr1e4__pred_norm_vec/best.ckpt"
+val_mode: True
+model_params:
+  in_features: 5
+  hidden_size: 512
+  num_layers: 5
+  dim_feedforward_size: 512
+  n_heads: 1
+  out_size: 3
+  dropout_p: 0.0
+  use_cls_token: True
+  return_only_cls_token: True
+lr: 1.0e-4
+batch_size: 128
+num_train_steps_per_validation: 25
+grad_clip_value: 1.0
+warmup_steps: 10000
+exp_name: "encoder_nl5_hs512_dff512_nh1_lr1e4_old_data_mae"
+exp_project: "angle_reconstruction_v5_mc_0924"
+tres_cut: 10000.0
+val_subset_cut: 10

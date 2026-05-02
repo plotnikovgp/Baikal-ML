@@ -1,0 +1,24 @@
+{
+    "auc": 0.7086742125379709,
+    "precision": 0.11231169473335244,
+    "recall": 0.8999954973209059,
+    "threshold": 0.11917277425527573,
+    "pos_class_ratio_pred": 0.6822691573402714,
+    "pos_class_ratio_true": 0.08514132076580802,
+    "loss": 439.10221760447433,
+    "cls_loss": 0.26664662960825897,
+    "tres_loss": 438.8355736965086
+}
+{
+    "train/auc": 0.7136367553683587,
+    "train/cls_loss": 0.24633471816778182,
+    "train/loss": 588.1120834350586,
+    "train/lr": 0.00011325692963295964,
+    "train/pos_class_ratio_pred": 0.6721616753670971,
+    "train/pos_class_ratio_true": 0.07751015050218274,
+    "train/precision": 0.10377872649650285,
+    "train/recall": 0.8999606144151241,
+    "train/threshold": 0.1185101866722107,
+    "train/tres_loss": 587.8657505035401,
+    "train/epoch": 0
+}

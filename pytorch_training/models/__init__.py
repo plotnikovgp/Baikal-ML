@@ -18,6 +18,8 @@ from .unet import UNetModel
 def load_model(model_type: str, model_kwargs: dict[str, tp.Any]) -> nn.Module:
     if model_type == "encoder":
         return Encoder(**model_kwargs)
+    elif model_type == "encoder_two_head":
+        return EncoderTwoHead(**model_kwargs)
     elif model_type == "encoder_domain_adaptation":
         return EncoderDomainAdaptation(**model_kwargs)
     elif model_type == "graphnet":

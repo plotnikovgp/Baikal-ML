@@ -1,0 +1,53 @@
+train_type:
+  name: noise_sig_and_tres
+  is_graph: false
+  tres_loss_k: 1.0
+model:
+  type: encoder
+  params:
+    in_features: 5
+    hidden_size: 128
+    num_layers: 5
+    dim_feedforward_size: 512
+    n_heads: 1
+    out_size: 3
+    dropout_p: 0.0
+    use_cls_token: false
+    return_only_cls_token: false
+data:
+  path: /home2/ivkhar/Baikal/data/normed/baikal_2020_sig-noise_mid-eq_normed.h5
+  val_subset_cut: 30
+  events_amount: null
+  set_tres_stats: false
+  cache_datasets: false
+  num_workers: 2
+  prefetch_factor: 4
+  persistent_workers: true
+  pin_memory: true
+  data_prefilter:
+    additive_gauss_noise_std: null
+    norm_Q: false
+exp_project: noise_sig_experiments
+exp_name: j_noise_sig_and_tres_hs128
+training:
+  lr: 0.001
+  batch_size: 128
+  warmup_steps: 5000
+  num_train_steps_per_validation: 20
+  grad_clip_value: null
+  accumulate_grad_steps: 1
+  scheduler_patience: 1000
+  min_recall: 0.9
+  valid_main_metric: loss
+  save_best_per_dataset: false
+val_mode: false
+from_checkpoint: null
+random_seed: 42
+use_clearml: false
+perf:
+  detect_anomaly: false
+  deterministic: false
+  allow_tf32: true
+  matmul_precision: high
+  amp_dtype: null
+tres_cut_for_track_hit: 10.0

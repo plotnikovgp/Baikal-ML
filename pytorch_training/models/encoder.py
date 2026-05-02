@@ -112,6 +112,75 @@ class Encoder(nn.Module):
         return res
 
 
+class EncoderTwoHead(nn.Module):
+    """Shared transformer trunk that splits into two task-specific branches.
+
+    - shared body: ``num_shared_layers`` transformer encoder layers
+    - classification branch: ``num_cls_layers`` extra transformer layers + linear head (2 logits)
+    - t_res regression branch: ``num_tres_layers`` extra transformer layers + linear head (1 scalar)
+
+    Forward returns (B, N, cls_out_size + tres_out_size) where the last dim is
+    [cls_logit_0, cls_logit_1, tres_pred] (matching the existing multi-task interface).
+    """
+
+    def __init__(
+        self,
+        in_features: int,
+        hidden_size: int,
+        num_shared_layers: int,
+        num_cls_layers: int,
+        num_tres_layers: int,
+        dim_feedforward_size: int,
+        n_heads: int,
+        cls_out_size: int = 2,
+        tres_out_size: int = 1,
+        dropout_p: float = 0.0,
+        use_batch_norm: bool = False,
+        **kwargs,
+    ) -> None:
+        super().__init__()
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.hidden_size = hidden_size
+        self.out_size = cls_out_size + tres_out_size
+        self.dropout_p = dropout_p
+
+        self.first_layer = nn.Linear(in_features, hidden_size)
+        encoder_layer_cls = (
+            TransformerEncoderLayerBN if use_batch_norm else nn.TransformerEncoderLayer
+        )
+
+        def _make_stack(n: int) -> nn.Module:
+            if n <= 0:
+                return nn.Identity()
+            layer = encoder_layer_cls(
+                hidden_size, n_heads, dim_feedforward_size, dropout_p, batch_first=True
+            )
+            return nn.TransformerEncoder(layer, n)
+
+        self.shared = _make_stack(num_shared_layers)
+        self.cls_branch = _make_stack(num_cls_layers)
+        self.tres_branch = _make_stack(num_tres_layers)
+
+        self.cls_head = nn.Linear(hidden_size, cls_out_size, bias=False)
+        self.tres_head = nn.Linear(hidden_size, tres_out_size)
+
+    @staticmethod
+    def _apply_stack(stack: nn.Module, x: Tensor, key_pad: Tensor) -> Tensor:
+        if isinstance(stack, nn.TransformerEncoder):
+            return stack(x, src_key_padding_mask=key_pad)
+        return stack(x)
+
+    def forward(self, x: Tensor, mask: Tensor) -> Tensor:
+        key_pad = (~mask).float()
+        x = self.first_layer(x)
+        x = self._apply_stack(self.shared, x, key_pad)
+        cls_x = self._apply_stack(self.cls_branch, x, key_pad)
+        tres_x = self._apply_stack(self.tres_branch, x, key_pad)
+        cls_y = self.cls_head(cls_x)
+        tres_y = self.tres_head(tres_x)
+        return torch.cat([cls_y, tres_y], dim=-1)
+
+
 class EncoderDomainAdaptation(nn.Module):
     """Encoder with domain adaptation head using gradient reversal."""
 

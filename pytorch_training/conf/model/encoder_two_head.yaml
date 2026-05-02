@@ -1,0 +1,12 @@
+type: encoder_two_head
+params:
+  in_features: 5
+  hidden_size: 128
+  num_shared_layers: 3
+  num_cls_layers: 2
+  num_tres_layers: 2
+  dim_feedforward_size: 512
+  n_heads: 1
+  cls_out_size: 2
+  tres_out_size: 1
+  dropout_p: 0.0

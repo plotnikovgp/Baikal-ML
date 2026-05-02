@@ -1,0 +1,8 @@
+- +experiment=noise_sig_and_tres
+- use_clearml=false
+- ++profile.num_iters=100
+- ++profile.warmup_iters=10
+- ++profile.detect_anomaly=false
+- ++profile.amp_dtype=bf16
+- data.num_workers=4
+- data.prefetch_factor=4

@@ -289,7 +289,9 @@ class Trainer:
 
         return train_metrics
 
-    def validate_single(self, val_loader, dataset_idx=0, min_recall=None, val_mode=False):
+    def validate_single(
+        self, val_loader, dataset_idx=0, min_recall=None, val_mode=False, dataset_name=None
+    ):
         y_pred_parts = []
         y_true_parts = []
         domain_pred_parts = []
@@ -297,6 +299,13 @@ class Trainer:
         loss_sums = {}
         loss_counts = {}
         is_domain_adaptation = self.train_type.get_train_kwargs().get("is_domain_adaptation", False)
+        label_dataset_name = getattr(self.train_type, "label_dataset_name", None)
+        is_labeled_dataset = (
+            (not is_domain_adaptation)
+            or label_dataset_name is None
+            or dataset_name is None
+            or dataset_name == label_dataset_name
+        )
 
         self.model.eval()
         self._set_preprocessor_mode(val_loader, training=False)
@@ -313,14 +322,10 @@ class Trainer:
                     )
                     domain_pred_parts.append(domain_pred.detach())
                     domain_true_parts.append(domain_true_event.detach())
-                    if (
-                        len(y_true.shape) == 1
-                        and len(output.shape) > 1
-                        and y_true.shape[0] == output.shape[0]
-                    ):
-                        loss = {"loss": torch.tensor(0.0, device=output.device)}
-                    else:
+                    if is_labeled_dataset:
                         loss = self.criterion(output, y_true, None, None)
+                    else:
+                        loss = {"loss": torch.tensor(0.0, device=output.device)}
                 else:
                     loss = self.criterion(output, y_true)
 
@@ -376,7 +381,11 @@ class Trainer:
                 self.metrics_fn.set_dataset_name(dataset_names[i])
 
             dataset_metrics = self.validate_single(
-                loader, dataset_idx=i, min_recall=min_recall, val_mode=val_mode
+                loader,
+                dataset_idx=i,
+                min_recall=min_recall,
+                val_mode=val_mode,
+                dataset_name=dataset_names[i] if dataset_names else None,
             )
 
             if val_mode:

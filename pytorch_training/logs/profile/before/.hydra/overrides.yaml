@@ -1,0 +1,6 @@
+- +experiment=noise_sig_and_tres
+- use_clearml=false
+- ++profile.num_iters=100
+- ++profile.warmup_iters=10
+- ++profile.detect_anomaly=true
+- data.num_workers=1

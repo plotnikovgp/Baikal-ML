@@ -1,0 +1,34 @@
+# @package _global_
+defaults:
+  - override /train_type: noise_sig_and_tres
+  - override /model: encoder_two_head
+  - override /data: single
+
+exp_project: noise_sig_experiments
+exp_name: m_nst_twohead_mae_hs128
+
+data:
+  path: /home/plotnikovgp/baikal/Baikal-ML/pytorch_training/data/baikal_2020_sig-noise_mid-eq_normed.h5
+  val_subset_cut: 3
+
+tres_cut_for_track_hit: 10.0
+
+train_type:
+  tres_loss_k: 0.01
+  tres_loss_type: mae
+
+model:
+  params:
+    hidden_size: 128
+    num_shared_layers: 3
+    num_cls_layers: 2
+    num_tres_layers: 2
+    dim_feedforward_size: 512
+    n_heads: 1
+
+training:
+  lr: 1.0e-3
+  batch_size: 128
+  warmup_steps: 5000
+  num_train_steps_per_validation: 100
+  min_recall: 0.9

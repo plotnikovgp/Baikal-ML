@@ -1,0 +1,5 @@
+name: noise_sig_and_tres
+is_graph: false
+tres_loss_k: 1.0
+tres_loss_threshold: 20.0
+tres_loss_type: sfmse

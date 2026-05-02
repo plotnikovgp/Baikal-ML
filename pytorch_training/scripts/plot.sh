@@ -1,0 +1,5 @@
+python plot_comparison.py \
+--checkpoint_no_da checkpoints/noise_sig_domain_adaptation/encoder_nl5_hs512_dff512_nh1_noise_sig_da_k02_gr0_bs128/best_sig_noise_2020.ckpt \
+--checkpoint_da checkpoints/noise_sig_domain_adaptation/encoder_nl5_hs512_dff512_nh1_noise_sig_da_k02_gr005_bs128/best_sig_noise_2020.ckpt \
+--config train_configs/noise_sig_da_k02_gr0.yaml \
+--output plots/noise_sig_comparison.png

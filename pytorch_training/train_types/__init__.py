@@ -19,6 +19,7 @@ from .noise_sig import (
     NoiseSigTrainType,
     TresRegressionSoftLossTrainType,
     TresRegressionTrainType,
+    TresSignalOnlyTrainType,
 )
 from .track_cascade import TrackCascadeDomainAdaptationTrainType, TrackCascadeTrainType
 from .tres import TresAndTrackCascadeTrainType, TresDomainAdaptationTrainType, TresTrainType
@@ -33,6 +34,7 @@ TRAIN_TYPE_REGISTRY: Dict[str, Type[BaseTrainType]] = {
     "noise_sig_and_tres": NoiseSigAndTresTrainType,
     "tres_regression": TresRegressionTrainType,
     "tres_regression_soft": TresRegressionSoftLossTrainType,
+    "tres_signal_only": TresSignalOnlyTrainType,
     "track_cascade": TrackCascadeTrainType,
     "track_cascade_domain_adaptation": TrackCascadeDomainAdaptationTrainType,
     "tres": TresTrainType,

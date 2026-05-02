@@ -277,9 +277,11 @@ class NoiseSigAndTresTrainType(BaseTrainType):
             self._tres_loss = SignalFocusedMSELoss(threshold=self.tres_loss_threshold)
         elif self.tres_loss_type == "mse":
             self._tres_loss = torch.nn.MSELoss()
+        elif self.tres_loss_type in {"mae", "l1"}:
+            self._tres_loss = torch.nn.L1Loss()
         else:
             raise ValueError(
-                f"Unknown tres_loss_type '{self.tres_loss_type}'. Use 'sfmse' or 'mse'."
+                f"Unknown tres_loss_type '{self.tres_loss_type}'. Use 'sfmse', 'mse', or 'mae'."
             )
 
     def get_dataset_type(self):
@@ -302,8 +304,8 @@ class NoiseSigAndTresTrainType(BaseTrainType):
             signal_mask = y_true == 1
             if signal_mask.any():
                 tres_loss = tres_loss_fn(
-                    tres_pred[signal_mask].abs(),
-                    tres_target[signal_mask].abs(),
+                    tres_pred[signal_mask],
+                    tres_target[signal_mask],
                 )
             else:
                 tres_loss = torch.tensor(0.0, device=cls_logits.device)
@@ -354,6 +356,70 @@ class NoiseSigOriginalLabelsAndTresTrainType(NoiseSigAndTresTrainType):
         return "noise_sig_original_labels_and_tres"
 
 
+class TresSignalOnlyTrainType(BaseTrainType):
+    """Predict t_res only for signal hits (label != 0 OR |t_res| < tres_cut).
+    Single-head regression baseline."""
+
+    @property
+    def name(self) -> str:
+        return "tres_signal_only"
+
+    def __init__(self, train_params: Dict[str, Any], device: str = "cuda"):
+        super().__init__(train_params, device)
+        self.is_classification = False
+        tt = train_params.get("train_type", train_params)
+        self.tres_cut = float(tt.get("tres_cut_for_track_hit", 10.0))
+        self._criterion = torch.nn.L1Loss()
+
+    def get_dataset_type(self):
+        return BaikalDataset
+
+    def get_preprocessor(self, config: Dict[str, Any]):
+        prefilter = _get_data_prefilter(config)
+        z_mirror = config.get("z_mirror", False)
+        return NoiseSigOriginalLabelsAndTresPreprocessor(prefilter, z_mirror=z_mirror)
+
+    def get_criterion(self):
+        loss_fn = self._criterion
+
+        def criterion(output, y_true):
+            tres_pred, tres_target, signal_mask = output
+            if signal_mask.any():
+                loss = loss_fn(tres_pred[signal_mask], tres_target[signal_mask])
+            else:
+                loss = torch.tensor(0.0, device=tres_pred.device)
+            return {"loss": loss}
+
+        return criterion
+
+    def get_metrics_function(self):
+        return RegressionMetrics()
+
+    def _process_batch(self, model, data, dataset_idx=None) -> Dict[str, torch.Tensor]:
+        x, y_tuple, mask = data[0], data[1], data[2]
+        y_cls, t_res_target = y_tuple
+
+        x = x.to(self.device, non_blocking=True)
+        mask = mask.to(self.device, non_blocking=True)
+        y_cls = y_cls.to(self.device, non_blocking=True)
+        t_res_target = t_res_target.to(self.device, non_blocking=True)
+
+        output = model(x, mask)
+
+        mask_flat = mask.reshape(-1) != 0
+        output_flat = output.reshape(-1, output.shape[-1]).squeeze(-1)[mask_flat]
+        y_cls_flat = y_cls.reshape(-1)[mask_flat]
+        t_res_flat = t_res_target.reshape(-1)[mask_flat]
+
+        signal_mask = y_cls_flat == 1
+
+        return {
+            "output": (output_flat, t_res_flat, signal_mask),
+            "y_pred": output_flat[signal_mask],
+            "y_true": t_res_flat[signal_mask],
+        }
+
+
 class SignalFocusedMSELoss(torch.nn.Module):
     """MSE for signal hits (|t_res| < threshold), log-damped for noise hits.
 
@@ -370,7 +436,7 @@ class SignalFocusedMSELoss(torch.nn.Module):
 
     def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
         residual_sq = (y_pred - y_true) ** 2
-        signal = y_true < self.threshold
+        signal = y_true.abs() < self.threshold
         t2 = self.threshold**2
         loss = torch.where(
             signal,

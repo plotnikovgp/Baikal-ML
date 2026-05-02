@@ -37,7 +37,7 @@ target-version = ["py310"]
 
 [tool.ruff]
 line-length = 100
-exclude = ["__pycache__", "wandb", "runs", "checkpoints", "notebooks"]
+exclude = ["__pycache__", "wandb", "runs", "checkpoints", "notebooks", "external_models"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]

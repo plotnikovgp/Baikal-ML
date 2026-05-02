@@ -1,0 +1,29 @@
+# @package _global_
+defaults:
+  - override /train_type: tres_signal_only
+  - override /model: encoder
+  - override /data: single
+
+exp_project: noise_sig_experiments
+exp_name: m_tres_signal_only_baseline_hs128
+
+data:
+  path: /home/plotnikovgp/baikal/Baikal-ML/pytorch_training/data/baikal_2020_sig-noise_mid-eq_normed.h5
+  val_subset_cut: 3
+
+tres_cut_for_track_hit: 10.0
+
+model:
+  params:
+    hidden_size: 128
+    num_layers: 5
+    dim_feedforward_size: 512
+    n_heads: 1
+    out_size: 1
+
+training:
+  lr: 1.0e-3
+  batch_size: 128
+  warmup_steps: 5000
+  num_train_steps_per_validation: 100
+  valid_main_metric: loss
