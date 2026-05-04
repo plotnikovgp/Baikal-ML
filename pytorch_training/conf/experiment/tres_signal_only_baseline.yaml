@@ -5,7 +5,7 @@ defaults:
   - override /data: single
 
 exp_project: noise_sig_experiments
-exp_name: m_tres_signal_only_baseline_hs128
+exp_name: m_tres_signal_only_fix_bias_hs128
 
 data:
   path: /home/plotnikovgp/baikal/Baikal-ML/pytorch_training/data/baikal_2020_sig-noise_mid-eq_normed.h5
@@ -20,6 +20,7 @@ model:
     dim_feedforward_size: 512
     n_heads: 1
     out_size: 1
+    head_bias: true
 
 training:
   lr: 1.0e-3

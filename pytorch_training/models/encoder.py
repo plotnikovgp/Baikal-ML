@@ -41,6 +41,7 @@ class Encoder(nn.Module):
         return_only_cls_token: bool = False,
         return_hidden: bool = False,
         return_hiddens_by_layers: bool = False,
+        head_bias: bool = False,
         **kwargs,
     ) -> None:
         super().__init__()
@@ -63,7 +64,7 @@ class Encoder(nn.Module):
         )
         self.enc = nn.TransformerEncoder(enc_layer, num_layers)
 
-        self.head = nn.Linear(hidden_size, out_size, bias=False)
+        self.head = nn.Linear(hidden_size, out_size, bias=head_bias)
 
         self.class_token: nn.Parameter | None = None
         if use_cls_token:

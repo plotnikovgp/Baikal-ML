@@ -370,6 +370,8 @@ class TresSignalOnlyTrainType(BaseTrainType):
         tt = train_params.get("train_type", train_params)
         self.tres_cut = float(tt.get("tres_cut_for_track_hit", 10.0))
         self.predict_abs = bool(tt.get("predict_abs", False))
+        self.signal_only_input = bool(tt.get("signal_only_input", False))
+        self.min_signal_hits = int(tt.get("min_signal_hits", 0))
         self._criterion = torch.nn.L1Loss()
 
     def get_dataset_type(self):
@@ -407,6 +409,25 @@ class TresSignalOnlyTrainType(BaseTrainType):
 
         if self.predict_abs:
             t_res_target = t_res_target.abs()
+
+        if self.signal_only_input:
+            sig_input_mask = (y_cls == 1) & (mask != 0)
+            mask = sig_input_mask.long()
+
+        if self.min_signal_hits > 0:
+            sig_per_event = ((y_cls == 1) & (mask != 0)).sum(dim=1)
+            keep = sig_per_event >= self.min_signal_hits
+            if not keep.any():
+                dummy = torch.tensor(0.0, device=x.device, requires_grad=True)
+                return {
+                    "output": (dummy, dummy, torch.zeros(1, dtype=torch.bool, device=x.device)),
+                    "y_pred": dummy.unsqueeze(0),
+                    "y_true": dummy.unsqueeze(0).detach(),
+                }
+            x = x[keep]
+            mask = mask[keep]
+            y_cls = y_cls[keep]
+            t_res_target = t_res_target[keep]
 
         output = model(x, mask)
 
