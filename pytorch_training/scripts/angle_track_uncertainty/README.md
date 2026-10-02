@@ -6,8 +6,11 @@ This directory contains the current single-model Baikal-GVD pipeline:
 - `train_track_anchor_v3.py`: direction plus a point on the reconstructed track;
 - `train_track_uncertainty_v2.py`: frozen backbone and track model with a small angular/transverse uncertainty head;
 - `plot_uncertainty_calibration.py`: test-set error-density, conditional-coverage and raw-reliability plots.
+- `plot_theta_phi_calibration.py`: signed theta/phi residual plots and component-wise coverage diagnostics.
 
 The uncertainty head predicts an angular scale in degrees and a transverse track scale in metres. It is trained with a two-dimensional Student-t negative log likelihood (3 degrees of freedom). The direction and track-point weights remain frozen. A separate validation subset provides empirical containment-radius factors at 68% and 95%; the test set is not used for fitting or calibration.
+
+For component plots, the same angular scale is used for theta and locally propagated to phi by dividing by `sin(theta_pred)`. The script calibrates theta and phi half-widths separately on validation events beyond the checkpoint-selection subset. Phi events with `sin(theta_pred) < 0.15` are excluded because azimuth is ill-defined near the poles; the exclusion is reported in the metrics.
 
 The completed run used the `nue2_2020` MC sample with GT signal hits and a 2-string/8-hit selection. It did **not** include `muatm` events or experimental hits. The track reference point is the point on the truth line closest to the centroid of retained signal hits. The angular/anchor errors on the independent 403,171-event test set were q50/q68 = 2.329/3.983 degrees and 4.406/7.239 m. Marginal 68%/95% coverage after validation calibration was 68.22%/95.11% for angle and 68.04%/94.90% for transverse anchor error. Conditional coverage across difficulty bins is imperfect, especially for the track intervals; do not interpret these as guaranteed coverage on experimental data.
 
