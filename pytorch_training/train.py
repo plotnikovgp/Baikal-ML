@@ -289,6 +289,20 @@ def main(cfg: DictConfig):
     else:
         train_dataset_size = None
 
+    # opt-in: snapshot checkpoints at given epochs (1 epoch == steps_per_epoch train steps)
+    save_step_marks = None
+    max_train_steps = None
+    save_epochs = training_cfg.get("save_epochs")
+    if save_epochs:
+        steps_per_epoch = int(training_cfg.get("steps_per_epoch"))
+        save_step_marks = {int(e) * steps_per_epoch: f"epoch{int(e)}" for e in save_epochs}
+        max_epochs = training_cfg.get("max_epochs", max(save_epochs))
+        max_train_steps = int(max_epochs) * steps_per_epoch
+        logging.info(
+            f"[snapshots] steps_per_epoch={steps_per_epoch}, marks={save_step_marks}, "
+            f"max_train_steps={max_train_steps}"
+        )
+
     trainer.train(
         train_loader=dataloaders["train"],
         val_loader=dataloaders["val"],
@@ -299,6 +313,8 @@ def main(cfg: DictConfig):
         val_mode=is_val_mode,
         min_recall=training_cfg.get("min_recall"),
         train_dataset_size=train_dataset_size,
+        save_step_marks=save_step_marks,
+        max_train_steps=max_train_steps,
     )
 
 

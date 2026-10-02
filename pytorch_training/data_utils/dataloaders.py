@@ -152,7 +152,22 @@ def create_multi_dataset_dataloader(
     train_datasets, val_datasets, test_datasets = [], [], []
     is_graph = any(cfg.get("is_graph", False) for cfg in dataset_configs)
 
+    _consumed_keys = {
+        "name",
+        "path_to_data",
+        "DatasetType",
+        "is_graph",
+        "val_subset_cut",
+        "val_path",
+        "test_path",
+        "val_renorm_params",
+        "test_renorm_params",
+        "preprocessor",
+        "renorm_params",
+    }
     for config in dataset_configs:
+        extra_ds_kwargs = {k: v for k, v in config.items() if k not in _consumed_keys}
+        merged_kwargs = {**kwargs, **extra_ds_kwargs}
         datasets = create_datasets(
             path_to_data=config["path_to_data"],
             DatasetType=config.get("DatasetType", BaikalDataset),
@@ -164,7 +179,7 @@ def create_multi_dataset_dataloader(
             val_renorm_params=config.get("val_renorm_params"),
             test_renorm_params=config.get("test_renorm_params"),
             preprocessor=config.get("preprocessor"),
-            **kwargs,
+            **merged_kwargs,
         )
         train_datasets.append(datasets["train"])
         val_datasets.append(datasets.get("val_subset", datasets["val"]))

@@ -1,0 +1,37 @@
+# @package _global_
+defaults:
+  - override /train_type: tres_signal_only
+  - override /model: encoder
+  - override /data: single
+
+exp_project: tres_loss_comparison_v2
+exp_name: tres_v2_mse_hs128
+
+z_mirror: true
+
+data:
+  path: /home/plotnikovgp/baikal/data/merged_nue2_nuatm_2-8gt_sigonly.h5
+  val_subset_cut: 3
+
+train_type:
+  predict_abs: true
+  normalize_tres: true
+  tres_mean: 14.7
+  tres_std: 37.7
+  loss_type: mse
+
+model:
+  params:
+    hidden_size: 128
+    num_layers: 5
+    dim_feedforward_size: 512
+    n_heads: 1
+    out_size: 1
+    head_bias: true
+
+training:
+  lr: 1.0e-3
+  batch_size: 128
+  warmup_steps: 3000
+  num_train_steps_per_validation: 500
+  valid_main_metric: loss

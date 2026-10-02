@@ -1,0 +1,50 @@
+# @package _global_
+defaults:
+  - override /train_type: tres_signal_only
+  - override /model: encoder
+  - override /data: multi
+
+exp_project: tres_loss_comparison
+exp_name: tres_merged_mae_log_hs128
+
+z_mirror: true
+
+data:
+  datasets:
+    - name: muatm
+      path_to_data: /home/plotnikovgp/baikal/data/merged_muatm.h5
+      val_subset_cut: 3
+    - name: nuatm
+      path_to_data: /home/plotnikovgp/baikal/data/merged_nuatm.h5
+      val_subset_cut: 3
+    - name: nue2
+      path_to_data: /home/plotnikovgp/baikal/data/merged_nue2.h5
+      val_subset_cut: 3
+  weights: [0.6, 0.22, 0.18]
+
+train_type:
+  predict_abs: true
+  normalize_tres: true
+  tres_mean: 7.8
+  tres_std: 26.2
+  signal_only_input: true
+  min_signal_hits: 8
+  loss_type: mae_log
+  loss_threshold: 15.0
+
+model:
+  params:
+    hidden_size: 128
+    num_layers: 5
+    dim_feedforward_size: 512
+    n_heads: 1
+    out_size: 1
+    head_bias: true
+
+training:
+  lr: 1.0e-3
+  batch_size: 128
+  warmup_steps: 5000
+  num_train_steps_per_validation: 500
+  valid_main_metric: loss
+  save_best_per_dataset: true

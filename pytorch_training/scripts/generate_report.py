@@ -2231,11 +2231,19 @@ def plot_energy_dependence_png(
     mc_events,
     threshold,
     out_path,
+    cuts=(8, 2),
     min_events_per_bin=300,
     energy_unit="GeV",
 ):
-    """Hit-level (micro) precision/recall vs log10 energy; 1 figure × 3 type-panels."""
-    evs_all = [e for e in mc_events if np.isfinite(e.get("energy", np.nan)) and e["energy"] > 0]
+    """Hit-level (micro) precision/recall vs log10 energy after the standard event cut."""
+    min_hits, min_strings = cuts
+    evs_all = [
+        e
+        for e in mc_events
+        if np.isfinite(e.get("energy", np.nan))
+        and e["energy"] > 0
+        and event_passes_cut(e, 0.5, min_hits, min_strings)
+    ]
     if not evs_all:
         return
     types = ["muatm", "nuatm", "nue2"]
@@ -2797,7 +2805,7 @@ def write_matplotlib_pngs(
         threshold_points=threshold_points,
         y_min=0.75,
     )
-    plot_energy_dependence_png(mc_events, threshold, out_dir / "energy_dependence.png")
+    plot_energy_dependence_png(mc_events, threshold, out_dir / "energy_dependence.png", cuts=(8, 2))
     plot_event_energy_dependence_png(
         mc_events, threshold, out_dir / "event_energy_dependence.png", cuts=(8, 2)
     )

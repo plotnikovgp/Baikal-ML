@@ -12,6 +12,7 @@ from .energy import EnergyReconstructionDomainAdaptationTrainType, EnergyReconst
 from .noise_sig import (
     NoiseSigAndTresTrainType,
     NoiseSigDomainAdaptationTrainType,
+    NoiseSigMaskedPseudoLabelTrainType,
     NoiseSigOriginalLabelsAndTresTrainType,
     NoiseSigOriginalLabelsDomainAdaptationTrainType,
     NoiseSigOriginalLabelsTrainType,
@@ -30,6 +31,7 @@ TRAIN_TYPE_REGISTRY: Dict[str, Type[BaseTrainType]] = {
     "noise_sig_original_labels": NoiseSigOriginalLabelsTrainType,
     "noise_sig_original_labels_da": NoiseSigOriginalLabelsDomainAdaptationTrainType,
     "noise_sig_original_labels_and_tres": NoiseSigOriginalLabelsAndTresTrainType,
+    "noise_sig_masked_pseudolabel": NoiseSigMaskedPseudoLabelTrainType,
     "noise_sig_or_labels": NoiseSigOrLabelsTrainType,
     "noise_sig_and_tres": NoiseSigAndTresTrainType,
     "tres_regression": TresRegressionTrainType,

@@ -14,7 +14,7 @@ train_type:
 data:
   datasets:
     - name: mc_2020
-      path_to_data: /home2/ivkhar/Baikal/data/normed/baikal_2020_sig-noise_mid-eq_normed.h5
+      path: /home/plotnikovgp/baikal/data/baikal_mc_merged_m50-na15-nue15_norm.h5
       val_subset_cut: 3
     - name: exp_data
       path_to_data: /home/plotnikovgp/baikal/Baikal-ML/pytorch_training/data/baikal_exp_filtered_norm.h5

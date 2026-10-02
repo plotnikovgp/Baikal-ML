@@ -2,7 +2,7 @@ from typing import Any, Dict
 
 import torch
 
-from data_utils import BaikalDataset, BaikalDatasetSingle
+from data_utils import BaikalDataset, BaikalDatasetPseudoLabel, BaikalDatasetSingle
 from data_utils.preprocessors import (
     DataPrefilter,
     NoiseSigGraphPreprocessor,
@@ -10,11 +10,27 @@ from data_utils.preprocessors import (
     NoiseSigOriginalLabelsPreprocessor,
     NoiseSigOrLabelsPreprocessor,
     NoiseSigPreprocessor,
+    PseudoLabelPassthroughPreprocessor,
     TresRegressionPreprocessor,
 )
 from metrics import BinaryClassificationMetrics, RegressionMetrics
 
 from .base import BaseTrainType, DomainAdaptationMixin
+
+
+class MaskedBinaryClassificationMetrics(BinaryClassificationMetrics):
+    """Binary metrics that drop hits with label == -1 (masked/ignored)."""
+
+    def _calc_metrics(self, y_pred_prob, y_true, **kwargs):
+        import numpy as np
+
+        y_true_arr = np.asarray(y_true)
+        y_pred_arr = np.asarray(y_pred_prob)
+        keep = y_true_arr != -1
+        if not keep.all():
+            y_pred_arr = y_pred_arr[keep]
+            y_true_arr = y_true_arr[keep]
+        return super()._calc_metrics(y_pred_arr, y_true_arr, **kwargs)
 
 
 def _get_data_prefilter(config: Dict[str, Any]) -> DataPrefilter:
@@ -154,6 +170,40 @@ class NoiseSigOriginalLabelsTrainType(BaseTrainType):
 
     def get_metrics_function(self):
         return BinaryClassificationMetrics(min_recall=0.9)
+
+
+class NoiseSigMaskedPseudoLabelTrainType(BaseTrainType):
+    """Fine-tune noise/signal classifier with masked per-hit pseudo-labels.
+
+    MC datasets (no ``labels_path``) use original labels (label != 0 -> signal).
+    Datasets with a ``labels_path`` sidecar use those pseudo-labels directly,
+    where label == -1 marks ignored hits (excluded from loss and metrics).
+    """
+
+    @property
+    def name(self) -> str:
+        return "noise_sig_masked_pseudolabel"
+
+    def __init__(self, train_params: Dict[str, Any], device: str = "cuda"):
+        super().__init__(train_params, device)
+        self.is_classification = True
+        self._criterion = torch.nn.CrossEntropyLoss(ignore_index=-1)
+
+    def get_dataset_type(self):
+        return BaikalDatasetPseudoLabel
+
+    def get_preprocessor(self, config: Dict[str, Any]):
+        prefilter = _get_data_prefilter(config)
+        z_mirror = config.get("z_mirror", False)
+        if config.get("labels_path"):
+            return PseudoLabelPassthroughPreprocessor(prefilter, z_mirror=z_mirror)
+        return NoiseSigOriginalLabelsPreprocessor(prefilter, z_mirror=z_mirror)
+
+    def get_criterion(self):
+        return self._criterion
+
+    def get_metrics_function(self):
+        return MaskedBinaryClassificationMetrics(min_recall=0.9)
 
 
 class NoiseSigOrLabelsTrainType(BaseTrainType):

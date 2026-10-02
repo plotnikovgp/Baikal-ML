@@ -156,6 +156,52 @@ class BaikalDataset(Dataset):
         return self.preprocessor(data_x, data_y, t_res, mask)
 
 
+class BaikalDatasetPseudoLabel(BaikalDataset):
+    """BaikalDataset that reads per-hit labels from a separate sidecar h5
+    (``labels_path``) with a matching ``{split}/labels/data`` hit layout.
+
+    Labels may be in {-1, 0, 1} where -1 marks masked/ignored hits. This is
+    used to fine-tune on experimental data with pseudo-labels: the input file
+    (experimental) has no ``labels``/``t_res`` datasets, so those are not read
+    from it; labels come from the sidecar and ``t_res`` is not needed (the
+    pseudo-label preprocessor ignores it). If ``labels_path`` is None this
+    falls back to the standard BaikalDataset behaviour.
+    """
+
+    def __init__(self, *args, labels_path: str | None = None, **kwargs):
+        self.labels_path = labels_path
+        self._lfile = None
+        super().__init__(*args, **kwargs)
+
+    @property
+    def lfile(self):
+        if self.labels_path is None:
+            return None
+        if self._lfile is None:
+            self._lfile = h5.File(self.labels_path, "r")
+        return self._lfile
+
+    def __getstate__(self):
+        state = super().__getstate__()
+        state["_lfile"] = None
+        return state
+
+    def __getitem__(self, idx: int):
+        if self.labels_path is None:
+            return super().__getitem__(idx)
+
+        batch_start, batch_end = self._get_batch_indices(idx)
+        info = self._load_event_data(batch_start, batch_end)
+
+        labels = torch.tensor(
+            self.lfile[f"{self.split_type}/labels/data"][info["global_start"] : info["global_end"]]
+        )
+        data_x, data_y, mask = self._collate(info["event_starts"], info["data"], labels)
+        # experimental input has no t_res; pseudo-label preprocessor ignores it
+        t_res = torch.zeros(data_x.shape[:2], dtype=torch.float32)
+        return self.preprocessor(data_x, data_y, t_res, mask)
+
+
 class BaikalDatasetSingle(BaikalDataset):
     def __getitem__(self, idx: int):
         start, end = self.hfile[f"{self.split_type}/ev_starts/data"][idx : idx + 2]

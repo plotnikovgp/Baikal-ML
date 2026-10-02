@@ -417,11 +417,16 @@ class Trainer:
         val_mode=False,
         min_recall=None,
         train_dataset_size=None,
+        save_step_marks=None,
+        max_train_steps=None,
     ):
         best_val_metrics = {}
         train_logs_ = {}
         iters_current = 0
         total_steps = 0
+        # opt-in: snapshot at exact training-step counts and/or hard step cap
+        global_train_steps = 0
+        pending_marks = dict(save_step_marks or {})
 
         if train_dataset_size is not None:
             iters_per_epoch = train_dataset_size / num_iters
@@ -453,6 +458,18 @@ class Trainer:
 
                     train_logs_["train/epoch"] = cur_epoch
                     total_steps += 1
+
+                    global_train_steps += num_iters
+                    if pending_marks:
+                        for mark in sorted(pending_marks):
+                            if global_train_steps >= mark:
+                                label = pending_marks.pop(mark)
+                                Path(self.model_save_dir).mkdir(parents=True, exist_ok=True)
+                                save_path = f"{self.model_save_dir}/{label}.ckpt"
+                                torch.save(self.model.state_dict(), save_path)
+                                print(f"[SNAPSHOT] step={global_train_steps} -> {save_path}")
+                    if max_train_steps is not None and global_train_steps >= max_train_steps:
+                        return
 
                     if self.clearml_logger:
                         for key, value in train_logs_.items():

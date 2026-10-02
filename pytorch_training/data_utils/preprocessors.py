@@ -130,6 +130,34 @@ class NoiseSigOriginalLabelsPreprocessor(BasePreprocessor):
         return x, y, mask
 
 
+class PseudoLabelPassthroughPreprocessor(BasePreprocessor):
+    """Pass per-hit pseudo-labels straight through as classification targets.
+
+    Labels are expected in {-1, 0, 1} (-1 = masked/ignored). No t_res-based
+    relabelling is applied; t_res is accepted for signature compatibility and
+    ignored. Used for experimental-data fine-tuning with masked pseudo-labels.
+    """
+
+    def __init__(
+        self,
+        data_prefilter: DataPrefilter | None = None,
+        z_mirror: bool = False,
+        **kwargs,
+    ):
+        super().__init__(data_prefilter, **kwargs)
+        self.z_mirror = z_mirror
+
+    def __call__(
+        self, x: torch.Tensor, y: torch.Tensor, t_res: torch.Tensor, mask: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        if self.data_prefilter is not None:
+            x = self.data_prefilter(x, training=self.training)
+        if self.z_mirror and self.training and torch.rand(1).item() < 0.5:
+            x = x.clone()
+            x[:, :, 4] = -x[:, :, 4]
+        return x, y.long(), mask
+
+
 class NoiseSigOriginalLabelsAndTresPreprocessor(BasePreprocessor):
     """Signal/noise by original labels plus t_res target for signal-hit regression."""
 

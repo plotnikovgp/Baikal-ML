@@ -61,13 +61,13 @@ class BaseTrainType(ABC):
         return {"output": output, "y_pred": y_pred, "y_true": y_true}
 
     def _process_batch(self, model, data, dataset_idx=None) -> Dict[str, torch.Tensor]:
-        if isinstance(data, tuple) and len(data) == 2:
-            if isinstance(data[0], tuple):
+        if isinstance(data, (tuple, list)) and len(data) == 2:
+            if isinstance(data[0], (tuple, list)):
                 data = data[0]
             elif not isinstance(data[1], torch.Tensor) or data[1].dim() == 0:
                 data = data[0]
 
-        if isinstance(data, tuple) and len(data) > 3:
+        if isinstance(data, (tuple, list)) and len(data) > 3:
             data = data[:3]
 
         x, y_true, mask = data
