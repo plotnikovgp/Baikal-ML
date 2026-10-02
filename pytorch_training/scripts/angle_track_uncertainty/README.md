@@ -7,6 +7,7 @@ This directory contains the current single-model Baikal-GVD pipeline:
 - `train_track_uncertainty_v2.py`: frozen backbone and track model with a small angular/transverse uncertainty head;
 - `plot_uncertainty_calibration.py`: test-set error-density, conditional-coverage and raw-reliability plots.
 - `plot_theta_phi_calibration.py`: signed theta/phi residual plots and component-wise coverage diagnostics.
+- `plot_track_distance_distribution.py`: distribution and uncertainty-quartile CDF of the transverse track-anchor error; the optional `--include-plus200` flag adds a lever-arm diagnostic.
 
 The uncertainty head predicts an angular scale in degrees and a transverse track scale in metres. It is trained with a two-dimensional Student-t negative log likelihood (3 degrees of freedom). The direction and track-point weights remain frozen. A separate validation subset provides empirical containment-radius factors at 68% and 95%; the test set is not used for fitting or calibration.
 
