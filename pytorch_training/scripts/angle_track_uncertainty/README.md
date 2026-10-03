@@ -1,5 +1,10 @@
 # Angle, track and uncertainty reconstruction
 
+For the newer all-particle direction model with a single CPU-loadable
+direction/track/uncertainty checkpoint, see [README_universal.md](README_universal.md).
+The nue2-only experiment documented below remains separate and is not compatible
+with the universal model's heads.
+
 This directory contains the current single-model Baikal-GVD pipeline:
 
 - `train_angle_signal.py`: masked set-transformer direction backbone and HDF5 input reader;
