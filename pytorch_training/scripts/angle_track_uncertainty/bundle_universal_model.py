@@ -57,7 +57,8 @@ def main() -> None:
     angle_args = angle["args"]
     track_args = track["args"]
     expected_angle = str(args.angle_checkpoint.resolve())
-    if Path(track_args["init_checkpoint"]).resolve() != Path(expected_angle):
+    angle_source = track_args.get("init_checkpoint", track_args.get("angle_checkpoint"))
+    if angle_source is None or Path(angle_source).resolve() != Path(expected_angle):
         raise ValueError("Track checkpoint was not initialized from the supplied angle checkpoint")
     expected_track = str(args.track_checkpoint.resolve())
     if Path(uncertainty["base_checkpoint"]).resolve() != Path(expected_track):
@@ -104,8 +105,15 @@ def main() -> None:
             key: {level: float(factors[key][level]) for level in ("68", "95")}
             for key in ("angle", "line")
         },
+        "calibration_gt_diagnostic": metrics.get("calibration_gt_from_val"),
         "scope": {
-            "direction": "muatm, nuatm and nue2; all selected events",
+            "direction": (
+                "nuatm and nue2; muatm only if the original MC has exactly one "
+                "simulated track. Multi-muatm and experimental direction quality "
+                "is not validated"
+                if track_args.get("single_muatm_only", False)
+                else "muatm, nuatm and nue2; all selected events"
+            ),
             "track_point_and_uncertainty": (
                 "trained/calibrated only where original MC has exactly one simulated track; "
                 "most muatm events are multi-track and have no validated point target"
