@@ -1,0 +1,43 @@
+{
+  "calibrated_coverage_on_gt_input": {
+    "angle": {
+      "68": 0.7285866294946809,
+      "95": 0.958181516031659
+    },
+    "line": {
+      "68": 0.7122238454650757,
+      "95": 0.957253869946003
+    }
+  },
+  "direction_error_deg": {
+    "q50": 3.390566349029541,
+    "q68": 5.6463193893432635,
+    "q90": 14.5491361618042,
+    "q95": 22.65269184112549
+  },
+  "input": "nue2 GT-signal hits with >=8 hits on >=2 strings",
+  "note": "This is out-of-training-input evaluation of the universal model on the exact GT-hit nue2 test. Its calibration was fitted on all-particle p>=0.70 predicted-signal hits, not on this GT input.",
+  "nue2_specialist_reference": {
+    "direction_error_deg": {
+      "q50": 2.3290414810180664,
+      "q68": 3.982551908493045,
+      "q90": 10.178688049316406,
+      "q95": 15.517829895019531
+    },
+    "transverse_anchor_error_m": {
+      "q50": 4.405778408050537,
+      "q68": 7.238995552062988,
+      "q90": 49.796356201171875,
+      "q95": 133.32305145263672
+    },
+    "universal_better_fraction_anchor": 0.36767277408345345,
+    "universal_better_fraction_angle": 0.29322545520387133
+  },
+  "test_events": 403171,
+  "transverse_anchor_error_m": {
+    "q50": 5.407322883605957,
+    "q68": 8.689868164062501,
+    "q90": 53.08375930786133,
+    "q95": 140.70359802246094
+  }
+}

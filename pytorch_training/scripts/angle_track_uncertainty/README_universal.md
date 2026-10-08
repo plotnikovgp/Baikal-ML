@@ -46,6 +46,17 @@ point error q50/q68 is 5.41/8.66 m. Marginal 68%/95% test coverage is
 particle type (e.g. angle 95% coverage on nue2 is 92.5%), and these MC
 numbers must not be transferred to experimental data without validation.
 
+For a direct comparison on the **same 403,171 nue2 GT-signal test events**,
+`evaluate_universal_nue2_gt.py` checks every event ID against the original
+anchor file and converts hit normalization to the bundle's expected scale.
+The universal model's direction q50/q68 is 3.39°/5.65°, versus 2.33°/3.98°
+for the nue2 specialist. Transverse point q50/q68 is 5.41/8.69 m, versus
+4.41/7.24 m. The universal model wins event by event on 29.3% of angular
+errors and 36.8% of point errors. Thus the universal model remains worse even
+after equalizing the hit source; its validation calibration was fitted on
+predicted-signal hits, so its GT-hit interval coverage is only a domain-shift
+diagnostic, not a new calibration claim.
+
 The current experimental selected-hit file was made with `p >= 0.90`, not
 the training threshold `p >= 0.70`. A five-event CPU schema smoke test passed,
 but that is not a calibration or domain-adaptation result.
