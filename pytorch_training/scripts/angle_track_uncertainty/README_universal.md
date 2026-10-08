@@ -1,7 +1,7 @@
 # Universal direction + track-point + uncertainty model
 
 The current single inference checkpoint is
-`universal_angle_track_uncertainty_v2.pt`. It contains the all-particle
+`universal_angle_track_uncertainty_v3.pt`. It contains the all-particle
 direction backbone, a compatible track-point head, the angular/transverse
 uncertainty head, input normalization, and validation calibration factors. It
 is a CPU-loadable PyTorch `state_dict` bundle without optimizer state. The
@@ -9,7 +9,7 @@ signal/noise hit classifier is **not** part of this file.
 
 On cluster63 the bundle is at:
 
-`/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/universal_angle_track_uncertainty_v2.pt`
+`/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/universal_angle_track_uncertainty_v3.pt`
 
 The model expects the prepared HDF5 format with signal/noise probability
 `p >= 0.70`, at least eight retained hits on at least two strings. The angle
@@ -24,7 +24,7 @@ Run a ten-event CPU smoke test on cluster63:
 ```bash
 CUDA_VISIBLE_DEVICES= /home/plotnikovgp/tmp/ENTER/bin/python3.11 \
   /home/plotnikovgp/tmp/angle_reconstruction/track_anchor/infer_unified_model.py \
-  --checkpoint /home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/universal_angle_track_uncertainty_v2.pt \
+  --checkpoint /home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/universal_angle_track_uncertainty_v3.pt \
   --data /home/plotnikovgp/tmp/angle_reconstruction/data/baikal_2020_all_predsignal_p070_2s8h.h5 \
   --split test --max-events 10 --batch-size 10 --threads 4 \
   --output /home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/my_predictions.csv
@@ -41,10 +41,10 @@ which the point prediction has not been validated against a unique true line.
 
 The clean predicted-hit MC test contains 27,038 events after cross-dataset
 leakage exclusion and removal of multi-track `muatm`. Direction q50/q68 is
-2.80°/4.85°; transverse point error q50/q68 is 3.72/5.67 m. Marginal
-68%/95% test coverage is 66.8%/93.7% for angle and 65.5%/92.7% for the
+2.77°/4.79°; transverse point error q50/q68 is 3.59/5.54 m. Marginal
+68%/95% test coverage is 66.0%/93.7% for angle and 65.8%/92.8% for the
 point. On the independent 307,913-event GT-hit `nue2` test, coverage is
-68.2%/95.1% for angle and 67.9%/94.5% for the point. Intervals are
+68.2%/95.1% for angle and 68.0%/94.6% for the point. Intervals are
 validation-calibrated separately in the predicted-hit and GT-hit domains;
 the CPU bundle uses the **predicted-hit** calibration. The high-uncertainty
 tail is under-covered on predicted hits, so marginal coverage is not a
@@ -72,12 +72,16 @@ predicted-hit validation/test masks also exclude GT train events already seen
 by the nue2 specialist initializer. Full multi-muatm metrics are reported
 separately as an out-of-scope diagnostic.
 
-## Single-track-muatm universal model (v2)
+## Single-track-muatm universal model (v3)
 
 The selected direction/point checkpoint is on cluster63 at
-`/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/single_mu_supervised_strict_3k/best.pt`.
+`/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/continue_10k_same_lr/best.pt`.
 It is one SetTransformer model, initialized from the nue2 specialist and
-fine-tuned on all three particle types. No teacher or ensemble is used at
+fine-tuned on all three particle types. The earlier v2 model was continued
+for 10,000 extra steps at the original learning rate and at half that rate.
+The original learning rate won by the predeclared validation score (6.875
+versus 6.889); its best checkpoint was at extra step 9,500. No teacher or
+ensemble is used at
 inference. The hit input is converted to the **GT signal-file normalization**
 even when the hits came from the signal/noise network. `muatm` training events
 are retained only if the original MC has one simulated muon track and a valid
@@ -87,10 +91,11 @@ The checkpoint was selected solely on validation. The independent test uses
 `masks_v2.npz`: predicted-hit test excludes events seen by the specialist's
 GT training; GT nue2 test excludes events seen by the original universal
 predicted-hit training. Both comparisons below evaluate exactly the same
-events and hit inputs for all three models.
+events and hit inputs for all models.
 
 | Model | Predicted-hit angle q50/q68 (27,038) | Single-muatm q68 (3,437) | Predicted-hit nue2 q68 (9,463) | GT nue2 angle q50/q68 (307,913) | GT nue2 line q68 |
 | --- | --- | --- | --- | --- | --- |
+| Universal v3, longer training | 2.77° / 4.79° | 10.09° | 5.83° | 2.41° / 4.09° | 6.81 m |
 | Universal v2 | 2.80° / 4.85° | 11.06° | 5.87° | 2.43° / 4.14° | 6.99 m |
 | Original universal | 3.21° / 5.49° | 11.54° | 7.81° | 3.44° / 5.73° | 8.68 m |
 | Original nue2 specialist | 3.06° / 5.99° | 50.91° | 5.82° | 2.37° / 4.04° | 7.22 m |
@@ -101,11 +106,11 @@ experimental resolution/coverage remain unvalidated; the table must not be
 read as a performance claim for all muatm events. The older v1 bundle remains
 available at `runs/universal_predsignal_bundle_v1/` for comparison only.
 
-`train_mixed_uncertainty.py` freezes the selected v2 direction/point model and
+`train_mixed_uncertainty.py` freezes the selected v3 direction/point model and
 trains a Student-t uncertainty head for angular and transverse line errors.
 Disjoint clean validation halves select the head and calibrate its 68%/95%
 radii. The selected head is
-`runs/mixed_universal/uncertainty_student_continued_v3/best.pt`; its metrics
+`runs/mixed_universal/uncertainty_continue10k_low_lr/best.pt`; its metrics
 and independent-test per-event predictions are in the same directory. The
 single bundled checkpoint above embeds both heads and predicted-hit
 calibration. `plot_mixed_uncertainty.py` produces angular/line reliability,
@@ -121,6 +126,6 @@ The preparation/training pipeline is in `build_all_track_anchor_targets.py`,
 `train_track_anchor_v3.py`, `make_leak_free_masks.py`,
 `train_mixed_universal.py`, and `train_mixed_uncertainty.py`. The bundle is
 produced by `bundle_universal_model.py`; `infer_unified_model.py` performs
-standalone CPU inference. A 16-event CPU-only smoke test of the v2 bundle
+standalone CPU inference. A 16-event CPU-only smoke test of the v3 bundle
 succeeded. Training source checkpoints and full test metrics remain under
 `/home/plotnikovgp/tmp/angle_reconstruction/` on cluster63.
