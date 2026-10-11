@@ -29,6 +29,47 @@ from train_track_anchor_v3 import BatchedTrackDataset, DirectionTrackAnchor, poi
 from train_track_uncertainty_v2 import residuals
 
 
+def thin_predicted_hits(
+    x: torch.Tensor,
+    mask: torch.Tensor,
+    probabilities: torch.Tensor,
+    direction: torch.Tensor,
+    point: torch.Tensor,
+    valid: torch.Tensor,
+    original_centroid_m: torch.Tensor,
+    mean: torch.Tensor,
+    std: torch.Tensor,
+    probability: float,
+    threshold_min: float,
+    threshold_max: float,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Vary the signal threshold while preserving the true physical track line."""
+    if not len(x) or probability <= 0:
+        return x, mask, point
+    apply = torch.rand(len(x)) < probability
+    thresholds = torch.empty(len(x)).uniform_(threshold_min, threshold_max)
+    candidate = mask & (probabilities >= thresholds[:, None])
+    # Keep the original cut: at least eight hits on at least two strings.
+    enough_hits = candidate.sum(dim=1) >= 8
+    positions_m = x[..., 2:5] * std[2:5] + mean[2:5]
+    first_index = candidate.int().argmax(dim=1)
+    first_xy = positions_m[torch.arange(len(x)), first_index, :2]
+    distinct_string = (
+        (torch.linalg.vector_norm(positions_m[..., :2] - first_xy[:, None], dim=-1) > 1.0)
+        & candidate
+    ).any(dim=1)
+    apply &= enough_hits & distinct_string
+    new_mask = torch.where(apply[:, None], candidate, mask)
+    changed = apply & (new_mask != mask).any(dim=1) & valid
+    if changed.any():
+        count = new_mask.sum(dim=1).clamp_min(1)[:, None]
+        new_centroid_m = (positions_m * new_mask[..., None]).sum(dim=1) / count
+        rebased = point + original_centroid_m - new_centroid_m
+        rebased -= direction * (rebased * direction).sum(dim=1, keepdim=True)
+        point = torch.where(changed[:, None], rebased, point)
+    return x * new_mask[..., None], new_mask, point
+
+
 class AdaptedTrackDataset(BatchedTrackDataset):
     def __init__(
         self,
@@ -37,11 +78,21 @@ class AdaptedTrackDataset(BatchedTrackDataset):
         expected_mean,
         expected_std,
         single_muatm_only: bool = False,
+        pred_thinning_prob: float = 0.0,
+        pred_threshold_min: float = 0.70,
+        pred_threshold_max: float = 0.90,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
         self.keep = keep
         self.single_muatm_only = single_muatm_only
+        self.pred_thinning_prob = pred_thinning_prob
+        self.pred_threshold_min = pred_threshold_min
+        self.pred_threshold_max = pred_threshold_max
+        if pred_thinning_prob > 0:
+            with h5py.File(self.path, "r") as h5:
+                if f"{self.split}/signal_probability/data" not in h5:
+                    raise ValueError("Predicted-hit thinning requires signal_probability/data")
         if keep is not None and len(keep) < self.n_events:
             raise ValueError(f"Selection mask too short for {self.split}")
         self.source_mean = torch.tensor(self.target_mean, dtype=torch.float32)
@@ -53,15 +104,52 @@ class AdaptedTrackDataset(BatchedTrackDataset):
         x, direction, mask, particle, point, valid = super().__getitem__(batch_index)
         x = (x * self.source_std + self.source_mean - self.expected_mean) / self.expected_std
         x = x * mask.unsqueeze(-1)
+        event_start = batch_index * self.events_per_batch
+        event_end = event_start + len(x)
         selection = torch.ones(len(x), dtype=torch.bool)
         if self.keep is not None:
-            begin = batch_index * self.events_per_batch
-            selection &= torch.from_numpy(self.keep[begin : begin + len(x)].copy())
+            selection &= torch.from_numpy(self.keep[event_start:event_end].copy())
         if self.single_muatm_only:
             selection &= (particle != 0) | valid
+        if self.pred_thinning_prob > 0 and selection.any():
+            starts = np.asarray(
+                self.h5[f"{self.split}/ev_starts/data"][event_start : event_end + 1],
+                dtype=np.int64,
+            )
+            flat_prob = np.asarray(
+                self.h5[f"{self.split}/signal_probability/data"][starts[0] : starts[-1]],
+                dtype=np.float32,
+            )
+            prob = np.zeros(mask.shape, dtype=np.float32)
+            for i, length in enumerate(mask.sum(dim=1).tolist()):
+                prob[i, :length] = flat_prob[starts[i] - starts[0] : starts[i] - starts[0] + length]
+            original_centroid_m = torch.from_numpy(
+                np.asarray(
+                    self.anchor_h5[f"{self.split}/hit_centroid_m"][event_start:event_end],
+                    dtype=np.float32,
+                )
+            )
         if not torch.all(selection):
             x, direction, mask, particle, point, valid = (
                 value[selection] for value in (x, direction, mask, particle, point, valid)
+            )
+            if self.pred_thinning_prob > 0 and selection.any():
+                prob = prob[selection]
+                original_centroid_m = original_centroid_m[selection]
+        if self.pred_thinning_prob > 0 and len(x):
+            x, mask, point = thin_predicted_hits(
+                x,
+                mask,
+                torch.from_numpy(prob),
+                direction,
+                point,
+                valid,
+                original_centroid_m,
+                self.expected_mean,
+                self.expected_std,
+                self.pred_thinning_prob,
+                self.pred_threshold_min,
+                self.pred_threshold_max,
             )
         return x, direction, mask, particle, point, valid
 
@@ -93,7 +181,7 @@ def validation_score(result: dict, pred_weight: float, muatm_weight: float) -> f
 
 
 @torch.inference_mode()
-def evaluate(model: nn.Module, loader, device: torch.device) -> dict:
+def evaluate(model: nn.Module, loader, device: torch.device, *, return_arrays: bool = False):
     model.eval()
     chunks = {name: [] for name in ("angle", "line", "valid", "particle")}
     for x, target_dir, mask, particle, target_point, valid in loader:
@@ -128,7 +216,7 @@ def evaluate(model: nn.Module, loader, device: torch.device) -> dict:
             }
             if track.any():
                 result[name]["line_m"] = quantiles(pred["line"][track])
-    return result
+    return (result, pred) if return_arrays else result
 
 
 def model_from_checkpoints(angle_path: Path, track_path: Path, scale: float, device):
@@ -177,6 +265,9 @@ def main() -> None:
     parser.add_argument("--pred-score-weight", type=float, default=0.0)
     parser.add_argument("--muatm-score-weight", type=float, default=0.0)
     parser.add_argument("--single-muatm-only", action="store_true")
+    parser.add_argument("--pred-thinning-prob", type=float, default=0.0)
+    parser.add_argument("--pred-threshold-min", type=float, default=0.70)
+    parser.add_argument("--pred-threshold-max", type=float, default=0.90)
     parser.add_argument("--anchor-scale-m", type=float, default=50.0)
     parser.add_argument("--seed", type=int, default=91)
     parser.add_argument("--eval-only", action="store_true")
@@ -185,6 +276,10 @@ def main() -> None:
     args = parser.parse_args()
     if not 0 <= args.gt_weight <= 1:
         raise ValueError("gt-weight must be between 0 and 1")
+    if not 0 <= args.pred_thinning_prob <= 1:
+        raise ValueError("pred-thinning-prob must be between 0 and 1")
+    if not 0.70 <= args.pred_threshold_min <= args.pred_threshold_max <= 1:
+        raise ValueError("Invalid predicted-hit threshold interval")
     args.output_dir.mkdir(parents=True, exist_ok=True)
     (args.output_dir / "config.json").write_text(
         json.dumps(vars(args), indent=2, default=str) + "\n"
@@ -234,7 +329,7 @@ def main() -> None:
     # first contiguous block of its event ordering.
     gt_val_small = gt_masks["gt_val"] & (np.arange(len(gt_masks["gt_val"])) % 6 == 0)
 
-    def dataset(path, anchors, split, keep=None, single_muatm_only=False):
+    def dataset(path, anchors, split, keep=None, single_muatm_only=False, pred_thinning_prob=0.0):
         return AdaptedTrackDataset(
             str(path),
             split,
@@ -248,6 +343,9 @@ def main() -> None:
             expected_mean=expected_mean,
             expected_std=expected_std,
             single_muatm_only=single_muatm_only,
+            pred_thinning_prob=pred_thinning_prob,
+            pred_threshold_min=args.pred_threshold_min,
+            pred_threshold_max=args.pred_threshold_max,
         )
 
     if args.eval_only:
@@ -268,16 +366,23 @@ def main() -> None:
         gt_eval = make_loader(
             dataset(args.gt_data, args.gt_anchors, split, selection), args.workers, False, args.seed
         )
-        result = {
-            f"pred_{split}": evaluate(model, pred_eval, device),
-            f"gt_{split}_clean": evaluate(model, gt_eval, device),
-        }
+        pred_result, pred_rows = evaluate(model, pred_eval, device, return_arrays=True)
+        gt_result, gt_rows = evaluate(model, gt_eval, device, return_arrays=True)
+        result = {f"pred_{split}": pred_result, f"gt_{split}_clean": gt_result}
         if args.single_muatm_only or pred_masks[split] is not None:
             pred_full = make_loader(
                 dataset(args.pred_data, args.pred_anchors, split), args.workers, False, args.seed
             )
             result[f"pred_{split}_full_diagnostic"] = evaluate(model, pred_full, device)
         (args.output_dir / "eval.json").write_text(json.dumps(result, indent=2) + "\n")
+        if split == "test":
+            np.savez_compressed(
+                args.output_dir / "test_residuals.npz",
+                pred_angle=pred_rows["angle"],
+                pred_line=pred_rows["line"],
+                gt_angle=gt_rows["angle"],
+                gt_line=gt_rows["line"],
+            )
         print(json.dumps(result, indent=2), flush=True)
         return
 
@@ -300,7 +405,11 @@ def main() -> None:
     pred_train = infinite_batches(
         make_loader(
             dataset(
-                args.pred_data, args.pred_anchors, "train", single_muatm_only=args.single_muatm_only
+                args.pred_data,
+                args.pred_anchors,
+                "train",
+                single_muatm_only=args.single_muatm_only,
+                pred_thinning_prob=args.pred_thinning_prob,
             ),
             args.workers,
             True,

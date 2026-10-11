@@ -46,6 +46,10 @@ def main() -> None:
     parser.add_argument("--metrics", type=Path, required=True)
     parser.add_argument("--data", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--hit-selection-description",
+        default="signal-noise p>=0.70; >=8 selected hits on >=2 strings",
+    )
     args = parser.parse_args()
     if args.output.exists():
         raise FileExistsError(f"Refusing to overwrite {args.output}")
@@ -99,7 +103,7 @@ def main() -> None:
             "input_norm_std": std,
             "max_seq_len": int(track_args["max_seq_len"]),
             "center_time": bool(angle_args.get("center_time", False)),
-            "hit_selection": "signal-noise p>=0.70; >=8 selected hits on >=2 strings",
+            "hit_selection": args.hit_selection_description,
         },
         "calibration": {
             key: {level: float(factors[key][level]) for level in ("68", "95")}
@@ -122,6 +126,10 @@ def main() -> None:
             "anchor_definition": (
                 "point on truth line closest to the centroid of all retained hits"
             ),
+            "uncertainty_calibration": (
+                "validation-calibrated on predicted-signal MC with p>=0.70; "
+                "p>=0.90 and experimental coverage are not validated"
+            ),
         },
         "test_metrics": metrics.get("test", {}),
         "provenance": {
@@ -129,6 +137,11 @@ def main() -> None:
             "track_checkpoint_sha256": sha256(args.track_checkpoint),
             "uncertainty_checkpoint_sha256": sha256(args.uncertainty_checkpoint),
             "uncertainty_step": int(uncertainty["step"]),
+            "predicted_hit_threshold_augmentation": {
+                "probability": float(track_args.get("pred_thinning_prob", 0.0)),
+                "minimum": float(track_args.get("pred_threshold_min", 0.70)),
+                "maximum": float(track_args.get("pred_threshold_max", 0.70)),
+            },
         },
     }
     torch.save(payload, args.output)
