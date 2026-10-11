@@ -216,6 +216,39 @@ under-covered. The bundle at the top of this README embeds this new head;
 the old v3 bundle is retained for comparison. Uncertainty radii at p>=0.90
 or on experimental events have **not** been calibrated.
 
+## Controlled continuation after v4
+
+The stochastic-threshold augmentation did not make individual experimental
+events invariant to the selected-hit threshold. On the same 2,126 experiment
+test IDs, changing p>=0.70 to p>=0.90 changes v4 direction by median/q68
+4.570°/7.323°, versus 4.498°/7.200° for v3. This is a useful limit on
+what the v4 MC improvement implies.
+
+Two further 3,000-step runs started from v4 with identical learning rates,
+seeds, and data: one always tried p>=0.90 on predicted-hit training batches
+(falling back to p>=0.70 when the 2s8h cut failed), the other used no new
+threshold augmentation. Both selected step 1,000 on validation. They are
+saved as `continue_v4_fixed_p090_3k` and `continue_v4_noaug_3k`, but neither
+replaces v4:
+
+| Unique-ID independent test q68 | v4 | Fixed-p090 continuation | No-new-augmentation continuation |
+| --- | ---: | ---: | ---: |
+| Predicted-hit direction [deg] | 4.782 | 4.773 | 4.794 |
+| Predicted-hit transverse line [m] | 5.212 | 5.238 | 5.203 |
+| GT nue2 direction [deg] | 4.194 | 4.178 | 4.172 |
+| GT nue2 transverse line [m] | 5.518 | 5.629 | 5.542 |
+
+For predicted-hit direction, the paired-bootstrap 95% intervals for the
+change relative to v4 both cross zero (fixed-p090 [-0.035°, +0.018°],
+no-new-augmentation [-0.010°, +0.043°]). The fixed-p090 run clearly
+damages the point target: GT nue2 transverse-line q68 rises by 0.111 m,
+95% interval [+0.099, +0.122] m. On the same 10,835 p>=0.90 muatm MC IDs,
+direction q68 is 9.221° for v4, 9.186° for fixed-p090, and 9.167° for
+no-new-augmentation; neither continuation's paired-bootstrap improvement
+excludes zero. Experiment-vs-MC hit/string-matched theta Wasserstein-1 is
+2.022°, 2.012°, and 2.009° respectively, also nearly unchanged. This is
+why the v4 all-heads bundle remains the selected model.
+
 The preparation/training pipeline is in `build_all_track_anchor_targets.py`,
 `train_track_anchor_v3.py`, `make_leak_free_masks.py`,
 `train_mixed_universal.py`, and `train_mixed_uncertainty.py`. The bundle is
