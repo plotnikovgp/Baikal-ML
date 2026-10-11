@@ -1,0 +1,178 @@
+[
+  {
+    "particle": "nuatm",
+    "threshold": 0.7,
+    "selected_unique_events": 4175,
+    "common_p090_events": 1580,
+    "selected_angle_q50_deg": 2.133105221285364,
+    "selected_angle_q68_deg": 3.472819940970304,
+    "selected_line_q50_m": 2.8641249377238256,
+    "selected_line_q68_m": 4.1279798870363695,
+    "common_angle_q50_deg": 1.6028069257736206,
+    "common_angle_q68_deg": 2.526424083709717,
+    "common_line_q50_m": 2.648385763168335,
+    "common_line_q68_m": 3.641694316864014,
+    "common_angle_q68_delta_ci95_deg": [
+      0.0,
+      0.0
+    ],
+    "common_line_q68_delta_ci95_m": [
+      0.0,
+      0.0
+    ]
+  },
+  {
+    "particle": "nuatm",
+    "threshold": 0.75,
+    "selected_unique_events": 3650,
+    "common_p090_events": 1580,
+    "selected_angle_q50_deg": 2.075380249749163,
+    "selected_angle_q68_deg": 3.352942760272909,
+    "selected_line_q50_m": 2.8180081020771297,
+    "selected_line_q68_m": 4.081528521386539,
+    "common_angle_q50_deg": 1.6466400623321533,
+    "common_angle_q68_deg": 2.585443449020386,
+    "common_line_q50_m": 2.6465940475463867,
+    "common_line_q68_m": 3.6356288528442384,
+    "common_angle_q68_delta_ci95_deg": [
+      -0.004919758319854536,
+      0.11065951585769686
+    ],
+    "common_line_q68_delta_ci95_m": [
+      -0.07090356898307817,
+      0.056910854101181116
+    ]
+  },
+  {
+    "particle": "nuatm",
+    "threshold": 0.8,
+    "selected_unique_events": 3095,
+    "common_p090_events": 1580,
+    "selected_angle_q50_deg": 2.03647433922115,
+    "selected_angle_q68_deg": 3.217890584377764,
+    "selected_line_q50_m": 2.799796220085635,
+    "selected_line_q68_m": 4.020413621439235,
+    "common_angle_q50_deg": 1.725985050201416,
+    "common_angle_q68_deg": 2.671777582168579,
+    "common_line_q50_m": 2.6566977500915527,
+    "common_line_q68_m": 3.737690114974976,
+    "common_angle_q68_delta_ci95_deg": [
+      0.04417662572860735,
+      0.22240365815162666
+    ],
+    "common_line_q68_delta_ci95_m": [
+      0.0011455798149110608,
+      0.20453769683837922
+    ]
+  },
+  {
+    "particle": "nuatm",
+    "threshold": 0.9,
+    "selected_unique_events": 1580,
+    "common_p090_events": 1580,
+    "selected_angle_q50_deg": 1.860243212473652,
+    "selected_angle_q68_deg": 2.882061091771532,
+    "selected_line_q50_m": 2.864129485553237,
+    "selected_line_q68_m": 3.889094483818655,
+    "common_angle_q50_deg": 1.860243320465088,
+    "common_angle_q68_deg": 2.88206111907959,
+    "common_line_q50_m": 2.8641295433044434,
+    "common_line_q68_m": 3.889094533920288,
+    "common_angle_q68_delta_ci95_deg": [
+      0.243358255624771,
+      0.5011914114952085
+    ],
+    "common_line_q68_delta_ci95_m": [
+      0.07338680052757245,
+      0.33909597420692394
+    ]
+  },
+  {
+    "particle": "nue2",
+    "threshold": 0.7,
+    "selected_unique_events": 5436,
+    "common_p090_events": 3667,
+    "selected_angle_q50_deg": 2.66129055615498,
+    "selected_angle_q68_deg": 4.619874804943805,
+    "selected_line_q50_m": 4.502090294393568,
+    "selected_line_q68_m": 7.871562130008477,
+    "common_angle_q50_deg": 2.107971429824829,
+    "common_angle_q68_deg": 3.576695137023926,
+    "common_line_q50_m": 4.218262195587158,
+    "common_line_q68_m": 7.33622226715088,
+    "common_angle_q68_delta_ci95_deg": [
+      0.0,
+      0.0
+    ],
+    "common_line_q68_delta_ci95_m": [
+      0.0,
+      0.0
+    ]
+  },
+  {
+    "particle": "nue2",
+    "threshold": 0.75,
+    "selected_unique_events": 5208,
+    "common_p090_events": 3667,
+    "selected_angle_q50_deg": 2.7190426938628907,
+    "selected_angle_q68_deg": 4.757023941067704,
+    "selected_line_q50_m": 4.605497996712498,
+    "selected_line_q68_m": 7.991100120697751,
+    "common_angle_q50_deg": 2.174251079559326,
+    "common_angle_q68_deg": 3.697267646789551,
+    "common_line_q50_m": 4.262744903564453,
+    "common_line_q68_m": 7.432140998840333,
+    "common_angle_q68_delta_ci95_deg": [
+      0.04123944139480603,
+      0.20621102404594424
+    ],
+    "common_line_q68_delta_ci95_m": [
+      -0.07894408655166665,
+      0.29198006391525383
+    ]
+  },
+  {
+    "particle": "nue2",
+    "threshold": 0.8,
+    "selected_unique_events": 4891,
+    "common_p090_events": 3667,
+    "selected_angle_q50_deg": 2.8189267906466675,
+    "selected_angle_q68_deg": 4.939294270017176,
+    "selected_line_q50_m": 4.642005978564747,
+    "selected_line_q68_m": 8.049604892591622,
+    "common_angle_q50_deg": 2.333059310913086,
+    "common_angle_q68_deg": 3.938853073120118,
+    "common_line_q50_m": 4.387004375457764,
+    "common_line_q68_m": 7.588447818756104,
+    "common_angle_q68_delta_ci95_deg": [
+      0.2518649902343746,
+      0.49790877509117193
+    ],
+    "common_line_q68_delta_ci95_m": [
+      0.03524824666976983,
+      0.5517587542533864
+    ]
+  },
+  {
+    "particle": "nue2",
+    "threshold": 0.9,
+    "selected_unique_events": 3667,
+    "common_p090_events": 3667,
+    "selected_angle_q50_deg": 3.1203170853693862,
+    "selected_angle_q68_deg": 5.627041751001703,
+    "selected_line_q50_m": 4.985914048977982,
+    "selected_line_q68_m": 8.71563839263167,
+    "common_angle_q50_deg": 3.120316982269287,
+    "common_angle_q68_deg": 5.627041759490967,
+    "common_line_q50_m": 4.98591423034668,
+    "common_line_q68_m": 8.71563846588135,
+    "common_angle_q68_delta_ci95_deg": [
+      1.7995825960636138,
+      2.2286118981838223
+    ],
+    "common_line_q68_delta_ci95_m": [
+      1.0566724348068237,
+      1.941316179275511
+    ]
+  }
+]

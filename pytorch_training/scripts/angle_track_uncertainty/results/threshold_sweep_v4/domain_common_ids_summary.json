@@ -1,0 +1,67 @@
+[
+  {
+    "threshold": 0.7,
+    "exp_common_events": 2126,
+    "mc_common_events": 10835,
+    "theta_w1_unweighted_deg": 3.9156949090616697,
+    "theta_w1_hit_string_matched_deg": 2.9369271889943582,
+    "matching_effective_mc_events": 9515.073641082767,
+    "exp_outside_mc_support_fraction": 0.0,
+    "theta_w1_delta_vs_p070_ci95_deg": [
+      0.0,
+      0.0
+    ]
+  },
+  {
+    "threshold": 0.75,
+    "exp_common_events": 2126,
+    "mc_common_events": 10835,
+    "theta_w1_unweighted_deg": 3.9196136682492986,
+    "theta_w1_hit_string_matched_deg": 2.666832266813114,
+    "matching_effective_mc_events": 9591.566647671423,
+    "exp_outside_mc_support_fraction": 0.0,
+    "theta_w1_delta_vs_p070_ci95_deg": [
+      -0.5000473282338774,
+      -0.04573023871145414
+    ]
+  },
+  {
+    "threshold": 0.8,
+    "exp_common_events": 2126,
+    "mc_common_events": 10835,
+    "theta_w1_unweighted_deg": 3.8930981697632028,
+    "theta_w1_hit_string_matched_deg": 2.3359898566656785,
+    "matching_effective_mc_events": 9713.047624257195,
+    "exp_outside_mc_support_fraction": 0.0,
+    "theta_w1_delta_vs_p070_ci95_deg": [
+      -0.9097844103841632,
+      -0.29534861484354696
+    ]
+  },
+  {
+    "threshold": 0.85,
+    "exp_common_events": 2126,
+    "mc_common_events": 10835,
+    "theta_w1_unweighted_deg": 3.881967040168112,
+    "theta_w1_hit_string_matched_deg": 1.9134340853759972,
+    "matching_effective_mc_events": 9713.250901526924,
+    "exp_outside_mc_support_fraction": 0.0,
+    "theta_w1_delta_vs_p070_ci95_deg": [
+      -1.3912894961878868,
+      -0.6204329385478186
+    ]
+  },
+  {
+    "threshold": 0.9,
+    "exp_common_events": 2126,
+    "mc_common_events": 10835,
+    "theta_w1_unweighted_deg": 3.9176633531600276,
+    "theta_w1_hit_string_matched_deg": 2.022240499253666,
+    "matching_effective_mc_events": 9681.556224655324,
+    "exp_outside_mc_support_fraction": 0.0,
+    "theta_w1_delta_vs_p070_ci95_deg": [
+      -1.3736299349865608,
+      -0.5006079182115323
+    ]
+  }
+]

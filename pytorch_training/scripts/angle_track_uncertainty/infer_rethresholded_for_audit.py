@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+"""Audit a bundled direction/point model after rethresholding prepared p>=0.70 hits.
+
+The HDF5 must contain per-hit signal probabilities and channel IDs. Events
+that fail the post-threshold two-string/eight-hit cut are omitted. Uncertainty
+columns are intentionally absent because calibration is threshold-specific.
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+from pathlib import Path
+
+import h5py
+import numpy as np
+import torch
+from bundle_universal_model import build_model
+
+FIELDS = (
+    "event_id",
+    "source_event_index",
+    "n_hits",
+    "n_strings",
+    "theta_deg",
+    "phi_deg",
+    "direction_x",
+    "direction_y",
+    "direction_z",
+    "anchor_x_m",
+    "anchor_y_m",
+    "anchor_z_m",
+)
+
+
+def selected_batch(
+    group: h5py.Group,
+    begin: int,
+    end: int,
+    threshold: float,
+    prep: dict,
+    stored_mean: np.ndarray,
+    stored_std: np.ndarray,
+    channels_per_string: int,
+    sample_start_event: int,
+    event_stride: int,
+):
+    starts = np.asarray(group["ev_starts/data"][begin : end + 1], dtype=np.int64)
+    first, last = int(starts[0]), int(starts[-1])
+    features = np.asarray(group["data/data"][first:last], dtype=np.float32)
+    probabilities = np.asarray(group["signal_probability/data"][first:last], dtype=np.float32)
+    channels = np.asarray(group["channels/data"][first:last], dtype=np.int32)
+    ids = np.asarray(group["ev_ids/data"][begin:end])
+    expected_mean = np.asarray(prep["input_norm_mean"], dtype=np.float32)
+    expected_std = np.asarray(prep["input_norm_std"], dtype=np.float32)
+    max_len = int(prep["max_seq_len"])
+
+    kept = []
+    for i, event_id in enumerate(ids):
+        if (begin + i - sample_start_event) % event_stride:
+            continue
+        lo, hi = int(starts[i] - first), int(starts[i + 1] - first)
+        choose = probabilities[lo:hi] >= threshold
+        hit_count = int(choose.sum())
+        if hit_count < 8:
+            continue
+        event_channels = channels[lo:hi][choose]
+        n_strings = len(np.unique(event_channels // channels_per_string))
+        if n_strings < 2:
+            continue
+        selected = features[lo:hi][choose]
+        center_m = (selected[:, 2:5] * stored_std[2:5] + stored_mean[2:5]).mean(0)
+        normalized = (selected[:max_len] * stored_std + stored_mean - expected_mean) / expected_std
+        if prep["center_time"]:
+            normalized[:, 1] -= normalized[:, 1].mean()
+        kept.append(
+            (
+                event_id.decode() if isinstance(event_id, bytes) else str(event_id),
+                begin + i,
+                hit_count,
+                n_strings,
+                center_m,
+                normalized,
+            )
+        )
+    if not kept:
+        return [], None, None
+    max_used = max(len(row[5]) for row in kept)
+    x = np.zeros((len(kept), max_used, 5), dtype=np.float32)
+    mask = np.zeros((len(kept), max_used), dtype=bool)
+    for i, row in enumerate(kept):
+        used = len(row[5])
+        x[i, :used] = row[5]
+        mask[i, :used] = True
+    return kept, x, mask
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--bundle", type=Path, required=True)
+    parser.add_argument("--data", type=Path, required=True)
+    parser.add_argument("--split", default="test")
+    parser.add_argument("--threshold", type=float, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--batch-size", type=int, default=256)
+    parser.add_argument("--start-event", type=int, default=0)
+    parser.add_argument("--max-events", type=int, default=None)
+    parser.add_argument("--event-stride", type=int, default=1)
+    parser.add_argument("--threads", type=int, default=4)
+    parser.add_argument("--channels-per-string", type=int, default=36)
+    args = parser.parse_args()
+    if args.output.exists():
+        raise FileExistsError(f"Refusing to overwrite {args.output}")
+    if not 0.70 <= args.threshold <= 1:
+        raise ValueError("Threshold must be between 0.70 and 1.00")
+    if args.batch_size < 1 or args.threads < 1 or args.channels_per_string < 1:
+        raise ValueError("Batch size, threads, and channels per string must be positive")
+    if args.start_event < 0 or (args.max_events is not None and args.max_events < 1):
+        raise ValueError("Start event must be nonnegative and max events positive")
+    if args.event_stride < 1:
+        raise ValueError("Event stride must be positive")
+    torch.set_num_threads(args.threads)
+    bundle = torch.load(args.bundle, map_location="cpu", weights_only=True)
+    full_model = build_model(bundle["model_config"])
+    full_model.load_state_dict(bundle["state_dict"], strict=True)
+    model = full_model.base.eval()
+    prep = bundle["preprocessing"]
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+
+    kept_total = 0
+    with h5py.File(args.data, "r") as h5, args.output.open("w", newline="") as stream:
+        group = h5[args.split]
+        for key in ("signal_probability/data", "channels/data"):
+            if key not in group:
+                raise KeyError(f"Missing {args.split}/{key} in {args.data}")
+        stored_mean = np.asarray(h5["norm_param/mean"], dtype=np.float32)
+        stored_std = np.asarray(h5["norm_param/std"], dtype=np.float32)
+        total = len(group["ev_starts/data"]) - 1
+        if args.start_event >= total:
+            raise ValueError(f"Start event {args.start_event} is outside {total} events")
+        end_event = (
+            total if args.max_events is None else min(total, args.start_event + args.max_events)
+        )
+        writer = csv.DictWriter(stream, fieldnames=FIELDS)
+        writer.writeheader()
+        for begin in range(args.start_event, end_event, args.batch_size):
+            end = min(begin + args.batch_size, end_event)
+            kept, x, mask = selected_batch(
+                group,
+                begin,
+                end,
+                args.threshold,
+                prep,
+                stored_mean,
+                stored_std,
+                args.channels_per_string,
+                args.start_event,
+                args.event_stride,
+            )
+            if not kept:
+                continue
+            with torch.inference_mode():
+                direction, offset = model(torch.from_numpy(x), torch.from_numpy(mask))
+            direction = direction.numpy()
+            offset = offset.numpy()
+            theta = np.rad2deg(np.arccos(np.clip(direction[:, 2], -1, 1)))
+            phi = np.mod(np.rad2deg(np.arctan2(direction[:, 1], direction[:, 0])), 360)
+            for i, row in enumerate(kept):
+                anchor = row[4] + offset[i]
+                writer.writerow(
+                    {
+                        "event_id": row[0],
+                        "source_event_index": row[1],
+                        "n_hits": row[2],
+                        "n_strings": row[3],
+                        "theta_deg": float(theta[i]),
+                        "phi_deg": float(phi[i]),
+                        "direction_x": float(direction[i, 0]),
+                        "direction_y": float(direction[i, 1]),
+                        "direction_z": float(direction[i, 2]),
+                        "anchor_x_m": float(anchor[0]),
+                        "anchor_y_m": float(anchor[1]),
+                        "anchor_z_m": float(anchor[2]),
+                    }
+                )
+            kept_total += len(kept)
+    print(
+        json.dumps(
+            {
+                "output": str(args.output),
+                "threshold": args.threshold,
+                "source_events": end_event - args.start_event,
+                "source_event_offset": args.start_event,
+                "event_stride": args.event_stride,
+                "kept_events": kept_total,
+            }
+        )
+    )
+
+
+if __name__ == "__main__":
+    main()

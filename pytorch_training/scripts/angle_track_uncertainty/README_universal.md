@@ -256,3 +256,75 @@ produced by `bundle_universal_model.py`; `infer_unified_model.py` performs
 standalone CPU inference. A 16-event CPU-only smoke test of the v4 bundle
 succeeded. Training source checkpoints and full test metrics remain under
 `/home/plotnikovgp/tmp/angle_reconstruction/` on cluster63.
+
+## Paired hit-threshold audit of v4
+
+`infer_rethresholded_for_audit.py` reapplies a signal-probability threshold
+to the same prepared p>=0.70 hits, recomputes the two-string/eight-hit cut
+and hit centroid, and runs the selected v4 direction/point backbone. The
+signal/noise checkpoint itself is unchanged. On the experimental test split,
+the first 100 source rows at p>=0.90 reproduce all 46 retained rows and
+every direction/point field of the separately prepared p>=0.90 file exactly.
+The full muatm validation CSV reproduces its 11,267 rows in the same order;
+the largest floating-point difference is 0.000031 degrees in phi and
+0.000008 m in anchor coordinates. The p>=0.70 baseline also reproduces the
+earlier 25,054-unique-ID muatm q68 of 10.629 degrees and matched theta W1
+of 3.007 degrees.
+
+The following comparison holds the **same** 10,835 muatm MC IDs and 2,126
+experimental IDs at every threshold. MC truth direction is `prime_prty`,
+which is ambiguous for multi-track muatm. `Line q68` uses only the 121
+single-track muatm events with a valid true line. W1 compares predicted
+theta distributions after matching MC to experimental hit/string counts;
+it is a domain-shift diagnostic, **not** experimental accuracy.
+
+| Minimum hit probability | Experiment test retained / 4,924 | muatm angle q68, common [deg] | Single-muatm angle q68 [deg] | Valid line q68 [m] | Experiment–MC theta W1, common [deg] |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 0.70 | 4,924 | 9.621 | 12.451 | 6.401 | 2.937 |
+| 0.75 | 4,470 | 9.557 | 15.963 | 5.777 | 2.667 |
+| 0.80 | 3,921 | 9.425 | 16.424 | 6.546 | 2.336 |
+| 0.85 | 3,215 | 9.247 | 18.530 | 6.758 | 1.913 |
+| 0.90 | 2,126 | 9.221 | 23.273 | 7.747 | 2.022 |
+
+For example, changing p>=0.70 to p>=0.80 improves all-muatm q68 by
+0.196 degrees on the fixed IDs (paired-bootstrap 95% interval
+[-0.364, -0.113] degrees), and reduces matched W1 by approximately
+0.60 degrees (paired interval [-0.910, -0.295]). But p>=0.90 worsens
+single-muatm angle q68 by 10.82 degrees (interval [+2.84, +16.99]) and
+point-line q68 by 1.35 m (interval [+0.15, +2.92]). The `p>=0.85` W1 is
+slightly smaller than `p>=0.90` on these fixed events, while retaining
+more events. All threshold comparisons use first occurrence for repeated
+MC event IDs; the experimental test IDs are unique.
+
+To test the universal model rather than only muatm, the same sweep covered
+all 4,185 nuatm validation rows and every fourth nue2 validation row
+(5,436 rows distributed across its full source range). The next figures
+hold the common p>=0.90 IDs fixed: 1,580 nuatm and 3,667 nue2.
+
+| Minimum hit probability | nuatm angle q68 / line q68 | nue2 angle q68 / line q68 |
+| --- | ---: | ---: |
+| 0.70 | 2.526 deg / 3.642 m | 3.577 deg / 7.336 m |
+| 0.75 | 2.585 deg / 3.636 m | 3.697 deg / 7.432 m |
+| 0.80 | 2.672 deg / 3.738 m | 3.939 deg / 7.588 m |
+| 0.90 | 2.882 deg / 3.889 m | 5.627 deg / 8.716 m |
+
+At p>=0.80 the paired 95% intervals for the q68 angle change versus
+p>=0.70 are [+0.044, +0.222] degrees for nuatm and [+0.252, +0.498]
+degrees for nue2; the line q68 increases too. Even p>=0.75 worsens nue2
+angle q68 with interval [+0.041, +0.206] degrees. This is validation
+evidence, not a new independent test. It nevertheless rules out adopting a
+higher hit threshold globally merely because multi-muatm `prime_prty` and
+the experimental theta distribution improve. **Keep p>=0.70 as the
+universal production input cut.** Higher thresholds remain optional
+muatm/domain diagnostics; their uncertainty radii have not been calibrated.
+
+On cluster63, `run_threshold_sweep_v4.sh` and
+`run_other_particles_thresholds_v4.sh` reproduce the inference/evaluation;
+`summarize_threshold_sweep_v4.py`,
+`summarize_other_particles_thresholds_v4.py`, and
+`compare_domain_threshold_common_v4.py` generate the paired tables,
+bootstrap intervals, and static figures in
+`runs/mixed_universal/threshold_sweep_v4/`. These scripts use only the
+single selected v4 checkpoint, never an ensemble. Compact snapshots of the
+tables and two trade-off figures are committed under
+[`results/threshold_sweep_v4/`](results/threshold_sweep_v4/).
