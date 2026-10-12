@@ -27,8 +27,9 @@ def read(path: Path, deduplicate: bool) -> pd.DataFrame:
 def aligned(before_path: Path, after_path: Path, deduplicate: bool):
     before = read(before_path, deduplicate)
     after = read(after_path, deduplicate)
-    if not before.index.equals(after.index):
+    if len(before) != len(after) or not before.index.isin(after.index).all():
         raise ValueError(f"Before/after event IDs differ: {before_path} {after_path}")
+    after = after.reindex(before.index)
     if not (
         np.array_equal(before.n_hits.to_numpy(), after.n_hits.to_numpy())
         and np.array_equal(before.n_strings.to_numpy(), after.n_strings.to_numpy())

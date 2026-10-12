@@ -592,3 +592,54 @@ distributional diagnostic. **The production v4 model remains unchanged.**
 Scripts and compact audit JSON are in
 [`results/physics_input_v4/`](results/physics_input_v4/); full
 checkpoints stay on cluster63.
+
+## Raw-hit joint signal/angle/line pilot
+
+The `joint_raw_*` scripts test a larger input/architecture change: one
+Transformer reads **all raw hits, including noise**, predicts signal
+probability per hit, and softly pools the contextual hit embeddings into
+direction and line-point heads. The signal/noise trunk starts from the
+existing classifier checkpoint; the geometric heads start from scratch.
+At inference this is one network, not an ensemble or a separate hard
+signal-selection pass. Two padding-mask variants were trained because
+the classifier checkpoint used a float additive mask: `legacy` exactly
+reproduces that behavior, and `hard` uses a corrected boolean mask.
+Both use BF16 for the trunk and FP32 for probabilities/geometric heads.
+
+`build_joint_raw_index.py` matches the existing p>=0.70, 2-string/
+8-hit selected events back to the 50 GB raw MC file by unique event ID.
+The matched training cohort contains 1,187,878 unique events, of which
+60,581 are single-track muatm, 379,999 nuatm, and 747,298 nue2. All
+26,044 overlaps with the established evaluation IDs were removed from
+training; validation (5,396 IDs) and test (26,229 IDs) are disjoint.
+This pilot changes the *input hits* but still uses the pre-existing
+event acceptance cohort; it is not an experiment on all raw events.
+Only unambiguous single-track muatm enter supervised training. The
+domain audit uses the same fixed 4,924 experimental and 25,054 unique
+muatm-MC events as the v4 p>=0.70 comparison, with matching by selected
+hit/string counts. `build_joint_raw_domain_index.py` maps those events
+to their raw-hit rows.
+
+The two 5,000-step runs selected validation angle/line q68 of
+6.931°/6.195 m (`legacy`, step 4,500) and 6.875°/6.093 m (`hard`, step
+5,000). The corrected-mask model was continued to 10,000 total steps,
+selecting step 9,000: angle q50/q68 4.045°/6.126°, line q50/q68
+4.127/5.813 m. On the closely matched v4 validation cohort, v4 has
+angle q50/q68 2.611°/4.469° and line q50/q68 3.228/4.691 m. The
+joint model remains substantially worse for every particle type, so
+it was **not** promoted and no independent test result is claimed.
+
+At 5,000 steps the raw model reduced hit/string-matched experimental
+versus muatm-MC theta W1 from v4's 3.007° to 2.197° (paired 95%
+interval for the change [-1.057°, -0.563°]). That advantage did not
+survive longer training: the selected 9,000-step checkpoint has W1
+3.012°, with change interval [-0.195°, +0.207°]. Thus the apparently
+better domain alignment of the undertrained model traded away MC truth
+accuracy and was not robust. Experimental data have no truth angles;
+W1 is distributional only. The current v4 production checkpoint and
+its calibrated uncertainty heads remain unchanged.
+
+Commands are in `run_joint_raw_5k.sh`,
+`run_joint_raw_hard_continue_10k.sh`, and `run_joint_raw_domain.sh`.
+The large raw files, ID indices, and checkpoints remain on cluster63.
+Compact audit JSON is in [`results/joint_raw_v1/`](results/joint_raw_v1/).

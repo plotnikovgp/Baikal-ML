@@ -1,0 +1,10 @@
+{
+  "domain_mc": {
+    "rows": 25054,
+    "single_track": 965,
+    "train_id_overlap": 0
+  },
+  "exp": {
+    "rows": 4924
+  }
+}

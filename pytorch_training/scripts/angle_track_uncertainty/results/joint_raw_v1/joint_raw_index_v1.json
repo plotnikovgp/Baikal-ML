@@ -1,0 +1,68 @@
+{
+  "files": {
+    "raw_mc": "/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/data/baikal_2020_sig-noise_mid-eq_normed.h5",
+    "clean_data": "/home/plotnikovgp/tmp/angle_reconstruction/data/baikal_2020_all_signal_2s8h.h5",
+    "clean_anchors": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/all_signal_paired_track_anchors_v1.h5",
+    "pred_data": "/home/plotnikovgp/tmp/angle_reconstruction/data/baikal_2020_all_predsignal_p070_2s8h.h5",
+    "pred_anchors": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/all_predsignal_p070_track_anchors_v1.h5",
+    "gt_data": "/home/plotnikovgp/tmp/angle_reconstruction/data/baikal_mc_merged2020_signal_8-2_angl_norm.h5",
+    "masks": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/masks_v2.npz",
+    "raw_exp": "/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/data/baikal_exp_filtered_norm_w_model_enc_v2_fix_q.h5",
+    "pred_exp": "/home/plotnikovgp/tmp/angle_reconstruction/data/baikal_exp_predsignal_p070_2s8h_v2audit.h5"
+  },
+  "train": {
+    "rows": 1187878,
+    "unique_event_ids": 1187878,
+    "class_counts": {
+      "muatm": 60581,
+      "nuatm": 379999,
+      "nue2": 747298
+    },
+    "point_valid": 983499,
+    "excluded_eval_overlap": 26044,
+    "missing_raw_source": 0,
+    "raw_hits_q50_q68_q95_q99": [
+      84.0,
+      91.0,
+      114.0,
+      143.0
+    ]
+  },
+  "val": {
+    "rows": 5396,
+    "class_counts": {
+      "muatm": 965,
+      "nuatm": 4175,
+      "nue2": 256
+    },
+    "missing_raw_source": 0,
+    "train_id_overlap": 0,
+    "raw_hits_q50_q68_q95_q99": [
+      76.0,
+      85.0,
+      103.0,
+      113.0
+    ]
+  },
+  "test": {
+    "rows": 26229,
+    "class_counts": {
+      "muatm": 3435,
+      "nuatm": 14121,
+      "nue2": 8673
+    },
+    "missing_raw_source": 0,
+    "train_id_overlap": 0,
+    "raw_hits_q50_q68_q95_q99": [
+      81.0,
+      88.0,
+      107.0,
+      127.0
+    ]
+  },
+  "exp": {
+    "rows": 4924,
+    "missing_raw_source": 0
+  },
+  "val_test_id_overlap": 0
+}
