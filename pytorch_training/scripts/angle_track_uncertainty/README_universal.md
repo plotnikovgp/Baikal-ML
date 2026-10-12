@@ -449,3 +449,41 @@ not an accuracy estimate. **Neither continuation replaces v4.** The
 scripts and compact validation/test/domain audit JSON are in
 [`results/low_lr_v4/`](results/low_lr_v4/); full checkpoints stay on
 cluster63.
+
+## Angular Huber, joint graph, and point-loss balance after v4
+
+These controlled continuations start from the same selected v4 model,
+retain stochastic threshold thinning, use the same cross-dataset masks,
+and keep multi-track muatm out of supervised training. The independent
+test is used only for variants that showed a validation gain; it is not
+used to select a checkpoint.
+
+`run_huber_v4_3k.sh` replaces only the predicted-hit component MAE with
+half-scaled angular Huber loss. The 4° and 8° transition runs both selected
+step 2,000. Their predicted-hit validation q68 was 4.445° and 4.463°,
+versus 4.469° for v4; however, on 26,229 unique independent predicted-hit
+test IDs, angle q68 was 4.789° and 4.791°, versus v4's 4.782°. Paired 95%
+intervals for the changes were [-0.024°, +0.039°] and
+[-0.024°, +0.039°]. The 4° run's GT nue2 angle q68 improved only slightly,
+4.194° to 4.186°. After hit/string matching, experiment–muatm-MC theta W1
+was 2.998° and 3.012°, versus 3.007° for v4; both changes had intervals
+crossing zero. Neither Huber candidate replaces v4.
+
+`run_joint_graph_v4_3k.sh` fine-tunes one identity-initialized, 8-neighbour
+local physics graph block *together with* the Transformer and point head.
+One variant uses spatial, timing, and light-propagation edges; the other
+adds a signed Minkowski feature in physical metres/nanoseconds before
+normalization. Both started at score 6.83898 and remained worse throughout
+3,000 steps. Best post-start scores were 6.85592 and 6.85642,
+respectively. Neither produced a selected checkpoint, so no test or
+experimental-distribution claim is made for them.
+
+`run_point_balance_v4_3k.sh` changes only the relative weight of the
+transverse-line loss from 0.5 to 0.2 or 0.8. The selected validation
+steps had predicted-hit angle/line q68 of 4.479°/4.711 m and
+4.507°/4.722 m, both worse than the v4 starting 4.469°/4.691 m. Small
+clean-GT gains are therefore insufficient to promote either candidate;
+they were not evaluated on the independent test. The runnable scripts
+and compact audit JSON are in [`results/huber_v4/`](results/huber_v4/),
+[`results/joint_graph_v4/`](results/joint_graph_v4/), and
+[`results/point_weight_v4/`](results/point_weight_v4/).

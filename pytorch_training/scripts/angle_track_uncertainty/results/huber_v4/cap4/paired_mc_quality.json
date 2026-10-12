@@ -1,0 +1,43 @@
+{
+  "matching_unique_event_ids": 25054,
+  "all": {
+    "count": 25054,
+    "q50_before_deg": 7.235427379608154,
+    "q50_after_deg": 7.329951524734497,
+    "q68_before_deg": 10.62916561126709,
+    "q68_after_deg": 10.707288284301757,
+    "q68_delta_after_minus_before_deg": 0.07812267303466669,
+    "q68_delta_bootstrap_95pct_deg": [
+      0.04709055805206086,
+      0.13006446552276538
+    ],
+    "fraction_individual_errors_improved": 0.42384449588888
+  },
+  "single_track": {
+    "count": 965,
+    "q50_before_deg": 6.101824760437012,
+    "q50_after_deg": 6.023368835449219,
+    "q68_before_deg": 10.577673492431643,
+    "q68_after_deg": 10.610898284912116,
+    "q68_delta_after_minus_before_deg": 0.03322479248047294,
+    "q68_delta_bootstrap_95pct_deg": [
+      -0.36543676280975257,
+      0.19559169960021436
+    ],
+    "fraction_individual_errors_improved": 0.5305699481865285
+  },
+  "multi_track_or_invalid": {
+    "count": 24089,
+    "q50_before_deg": 7.271534442901611,
+    "q50_after_deg": 7.367244243621826,
+    "q68_before_deg": 10.629260215759277,
+    "q68_after_deg": 10.7097566986084,
+    "q68_delta_after_minus_before_deg": 0.08049648284912259,
+    "q68_delta_bootstrap_95pct_deg": [
+      0.04862246417999314,
+      0.12937909126281755
+    ],
+    "fraction_individual_errors_improved": 0.4195690979285151
+  },
+  "caveat": "Multi-track prime_prty angle is not a unique-track ground truth."
+}
