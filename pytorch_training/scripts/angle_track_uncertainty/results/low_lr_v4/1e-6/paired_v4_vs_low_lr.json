@@ -1,0 +1,51 @@
+{
+  "pred_angle_deg": {
+    "rows": 27038,
+    "unique_event_ids": 26229,
+    "q68_before": 4.7815259742736815,
+    "q68_after": 4.775803966522218,
+    "q68_delta_after_minus_before": -0.00572200775146392,
+    "paired_bootstrap_95pct_delta": [
+      -0.03508535957336445,
+      0.01849440526962277
+    ],
+    "fraction_individual_errors_improved": 0.5242289069350718
+  },
+  "pred_line_m": {
+    "rows": 27038,
+    "unique_event_ids": 26229,
+    "q68_before": 5.212132205963135,
+    "q68_after": 5.195466842651367,
+    "q68_delta_after_minus_before": -0.016665363311767933,
+    "paired_bootstrap_95pct_delta": [
+      -0.036834415435791065,
+      0.007387243747712659
+    ],
+    "fraction_individual_errors_improved": 0.5115330359525716
+  },
+  "gt_angle_deg": {
+    "rows": 307913,
+    "unique_event_ids": 281804,
+    "q68_before": 4.194079132080079,
+    "q68_after": 4.1679847526550295,
+    "q68_delta_after_minus_before": -0.02609437942504922,
+    "paired_bootstrap_95pct_delta": [
+      -0.03444992017745825,
+      -0.018957335948944262
+    ],
+    "fraction_individual_errors_improved": 0.5288569360264581
+  },
+  "gt_line_m": {
+    "rows": 307913,
+    "unique_event_ids": 281804,
+    "q68_before": 5.517930355072022,
+    "q68_after": 5.548991031646729,
+    "q68_delta_after_minus_before": 0.03106067657470657,
+    "paired_bootstrap_95pct_delta": [
+      0.02189548349380397,
+      0.040765984058380014
+    ],
+    "fraction_individual_errors_improved": 0.4890810634341599
+  },
+  "note": "Same leakage-free selected test IDs, one row per unique event ID; paired bootstrap resamples IDs, not hits"
+}

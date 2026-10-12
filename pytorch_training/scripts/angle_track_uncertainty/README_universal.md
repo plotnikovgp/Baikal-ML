@@ -412,3 +412,40 @@ The common starting values were 4.469°/4.691 m and 4.089° on these
 validation subsets. This rules out selecting a candidate merely by
 reweighting MC loss toward the predicted-hit sample in this short sweep;
 no independent test was needed because no checkpoint passed selection.
+
+## Longer, low-learning-rate continuation of v4
+
+`run_low_lr_v4_5k.sh` continues the selected v4 checkpoint for 5,000
+steps with batch size 256, the same leakage-free masks, stochastic
+predicted-hit threshold in [0.70, 0.90], and the single-muatm training
+filter. The two runs used backbone/point learning rates of
+`1e-6`/`2e-6` and `2e-6`/`4e-6`, respectively. Both selected a slightly
+lower validation score than the step-0 value 6.83898 (6.82060 at step
+3,000 and 6.81925 at step 2,500). However, predicted-hit validation
+angle q68 increased from 4.4695° to 4.4956° and 4.4854° at those
+selected steps, respectively.
+
+`run_low_lr_audit_v4.sh` evaluated the validation-selected checkpoints
+on the independent, leakage-free test. Paired bootstrap samples unique
+event IDs, not hits. Lower is better in each column:
+
+| Checkpoint | Pred-hit angle q68 | Pred-hit line q68 | GT nue2 angle q68 | GT nue2 line q68 |
+| --- | ---: | ---: | ---: | ---: |
+| v4 baseline | 4.782° | 5.212 m | 4.194° | 5.518 m |
+| 1e-6 / 2e-6 | 4.776° | 5.195 m | 4.168° | 5.549 m |
+| 2e-6 / 4e-6 | 4.786° | 5.204 m | 4.173° | 5.552 m |
+
+For predicted-hit angle, paired 95% intervals for the change from v4
+were [-0.035°, +0.018°] and [-0.028°, +0.032°]; neither establishes an
+improvement. GT-angle gains were statistically clear, but GT-line
+resolution worsened by roughly 0.03 m in both runs. On experiment versus
+muatm MC after the same p>=0.70 selection and hit/string matching,
+theta W1 was 3.0075° for v4, 3.0010° for the 1e-6 run, and 3.0222° for
+the 2e-6 run. Paired 95% intervals for W1 changes were [-0.0194°,
++0.0080°] and [+0.0011°, +0.0315°], respectively. The higher-LR run
+therefore slightly but measurably worsened the domain match. Experimental
+events have no direction truth, so W1 is a distributional diagnostic,
+not an accuracy estimate. **Neither continuation replaces v4.** The
+scripts and compact validation/test/domain audit JSON are in
+[`results/low_lr_v4/`](results/low_lr_v4/); full checkpoints stay on
+cluster63.

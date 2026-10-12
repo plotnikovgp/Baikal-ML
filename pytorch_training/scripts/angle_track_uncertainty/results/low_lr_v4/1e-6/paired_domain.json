@@ -1,0 +1,46 @@
+{
+  "experimental_events": 4924,
+  "unique_muatm_mc_events": 25054,
+  "matched_theta_w1_before_deg": 3.0074678401213184,
+  "matched_theta_w1_after_deg": 3.0010038006858957,
+  "w1_delta_after_minus_before_ci95_deg": [
+    -0.019434558660721045,
+    0.008038573516446148
+  ],
+  "experimental_direction_change_q50_q68_deg": [
+    0.4148810510455019,
+    0.5205647871690123
+  ],
+  "experiment_theta_q10_q50_q90_before_deg": [
+    116.88150863647462,
+    140.81019592285156,
+    162.47266693115233
+  ],
+  "experiment_theta_q10_q50_q90_after_deg": [
+    117.03167495727538,
+    140.955810546875,
+    162.55891876220704
+  ],
+  "matching_support": {
+    "exp_outside_mc_support_count": 0,
+    "exp_outside_mc_support_fraction": 0.0,
+    "mc_effective_sample_size": 23408.628579834665,
+    "mc_nonzero_weight_count": 25054,
+    "hit_edges": [
+      8,
+      10,
+      12,
+      16,
+      24,
+      40
+    ],
+    "string_edges": [
+      2,
+      3,
+      4,
+      6,
+      9
+    ]
+  },
+  "warning": "Experimental data have no angle truth; W1 is distributional only."
+}
