@@ -1,0 +1,26 @@
+{
+  "test": {
+    "events": 238397,
+    "muatm_total": 117839,
+    "nuatm_total": 20134,
+    "nuatm_valid": 13596,
+    "single_muatm_valid": 3115,
+    "valid_total": 16711
+  },
+  "train": {
+    "events": 3487323,
+    "muatm_total": 2262033,
+    "nuatm_total": 380648,
+    "nuatm_valid": 249505,
+    "single_muatm_valid": 60704,
+    "valid_total": 310209
+  },
+  "val": {
+    "events": 63963,
+    "muatm_total": 33794,
+    "nuatm_total": 5914,
+    "nuatm_valid": 4005,
+    "single_muatm_valid": 888,
+    "valid_total": 4893
+  }
+}

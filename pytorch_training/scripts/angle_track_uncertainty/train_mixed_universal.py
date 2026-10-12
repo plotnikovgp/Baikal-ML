@@ -22,6 +22,7 @@ from softscore_model import upgrade_track_model
 from torch import nn
 from track_augmentation import augment_track_batch
 from train_angle_signal import (
+    BatchedAngleDataset,
     SetTransformerDirection,
     infinite_batches,
     loss_function,
@@ -201,6 +202,36 @@ class AdaptedTrackDataset(BatchedTrackDataset):
         return x, direction, mask, particle, point, valid
 
 
+class CleanParticleAngleDataset(BatchedAngleDataset):
+    """Angle-only clean-hit stream, normalized like the shared model input."""
+
+    def __init__(
+        self,
+        *args,
+        expected_mean: np.ndarray,
+        expected_std: np.ndarray,
+        particle_code: int,
+        **kwargs,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.source_mean = torch.tensor(self.target_mean, dtype=torch.float32)
+        self.source_std = torch.tensor(self.target_std, dtype=torch.float32)
+        self.expected_mean = torch.tensor(expected_mean, dtype=torch.float32)
+        self.expected_std = torch.tensor(expected_std, dtype=torch.float32)
+        self.particle_code = particle_code
+
+    def __getitem__(self, batch_index: int):
+        x, direction, mask, particle = super().__getitem__(batch_index)
+        x = (x * self.source_std + self.source_mean - self.expected_mean) / self.expected_std
+        selected = particle == self.particle_code
+        return (
+            (x * mask.unsqueeze(-1))[selected],
+            direction[selected],
+            mask[selected],
+            particle[selected],
+        )
+
+
 def quantiles(values: np.ndarray) -> dict[str, float]:
     return {
         "q50": float(np.quantile(values, 0.5)),
@@ -266,6 +297,21 @@ def evaluate(model: nn.Module, loader, device: torch.device, *, return_arrays: b
     return (result, pred) if return_arrays else result
 
 
+@torch.inference_mode()
+def evaluate_angle_only(model: nn.Module, loader, device: torch.device) -> dict:
+    model.eval()
+    errors = []
+    for x, target_dir, mask, _particle in loader:
+        if not len(x):
+            continue
+        with torch.autocast("cuda", dtype=torch.float16, enabled=device.type == "cuda"):
+            direction, _point = model(x.to(device), mask.to(device))
+        dot = (direction.float() * target_dir.to(device)).sum(dim=1).clamp(-1.0, 1.0)
+        errors.append(torch.rad2deg(torch.acos(dot)).cpu().numpy())
+    values = np.concatenate(errors)
+    return {"count": int(len(values)), "direction_deg": quantiles(values)}
+
+
 def model_from_checkpoints(angle_path: Path, track_path: Path, scale: float, device):
     angle = torch.load(angle_path, map_location="cpu", weights_only=False)
     config = angle["args"]
@@ -290,6 +336,11 @@ def main() -> None:
     parser.add_argument("--pred-anchors", type=Path, required=True)
     parser.add_argument("--gt-data", type=Path, required=True)
     parser.add_argument("--gt-anchors", type=Path, required=True)
+    parser.add_argument("--clean-nuatm-data", type=Path, default=None)
+    parser.add_argument("--clean-nuatm-weight", type=float, default=0.0)
+    parser.add_argument("--clean-paired-data", type=Path, default=None)
+    parser.add_argument("--clean-paired-anchors", type=Path, default=None)
+    parser.add_argument("--clean-paired-weight", type=float, default=0.0)
     parser.add_argument("--masks", type=Path, required=True)
     parser.add_argument("--angle-checkpoint", type=Path, required=True)
     parser.add_argument("--track-checkpoint", type=Path, required=True)
@@ -349,6 +400,17 @@ def main() -> None:
     args = parser.parse_args()
     if not 0 <= args.gt_weight <= 1:
         raise ValueError("gt-weight must be between 0 and 1")
+    if args.clean_nuatm_weight < 0 or (
+        args.clean_nuatm_weight > 0 and args.clean_nuatm_data is None
+    ):
+        raise ValueError("Positive clean-nuatm weight needs --clean-nuatm-data")
+    if args.clean_paired_weight < 0 or (
+        args.clean_paired_weight > 0
+        and (args.clean_paired_data is None or args.clean_paired_anchors is None)
+    ):
+        raise ValueError("Positive clean-paired weight needs data and anchors")
+    if args.clean_nuatm_weight > 0 and args.clean_paired_weight > 0:
+        raise ValueError("Choose one clean-hit augmentation stream at a time")
     if args.pred_direction_scale <= 0 or args.pred_direction_power <= 0:
         raise ValueError("Direction-loss scale and power must be positive")
     if not 0 <= args.pred_thinning_prob <= 1:
@@ -489,6 +551,36 @@ def main() -> None:
             charge_log_jitter=args.charge_log_jitter if train_aug else 0.0,
         )
 
+    def clean_nuatm_dataset(split):
+        return CleanParticleAngleDataset(
+            str(args.clean_nuatm_data),
+            split,
+            args.batch_size,
+            args.max_seq_len,
+            False,
+            None,
+            False,
+            expected_mean=expected_mean,
+            expected_std=expected_std,
+            particle_code=1,
+        )
+
+    clean_paired_keep = None
+    if args.clean_paired_anchors is not None:
+        with h5py.File(args.clean_paired_anchors, "r") as anchors:
+            clean_paired_keep = {
+                split: np.asarray(anchors[f"{split}/valid"], dtype=bool)
+                for split in ("train", "val", "test")
+            }
+
+    def clean_paired_dataset(split):
+        return dataset(
+            args.clean_paired_data,
+            args.clean_paired_anchors,
+            split,
+            keep=clean_paired_keep[split],
+        )
+
     if args.eval_only:
         split = args.eval_split
         selection = gt_val_small if split == "val" else gt_masks["gt_test"]
@@ -505,14 +597,26 @@ def main() -> None:
             args.seed,
         )
         gt_eval = make_loader(
-            dataset(args.gt_data, args.gt_anchors, split, selection), args.workers, False, args.seed
+            dataset(args.gt_data, args.gt_anchors, split, selection),
+            args.workers,
+            False,
+            args.seed,
         )
         pred_result, pred_rows = evaluate(model, pred_eval, device, return_arrays=True)
         gt_result, gt_rows = evaluate(model, gt_eval, device, return_arrays=True)
         result = {f"pred_{split}": pred_result, f"gt_{split}_clean": gt_result}
+        if args.clean_nuatm_data is not None:
+            clean_eval = make_loader(clean_nuatm_dataset(split), args.workers, False, args.seed)
+            result[f"clean_nuatm_{split}"] = evaluate_angle_only(model, clean_eval, device)
+        if clean_paired_keep is not None and args.clean_paired_data is not None:
+            clean_eval = make_loader(clean_paired_dataset(split), args.workers, False, args.seed)
+            result[f"clean_paired_{split}"] = evaluate(model, clean_eval, device)
         if args.single_muatm_only or pred_masks[split] is not None:
             pred_full = make_loader(
-                dataset(args.pred_data, args.pred_anchors, split), args.workers, False, args.seed
+                dataset(args.pred_data, args.pred_anchors, split),
+                args.workers,
+                False,
+                args.seed,
             )
             result[f"pred_{split}_full_diagnostic"] = evaluate(model, pred_full, device)
         (args.output_dir / "eval.json").write_text(json.dumps(result, indent=2) + "\n")
@@ -540,7 +644,20 @@ def main() -> None:
         args.seed,
     )
     gt_val = make_loader(
-        dataset(args.gt_data, args.gt_anchors, "val", gt_val_small), args.workers, False, args.seed
+        dataset(args.gt_data, args.gt_anchors, "val", gt_val_small),
+        args.workers,
+        False,
+        args.seed,
+    )
+    clean_nuatm_val = (
+        make_loader(clean_nuatm_dataset("val"), args.workers, False, args.seed)
+        if args.clean_nuatm_data is not None
+        else None
+    )
+    clean_paired_val = (
+        make_loader(clean_paired_dataset("val"), args.workers, False, args.seed)
+        if clean_paired_keep is not None and args.clean_paired_data is not None
+        else None
     )
 
     pred_train = infinite_batches(
@@ -565,6 +682,20 @@ def main() -> None:
             True,
             args.seed + 1,
         )
+    )
+    clean_nuatm_train = (
+        infinite_batches(
+            make_loader(clean_nuatm_dataset("train"), args.workers, True, args.seed + 2)
+        )
+        if args.clean_nuatm_weight > 0
+        else None
+    )
+    clean_paired_train = (
+        infinite_batches(
+            make_loader(clean_paired_dataset("train"), args.workers, True, args.seed + 3)
+        )
+        if args.clean_paired_weight > 0
+        else None
     )
     if args.score_column_only:
         model.requires_grad_(False)
@@ -599,7 +730,10 @@ def main() -> None:
                 ]
                 groups = [
                     {"params": backbone_params, "lr": args.backbone_lr},
-                    {"params": model.backbone.graph_blocks.parameters(), "lr": args.graph_lr},
+                    {
+                        "params": model.backbone.graph_blocks.parameters(),
+                        "lr": args.graph_lr,
+                    },
                 ]
             else:
                 groups = [
@@ -621,6 +755,10 @@ def main() -> None:
         "pred_val": evaluate(model, pred_val, device),
         "gt_val_clean": evaluate(model, gt_val, device),
     }
+    if clean_nuatm_val is not None:
+        initial["clean_nuatm_val"] = evaluate_angle_only(model, clean_nuatm_val, device)
+    if clean_paired_val is not None:
+        initial["clean_paired_val"] = evaluate(model, clean_paired_val, device)
     initial["step"] = 0
     initial["score"] = validation_score(initial, args.pred_score_weight, args.muatm_score_weight)
     (args.output_dir / "val_step_0.json").write_text(json.dumps(initial, indent=2) + "\n")
@@ -667,7 +805,12 @@ def main() -> None:
                 if name == "pred":
                     angular = angular * args.pred_direction_scale
                 transverse = point_loss(
-                    point, target_point, target_dir, valid, args.anchor_scale_m, "line_huber"
+                    point,
+                    target_point,
+                    target_dir,
+                    valid,
+                    args.anchor_scale_m,
+                    "line_huber",
                 )
                 loss = weight * (angular + args.point_weight * transverse)
                 if name == "pred" and teacher is not None:
@@ -693,6 +836,44 @@ def main() -> None:
                     )
             scaler.scale(loss).backward()
             losses[name] = float(loss.detach())
+        if clean_nuatm_train is not None:
+            x, target_dir, mask, _particle = next_nonempty(clean_nuatm_train)
+            x = x.to(device, non_blocking=True)
+            target_dir = target_dir.to(device, non_blocking=True)
+            mask = mask.to(device, non_blocking=True)
+            with torch.autocast("cuda", dtype=torch.float16, enabled=device.type == "cuda"):
+                direction, _point = model(x, mask)
+                clean_angular = loss_function(
+                    direction, target_dir, "trimmed_angular", 1.0, None, 8.0
+                )
+                clean_loss = args.clean_nuatm_weight * clean_angular
+            scaler.scale(clean_loss).backward()
+            losses["clean_nuatm"] = float(clean_loss.detach())
+        if clean_paired_train is not None:
+            x, target_dir, mask, _particle, target_point, valid = next_nonempty(clean_paired_train)
+            x = x.to(device, non_blocking=True)
+            target_dir = target_dir.to(device, non_blocking=True)
+            mask = mask.to(device, non_blocking=True)
+            target_point = target_point.to(device, non_blocking=True)
+            valid = valid.to(device, non_blocking=True)
+            with torch.autocast("cuda", dtype=torch.float16, enabled=device.type == "cuda"):
+                direction, point = model(x, mask)
+                clean_angular = loss_function(
+                    direction, target_dir, "trimmed_angular", 1.0, None, 8.0
+                )
+                clean_transverse = point_loss(
+                    point,
+                    target_point,
+                    target_dir,
+                    valid,
+                    args.anchor_scale_m,
+                    "line_huber",
+                )
+                clean_loss = args.clean_paired_weight * (
+                    clean_angular + args.point_weight * clean_transverse
+                )
+            scaler.scale(clean_loss).backward()
+            losses["clean_paired"] = float(clean_loss.detach())
         scaler.unscale_(optimizer)
         nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         scaler.step(optimizer)
@@ -704,6 +885,10 @@ def main() -> None:
                 "pred_val": evaluate(model, pred_val, device),
                 "gt_val_clean": evaluate(model, gt_val, device),
             }
+            if clean_nuatm_val is not None:
+                result["clean_nuatm_val"] = evaluate_angle_only(model, clean_nuatm_val, device)
+            if clean_paired_val is not None:
+                result["clean_paired_val"] = evaluate(model, clean_paired_val, device)
             pred_q68 = result["pred_val"]["direction_deg"]["q68"]
             gt_q68 = result["gt_val_clean"]["direction_deg"]["q68"]
             # Primary: clean nue2 direction. Reject candidates that damage

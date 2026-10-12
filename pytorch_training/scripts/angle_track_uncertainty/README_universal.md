@@ -487,3 +487,60 @@ they were not evaluated on the independent test. The runnable scripts
 and compact audit JSON are in [`results/huber_v4/`](results/huber_v4/),
 [`results/joint_graph_v4/`](results/joint_graph_v4/), and
 [`results/point_weight_v4/`](results/point_weight_v4/).
+
+## Additional clean-hit particle supervision after v4
+
+`run_clean_nuatm_v4_3k.sh` adds an angle-only stream of clean-GT nuatm
+events from the all-particle 2-string/8-hit sample. The training stream
+contains 380,648 rows (379,999 unique event IDs), with no overlap with
+predicted-hit validation or test IDs. We tried auxiliary loss weights 0.1
+and 0.3, using the same v4 initialization and stochastic predicted-hit
+threshold. Both selected step 1,500 on validation, but neither improved
+the independent predicted-hit test. On 26,229 unique test IDs, angle q68
+was 4.788° and 4.812° versus 4.782° for v4; line q68 was 5.240 m and
+5.242 m versus 5.212 m. The 0.3-weight run also worsened the matched
+experiment–muatm-MC theta W1 from 3.007° to 3.038° (paired 95% change
+interval [+0.011°, +0.051°]). Angle-only clean-particle supervision is
+therefore not a production replacement. The 0.1-weight W1 was 3.016°
+and its change interval crossed zero.
+
+`build_paired_clean_anchor_targets.py` creates *paired* clean-hit track
+anchors without rescanning the large raw MC archive: it matches the
+already validated true-particle track point by event ID, then expresses
+the same truth line relative to the clean-hit centroid. Only nuatm and
+single-track muatm with a valid particle track are used. The generated
+`all_signal_paired_track_anchors_v1.h5` stays on cluster63, is about
+88 MB, and has 310,209 valid training rows, 4,893 validation rows, and
+16,711 test rows. A geometry check found transverse disagreement below
+0.00002 m in sampled events. `--clean-paired-data`,
+`--clean-paired-anchors`, and `--clean-paired-weight` add this joint
+angle-and-line stream to `train_mixed_universal.py` without changing the
+default v4 training behavior.
+
+`run_clean_paired_v4_3k.sh` tests weights 0.1 and 0.3. The 0.1 run
+selected step 1,000: predicted-hit validation angle/line q68 changed
+from 4.469°/4.691 m to 4.460°/4.667 m; clean-GT nue2 angle changed
+from 4.088° to 4.076°. The 0.3 run's selected validation angle was
+worse than v4 (4.477°), so only the 0.1 run was audited independently.
+On one row per unique event ID:
+
+| Metric | v4 | Clean-paired 0.1 | Paired 95% interval for change |
+| --- | ---: | ---: | ---: |
+| Pred-hit angle q68 | 4.782° | 4.788° | [-0.024°, +0.037°] |
+| Pred-hit line q68 | 5.212 m | 5.171 m | [-0.065, -0.014] m |
+| GT nue2 angle q68 | 4.194° | 4.177° | [-0.026°, -0.009°] |
+| GT nue2 line q68 | 5.518 m | 5.507 m | [-0.022, -0.001] m |
+
+With the same p>=0.70 signal-hit selection and hit/string matching,
+experiment–muatm-MC theta W1 changed from 3.007° to 2.975°; the
+paired 95% interval for the change was [-0.053°, -0.008°]. This is a
+small distributional improvement, **not** experimental truth validation.
+The candidate preserves the single-model architecture and CPU cost, but
+its principal predicted-hit angular q68 has not improved. Furthermore,
+many closely related candidates have now been evaluated, so small test
+gains should be treated cautiously. **The production v4 checkpoint is
+unchanged.** If this line-focused candidate is promoted later, its
+uncertainty head must be retrained and bundled with it; the v4 head
+should not be reused uncalibrated. Scripts and compact audit JSON are
+in [`results/clean_nuatm_v4/`](results/clean_nuatm_v4/) and
+[`results/clean_paired_v4/`](results/clean_paired_v4/).
