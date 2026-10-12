@@ -544,3 +544,51 @@ uncertainty head must be retrained and bundled with it; the v4 head
 should not be reused uncalibrated. Scripts and compact audit JSON are
 in [`results/clean_nuatm_v4/`](results/clean_nuatm_v4/) and
 [`results/clean_paired_v4/`](results/clean_paired_v4/).
+
+## Explicit space-time track-frame input
+
+`diagnose_physical_direction.py` first tests analytic geometry on the
+same leakage-free predicted-hit validation used for model selection.
+An oriented PCA axis has angle q68 7.846° versus 4.469° for v4 on
+5,406 events. It is better than the network on 20.7% of individual
+events, so it may contain complementary information, but cannot replace
+the network directly. The reverse PCA axis has a median error near
+175°, confirming the time-based orientation convention. This is a
+validation-only diagnostic, not a test result.
+
+`physics_feature_upgrade.py` adds six per-hit features to the *same*
+Transformer: longitudinal and transverse position relative to an
+event-wise PCA axis in physical metres, a time residual in nanoseconds
+relative to propagation along that axis, and the three oriented axis
+components. The old embedding columns are copied exactly and the new
+columns initialized to zero, so step 0 gives the v4 prediction. The
+physical input layer is learned at 1e-4 while the rest of the backbone
+uses 5e-6. This remains a single model, with no ensemble. In a small
+cluster63 CPU benchmark (140 events, up to 77 hits, four threads, ten
+timed forwards), median batch latency was 0.992 s for v4 and 1.017 s
+for the upgraded model, about 2.5% more. This is not a full production
+throughput measurement.
+
+`run_physics_input_v4_3k.sh` trained the upgraded model for 3,000 steps
+with the same stochastic p=0.70–0.90 hit selection, data splits, and
+single-muatm filter as v4. The selected step-3,000 validation score
+was 6.817 versus 6.839 at initialization; predicted-hit angle q68
+was only slightly lower, 4.462° versus 4.469°, while clean-GT nue2
+angle q68 was 4.068° versus 4.088°. The independent unique-ID test
+does **not** support promotion:
+
+| Metric | v4 | Physical-input model | Paired 95% interval for change |
+| --- | ---: | ---: | ---: |
+| Pred-hit angle q68 | 4.782° | 4.807° | [-0.003°, +0.055°] |
+| Pred-hit line q68 | 5.212 m | 5.204 m | [-0.040, +0.017] m |
+| GT nue2 angle q68 | 4.194° | 4.177° | [-0.025°, -0.009°] |
+| GT nue2 line q68 | 5.518 m | 5.569 m | [+0.041, +0.061] m |
+
+Experiment–muatm-MC theta W1 after the same p>=0.70 hit selection and
+hit/string matching was 3.007° for v4 and 3.022° for the new model;
+the paired 95% interval for the change was [-0.009°, +0.032°]. The
+experimental sample has no truth direction, so this is only a
+distributional diagnostic. **The production v4 model remains unchanged.**
+Scripts and compact audit JSON are in
+[`results/physics_input_v4/`](results/physics_input_v4/); full
+checkpoints stay on cluster63.

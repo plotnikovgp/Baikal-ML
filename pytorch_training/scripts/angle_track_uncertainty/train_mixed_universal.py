@@ -17,6 +17,7 @@ import h5py
 import numpy as np
 import torch
 import torch.nn.functional as F
+from physics_feature_upgrade import upgrade_track_model_physics_features
 from physics_graph_upgrade import upgrade_track_model_graph
 from softscore_model import upgrade_track_model
 from torch import nn
@@ -391,6 +392,8 @@ def main() -> None:
     parser.add_argument("--graph-minkowski-edge", action="store_true")
     parser.add_argument("--graph-only", action="store_true")
     parser.add_argument("--graph-lr", type=float, default=1e-4)
+    parser.add_argument("--physics-features", action="store_true")
+    parser.add_argument("--physics-input-lr", type=float, default=1e-4)
     parser.add_argument("--init-from-transformer-model", action="store_true")
     parser.add_argument("--anchor-scale-m", type=float, default=50.0)
     parser.add_argument("--seed", type=int, default=91)
@@ -443,10 +446,20 @@ def main() -> None:
         raise ValueError("Invalid graph geometry settings")
     if args.graph_layers and args.score_feature:
         raise ValueError("Graph and score-feature upgrades are separate experiments")
+    if args.physics_features and (
+        args.graph_layers or args.score_feature or args.direction_head_only
+    ):
+        raise ValueError("Physical input features require the plain Transformer")
+    if args.physics_features and args.physics_input_lr <= 0:
+        raise ValueError("Physical input learning rate must be positive")
     if args.graph_only and (args.graph_layers < 1 or args.graph_lr <= 0):
         raise ValueError("Graph-only training needs graph layers and positive graph LR")
-    if args.init_from_transformer_model and (args.graph_layers < 1 or args.load_model is None):
-        raise ValueError("Transformer initialization needs a graph and --load-model")
+    if args.init_from_transformer_model and (
+        (args.graph_layers < 1 and not args.physics_features) or args.load_model is None
+    ):
+        raise ValueError(
+            "Transformer initialization needs an architecture upgrade and --load-model"
+        )
     if args.init_from_five_feature_model and args.init_from_transformer_model:
         raise ValueError("Select only one architecture initialization mode")
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -473,6 +486,8 @@ def main() -> None:
             photon_speed_m_per_ns=args.graph_photon_speed_m_per_ns,
             minkowski_edge=args.graph_minkowski_edge,
         ).to(device)
+    if args.physics_features:
+        model = upgrade_track_model_physics_features(model).to(device)
     if args.load_model is not None and not (
         args.init_from_five_feature_model or args.init_from_transformer_model
     ):
@@ -498,7 +513,7 @@ def main() -> None:
     with h5py.File(args.norm_data or args.pred_data, "r") as h5:
         expected_mean = np.asarray(h5["norm_param/mean"], dtype=np.float32)
         expected_std = np.asarray(h5["norm_param/std"], dtype=np.float32)
-    if args.graph_layers:
+    if args.graph_layers or args.physics_features:
         model.backbone.set_feature_norm(expected_mean, expected_std)
     with h5py.File(args.pred_data, "r") as h5:
         pred_mean = np.asarray(h5["norm_param/mean"], dtype=np.float32)
@@ -733,6 +748,25 @@ def main() -> None:
                     {
                         "params": model.backbone.graph_blocks.parameters(),
                         "lr": args.graph_lr,
+                    },
+                ]
+            elif args.physics_features:
+                first_weight = model.backbone.embed[0].weight
+                original_features = first_weight.shape[1] - model.backbone.extra_features
+                gradient_mask = torch.zeros_like(first_weight)
+                gradient_mask[:, original_features:] = 1.0
+                first_weight.register_hook(lambda gradient: gradient * gradient_mask)
+                backbone_params = [
+                    value
+                    for name, value in model.backbone.named_parameters()
+                    if name != "embed.0.weight"
+                ]
+                groups = [
+                    {"params": backbone_params, "lr": args.backbone_lr},
+                    {
+                        "params": [first_weight],
+                        "lr": args.physics_input_lr,
+                        "weight_decay": 0.0,
                     },
                 ]
             else:

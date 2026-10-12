@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CPU audit inference for five-feature or six-feature direction/point models."""
+"""CPU audit inference for standard, score-augmented, or physical-input models."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import h5py
 import numpy as np
 import torch
 from infer_rethresholded_for_audit import FIELDS, selected_batch
+from physics_feature_upgrade import upgrade_track_model_physics_features
 from softscore_model import upgrade_track_model
 from train_mixed_universal import model_from_checkpoints
 
@@ -46,8 +47,13 @@ def main() -> None:
     scale = checkpoint["args"].get("anchor_scale_m", 50.0)
     model = model_from_checkpoints(args.angle_checkpoint, args.track_checkpoint, scale, "cpu")
     score_feature = bool(checkpoint["args"].get("score_feature", False))
+    physics_features = bool(checkpoint["args"].get("physics_features", False))
+    if score_feature and physics_features:
+        raise ValueError("Score and physical-input upgrades cannot be combined")
     if score_feature:
         model = upgrade_track_model(model, checkpoint["args"].get("score_mode", "absolute"))
+    if physics_features:
+        model = upgrade_track_model_physics_features(model)
     model.load_state_dict(checkpoint["model"], strict=True)
     model.eval()
     with h5py.File(args.norm_data, "r") as h5:
