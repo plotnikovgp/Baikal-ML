@@ -328,3 +328,87 @@ bootstrap intervals, and static figures in
 single selected v4 checkpoint, never an ensemble. Compact snapshots of the
 tables and two trade-off figures are committed under
 [`results/threshold_sweep_v4/`](results/threshold_sweep_v4/).
+
+## Physical-fit, score-feature, graph, and loss ablations after v4
+
+These experiments retain the same leakage-free masks, `p>=0.70` input cut,
+single-muatm training filter, and one-model CPU inference requirement. The
+selected production model remains v4 unless an alternative improves the
+independent predicted-hit test **and** survives the experiment-versus-muatm-MC
+distribution audit. Experimental events have no truth direction.
+
+`evaluate_spacetime_direction.py` compared two simple physical direction
+estimates using raw positions in metres and times in nanoseconds: the
+position/time covariance and a ridge time-gradient fit. The water photon
+speed in the graph experiment is 0.225 m/ns. On the selected MC subsets,
+covariance-fit versus v4 NN angle q68 was 25.29° versus 10.58° for muatm,
+6.36° versus 3.48° for nuatm, and 22.42° versus 4.62° for nue2. The
+time-gradient fit was worse still. Linear blending did not beat the NN, so
+neither physical fit was deployed. The per-event mean signal probability
+was close, but not identical, between hit/string-matched experiment and
+muatm MC (`q50` 0.8876 versus 0.8947; W1 0.00679); the fraction of hits
+below 0.8 showed a larger shift (`q50` 0.150 versus 0.118; W1 0.0310).
+
+An optional six-feature model added each hit's signal probability to the
+five physical inputs. It is initialized exactly from v4 by zeroing the new
+input column. Full fine-tuning and a within-event-centered score feature
+both failed the v4 validation gate. Training *only* the absolute-score
+column found a slightly lower validation score (6.8399 to 6.8309), but on
+26,229 independent predicted-hit event IDs its angle q68 changed only
+4.782° to 4.778° (paired 95% interval for change
+[-0.014°, +0.012°]) and transverse-line q68 5.212 to 5.216 m.
+Hit/string-matched experiment–MC theta W1 was essentially unchanged,
+3.0075° to 3.0066° (paired interval for change
+[-0.0032°, +0.0016°]). It is not a production improvement.
+
+`physics_graph_upgrade.py` adds identity-initialized local graph blocks
+with spatial separation, light-cone timing, and a signed Minkowski edge
+feature computed in physical units. With the base network frozen, neither
+two layers/12 neighbours nor one layer/8 neighbours beat the starting
+validation score 6.83945 after 2,000 steps. The approximate CPU cost on a
+16-event benchmark increased from 2.6–3.0 ms/event for v4 to 8.5 ms/event
+for the larger graph or 4.8 ms/event for the compact graph. No graph
+checkpoint replaced v4.
+
+The predicted-hit MAE angular loss was compared against a half-scaled
+chord distance and a half-scaled 8° trimmed-angular loss, starting from
+the same v4 checkpoint. Chord did not beat the starting validation score.
+Trimmed-angular selected step 2,000 with score 6.826 versus 6.839, but its
+independent predicted-hit angle q68 was 4.795° versus v4's 4.782°
+(paired interval for the change [-0.022°, +0.049°]). GT nue2 angle q68
+did improve 4.194° to 4.157° ([-0.048°, -0.030°]), showing that an MC-only
+gain does not necessarily transfer to the working predicted-hit input.
+On experiment versus muatm MC, matched theta W1 changed 3.007° to
+3.042° (interval for change [-0.005°, +0.077°]); the direction of the
+change is not reassuring. The v4 checkpoint remains selected.
+
+`track_augmentation.py` adds training-only hit-time jitter and event-time
+offsets in ns, coordinate jitter in metres, and optional event-consistent
+z rotations. Coordinate jitter rebases the truth-line point when the hit
+centroid moves; rotations transform both the direction and point target.
+`test_track_augmentation.py` verifies these invariants. With the original
+v4 loss balance, a 2,000-step run using 1 ns per-hit time noise, 5 ns
+event-time offset, and 0.1 m coordinate noise did not beat the starting
+validation score (6.83945; final 6.84216). Its final predicted-hit q68
+was slightly lower, 4.469° to 4.451°, but GT nue2 q68 increased from
+4.089° to 4.099°. A separate 25%-probability random z-rotation run
+ended at score 6.86648 and predicted-hit q68 4.499°. Neither passed
+checkpoint selection; there is no independent-test or experimental-
+distribution claim for these augs. A pred-hit-focused controlled run is
+the follow-up to test whether the small noise gain is reproducible.
+
+Small numerical audit snapshots and the signal-probability plot are saved
+under [`results/ablations_v4/`](results/ablations_v4/); H5 inputs and
+large checkpoint files remain on cluster63.
+
+Finally, `run_predfocus_v4_3k.sh` compared 3,000-step continuations with
+20% GT-hit training weight and double the predicted-hit validation-score
+weight, with and without the same mild noise. Both used identical masks
+and seed and enforced GT-nue2 validation q68 <=4.2°. Neither beat the
+starting score 9.07388. At step 3,000 the unnoised run had score 9.14571,
+predicted-hit angle/line q68 4.495°/4.722 m, and GT angle q68 4.136°;
+the noisy run had score 9.13669, 4.507°/4.726 m, and 4.119° respectively.
+The common starting values were 4.469°/4.691 m and 4.089° on these
+validation subsets. This rules out selecting a candidate merely by
+reweighting MC loss toward the predicted-hit sample in this short sweep;
+no independent test was needed because no checkpoint passed selection.

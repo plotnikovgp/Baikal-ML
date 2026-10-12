@@ -17,7 +17,10 @@ import h5py
 import numpy as np
 import torch
 import torch.nn.functional as F
+from physics_graph_upgrade import upgrade_track_model_graph
+from softscore_model import upgrade_track_model
 from torch import nn
+from track_augmentation import augment_track_batch
 from train_angle_signal import (
     SetTransformerDirection,
     infinite_batches,
@@ -81,6 +84,13 @@ class AdaptedTrackDataset(BatchedTrackDataset):
         pred_thinning_prob: float = 0.0,
         pred_threshold_min: float = 0.70,
         pred_threshold_max: float = 0.90,
+        score_feature: bool = False,
+        score_jitter: float = 0.0,
+        rotate_z_prob: float = 0.0,
+        time_jitter_ns: float = 0.0,
+        event_time_jitter_ns: float = 0.0,
+        coord_jitter_m: float = 0.0,
+        charge_log_jitter: float = 0.0,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
@@ -89,10 +99,17 @@ class AdaptedTrackDataset(BatchedTrackDataset):
         self.pred_thinning_prob = pred_thinning_prob
         self.pred_threshold_min = pred_threshold_min
         self.pred_threshold_max = pred_threshold_max
-        if pred_thinning_prob > 0:
-            with h5py.File(self.path, "r") as h5:
-                if f"{self.split}/signal_probability/data" not in h5:
-                    raise ValueError("Predicted-hit thinning requires signal_probability/data")
+        self.score_feature = score_feature
+        self.score_jitter = score_jitter
+        self.rotate_z_prob = rotate_z_prob
+        self.time_jitter_ns = time_jitter_ns
+        self.event_time_jitter_ns = event_time_jitter_ns
+        self.coord_jitter_m = coord_jitter_m
+        self.charge_log_jitter = charge_log_jitter
+        with h5py.File(self.path, "r") as h5:
+            self.has_signal_probability = f"{self.split}/signal_probability/data" in h5
+        if pred_thinning_prob > 0 and not self.has_signal_probability:
+            raise ValueError("Predicted-hit thinning requires signal_probability/data")
         if keep is not None and len(keep) < self.n_events:
             raise ValueError(f"Selection mask too short for {self.split}")
         self.source_mean = torch.tensor(self.target_mean, dtype=torch.float32)
@@ -111,7 +128,13 @@ class AdaptedTrackDataset(BatchedTrackDataset):
             selection &= torch.from_numpy(self.keep[event_start:event_end].copy())
         if self.single_muatm_only:
             selection &= (particle != 0) | valid
-        if self.pred_thinning_prob > 0 and selection.any():
+        if (self.pred_thinning_prob > 0 or self.score_feature) and selection.any():
+            prob = np.ones(mask.shape, dtype=np.float32)
+        if (
+            self.has_signal_probability
+            and (self.pred_thinning_prob > 0 or self.score_feature)
+            and selection.any()
+        ):
             starts = np.asarray(
                 self.h5[f"{self.split}/ev_starts/data"][event_start : event_end + 1],
                 dtype=np.int64,
@@ -120,9 +143,9 @@ class AdaptedTrackDataset(BatchedTrackDataset):
                 self.h5[f"{self.split}/signal_probability/data"][starts[0] : starts[-1]],
                 dtype=np.float32,
             )
-            prob = np.zeros(mask.shape, dtype=np.float32)
             for i, length in enumerate(mask.sum(dim=1).tolist()):
                 prob[i, :length] = flat_prob[starts[i] - starts[0] : starts[i] - starts[0] + length]
+        if self.pred_thinning_prob > 0 and selection.any():
             original_centroid_m = torch.from_numpy(
                 np.asarray(
                     self.anchor_h5[f"{self.split}/hit_centroid_m"][event_start:event_end],
@@ -133,8 +156,9 @@ class AdaptedTrackDataset(BatchedTrackDataset):
             x, direction, mask, particle, point, valid = (
                 value[selection] for value in (x, direction, mask, particle, point, valid)
             )
-            if self.pred_thinning_prob > 0 and selection.any():
+            if (self.pred_thinning_prob > 0 or self.score_feature) and selection.any():
                 prob = prob[selection]
+            if self.pred_thinning_prob > 0 and selection.any():
                 original_centroid_m = original_centroid_m[selection]
         if self.pred_thinning_prob > 0 and len(x):
             x, mask, point = thin_predicted_hits(
@@ -150,6 +174,29 @@ class AdaptedTrackDataset(BatchedTrackDataset):
                 self.pred_thinning_prob,
                 self.pred_threshold_min,
                 self.pred_threshold_max,
+            )
+        if self.score_feature:
+            if len(x):
+                score = torch.from_numpy(prob)
+                if self.split == "train" and self.has_signal_probability and self.score_jitter:
+                    score = (score + torch.randn_like(score) * self.score_jitter).clamp(0.7, 1.0)
+                score = score * mask
+            else:
+                score = torch.zeros(mask.shape, dtype=torch.float32)
+            x = torch.cat((x, score.unsqueeze(-1)), dim=-1)
+        if self.split == "train":
+            x, direction, point = augment_track_batch(
+                x,
+                direction,
+                mask,
+                point,
+                self.expected_mean,
+                self.expected_std,
+                rotate_z_prob=self.rotate_z_prob,
+                time_jitter_ns=self.time_jitter_ns,
+                event_time_jitter_ns=self.event_time_jitter_ns,
+                coord_jitter_m=self.coord_jitter_m,
+                charge_log_jitter=self.charge_log_jitter,
             )
         return x, direction, mask, particle, point, valid
 
@@ -254,6 +301,14 @@ def main() -> None:
     parser.add_argument("--val-every", type=int, default=250)
     parser.add_argument("--gt-weight", type=float, default=0.5)
     parser.add_argument("--point-weight", type=float, default=0.5)
+    parser.add_argument(
+        "--pred-direction-loss",
+        choices=("mae", "mse", "cosine", "chord", "trimmed_angular", "angular_huber"),
+        default="mae",
+    )
+    parser.add_argument("--pred-direction-power", type=float, default=1.0)
+    parser.add_argument("--pred-direction-cap-deg", type=float, default=8.0)
+    parser.add_argument("--pred-direction-scale", type=float, default=1.0)
     parser.add_argument("--backbone-lr", type=float, default=2e-5)
     parser.add_argument("--point-lr", type=float, default=1e-4)
     parser.add_argument("--direction-head-only", action="store_true")
@@ -268,6 +323,24 @@ def main() -> None:
     parser.add_argument("--pred-thinning-prob", type=float, default=0.0)
     parser.add_argument("--pred-threshold-min", type=float, default=0.70)
     parser.add_argument("--pred-threshold-max", type=float, default=0.90)
+    parser.add_argument("--score-feature", action="store_true")
+    parser.add_argument("--score-jitter", type=float, default=0.0)
+    parser.add_argument("--rotate-z-prob", type=float, default=0.0)
+    parser.add_argument("--time-jitter-ns", type=float, default=0.0)
+    parser.add_argument("--event-time-jitter-ns", type=float, default=0.0)
+    parser.add_argument("--coord-jitter-m", type=float, default=0.0)
+    parser.add_argument("--charge-log-jitter", type=float, default=0.0)
+    parser.add_argument("--score-mode", choices=("absolute", "centered"), default="absolute")
+    parser.add_argument("--init-from-five-feature-model", action="store_true")
+    parser.add_argument("--score-column-only", action="store_true")
+    parser.add_argument("--score-column-lr", type=float, default=1e-3)
+    parser.add_argument("--graph-layers", type=int, default=0)
+    parser.add_argument("--graph-k", type=int, default=12)
+    parser.add_argument("--graph-photon-speed-m-per-ns", type=float, default=0.225)
+    parser.add_argument("--graph-minkowski-edge", action="store_true")
+    parser.add_argument("--graph-only", action="store_true")
+    parser.add_argument("--graph-lr", type=float, default=1e-4)
+    parser.add_argument("--init-from-transformer-model", action="store_true")
     parser.add_argument("--anchor-scale-m", type=float, default=50.0)
     parser.add_argument("--seed", type=int, default=91)
     parser.add_argument("--eval-only", action="store_true")
@@ -276,10 +349,44 @@ def main() -> None:
     args = parser.parse_args()
     if not 0 <= args.gt_weight <= 1:
         raise ValueError("gt-weight must be between 0 and 1")
+    if args.pred_direction_scale <= 0 or args.pred_direction_power <= 0:
+        raise ValueError("Direction-loss scale and power must be positive")
     if not 0 <= args.pred_thinning_prob <= 1:
         raise ValueError("pred-thinning-prob must be between 0 and 1")
     if not 0.70 <= args.pred_threshold_min <= args.pred_threshold_max <= 1:
         raise ValueError("Invalid predicted-hit threshold interval")
+    if args.score_jitter < 0:
+        raise ValueError("Score jitter must be nonnegative")
+    if not 0 <= args.rotate_z_prob <= 1:
+        raise ValueError("rotate-z-prob must be in [0, 1]")
+    if (
+        min(
+            args.time_jitter_ns,
+            args.event_time_jitter_ns,
+            args.coord_jitter_m,
+            args.charge_log_jitter,
+        )
+        < 0
+    ):
+        raise ValueError("Physical jitter magnitudes must be nonnegative")
+    if args.init_from_five_feature_model and (not args.score_feature or args.load_model is None):
+        raise ValueError("Five-feature initialization needs --score-feature and --load-model")
+    if args.score_feature and (args.direction_head_only or args.teacher_weight > 0):
+        raise ValueError("Score-feature training needs the full backbone and no legacy teacher")
+    if args.score_column_only and (not args.score_feature or args.score_column_lr <= 0):
+        raise ValueError(
+            "Score-column-only training needs a score feature and positive learning rate"
+        )
+    if args.graph_layers < 0 or args.graph_k < 1 or args.graph_photon_speed_m_per_ns <= 0:
+        raise ValueError("Invalid graph geometry settings")
+    if args.graph_layers and args.score_feature:
+        raise ValueError("Graph and score-feature upgrades are separate experiments")
+    if args.graph_only and (args.graph_layers < 1 or args.graph_lr <= 0):
+        raise ValueError("Graph-only training needs graph layers and positive graph LR")
+    if args.init_from_transformer_model and (args.graph_layers < 1 or args.load_model is None):
+        raise ValueError("Transformer initialization needs a graph and --load-model")
+    if args.init_from_five_feature_model and args.init_from_transformer_model:
+        raise ValueError("Select only one architecture initialization mode")
     args.output_dir.mkdir(parents=True, exist_ok=True)
     (args.output_dir / "config.json").write_text(
         json.dumps(vars(args), indent=2, default=str) + "\n"
@@ -289,7 +396,24 @@ def main() -> None:
     model = model_from_checkpoints(
         args.angle_checkpoint, args.track_checkpoint, args.anchor_scale_m, device
     )
-    if args.load_model is not None:
+    if args.load_model is not None and (
+        args.init_from_five_feature_model or args.init_from_transformer_model
+    ):
+        checkpoint = torch.load(args.load_model, map_location="cpu", weights_only=False)
+        model.load_state_dict(checkpoint["model"], strict=True)
+    if args.score_feature:
+        model = upgrade_track_model(model, args.score_mode).to(device)
+    if args.graph_layers:
+        model = upgrade_track_model_graph(
+            model,
+            graph_layers=args.graph_layers,
+            graph_k=args.graph_k,
+            photon_speed_m_per_ns=args.graph_photon_speed_m_per_ns,
+            minkowski_edge=args.graph_minkowski_edge,
+        ).to(device)
+    if args.load_model is not None and not (
+        args.init_from_five_feature_model or args.init_from_transformer_model
+    ):
         checkpoint = torch.load(args.load_model, map_location="cpu", weights_only=False)
         model.load_state_dict(checkpoint["model"], strict=True)
     teacher = None
@@ -312,6 +436,8 @@ def main() -> None:
     with h5py.File(args.norm_data or args.pred_data, "r") as h5:
         expected_mean = np.asarray(h5["norm_param/mean"], dtype=np.float32)
         expected_std = np.asarray(h5["norm_param/std"], dtype=np.float32)
+    if args.graph_layers:
+        model.backbone.set_feature_norm(expected_mean, expected_std)
     with h5py.File(args.pred_data, "r") as h5:
         pred_mean = np.asarray(h5["norm_param/mean"], dtype=np.float32)
         pred_std = np.asarray(h5["norm_param/std"], dtype=np.float32)
@@ -329,7 +455,15 @@ def main() -> None:
     # first contiguous block of its event ordering.
     gt_val_small = gt_masks["gt_val"] & (np.arange(len(gt_masks["gt_val"])) % 6 == 0)
 
-    def dataset(path, anchors, split, keep=None, single_muatm_only=False, pred_thinning_prob=0.0):
+    def dataset(
+        path,
+        anchors,
+        split,
+        keep=None,
+        single_muatm_only=False,
+        pred_thinning_prob=0.0,
+        train_aug=False,
+    ):
         return AdaptedTrackDataset(
             str(path),
             split,
@@ -346,6 +480,13 @@ def main() -> None:
             pred_thinning_prob=pred_thinning_prob,
             pred_threshold_min=args.pred_threshold_min,
             pred_threshold_max=args.pred_threshold_max,
+            score_feature=args.score_feature,
+            score_jitter=args.score_jitter if split == "train" else 0.0,
+            rotate_z_prob=args.rotate_z_prob if train_aug else 0.0,
+            time_jitter_ns=args.time_jitter_ns if train_aug else 0.0,
+            event_time_jitter_ns=args.event_time_jitter_ns if train_aug else 0.0,
+            coord_jitter_m=args.coord_jitter_m if train_aug else 0.0,
+            charge_log_jitter=args.charge_log_jitter if train_aug else 0.0,
         )
 
     if args.eval_only:
@@ -410,6 +551,7 @@ def main() -> None:
                 "train",
                 single_muatm_only=args.single_muatm_only,
                 pred_thinning_prob=args.pred_thinning_prob,
+                train_aug=True,
             ),
             args.workers,
             True,
@@ -424,22 +566,56 @@ def main() -> None:
             args.seed + 1,
         )
     )
-    if args.direction_head_only:
+    if args.score_column_only:
+        model.requires_grad_(False)
+        score_weight = model.backbone.embed[0].weight
+        score_weight.requires_grad_(True)
+        gradient_mask = torch.zeros_like(score_weight)
+        gradient_mask[:, -1] = 1
+        score_weight.register_hook(lambda gradient: gradient * gradient_mask)
+        optimizer = torch.optim.AdamW(
+            [{"params": [score_weight], "lr": args.score_column_lr}],
+            weight_decay=0.0,
+            fused=device.type == "cuda",
+        )
+    elif args.graph_only:
+        model.requires_grad_(False)
+        model.backbone.graph_blocks.requires_grad_(True)
+        optimizer = torch.optim.AdamW(
+            [{"params": model.backbone.graph_blocks.parameters(), "lr": args.graph_lr}],
+            weight_decay=1e-4,
+            fused=device.type == "cuda",
+        )
+    elif args.direction_head_only:
         model.backbone.requires_grad_(False)
         model.backbone.head.requires_grad_(True)
-    optimizer = torch.optim.AdamW(
-        [
-            {
-                "params": model.backbone.head.parameters()
-                if args.direction_head_only
-                else model.backbone.parameters(),
-                "lr": args.backbone_lr,
-            },
-            {"params": model.point_head.parameters(), "lr": args.point_lr},
-        ],
-        weight_decay=1e-4,
-        fused=device.type == "cuda",
-    )
+    if not args.score_column_only:
+        if not args.graph_only:
+            if args.graph_layers:
+                backbone_params = [
+                    value
+                    for name, value in model.backbone.named_parameters()
+                    if not name.startswith("graph_blocks.")
+                ]
+                groups = [
+                    {"params": backbone_params, "lr": args.backbone_lr},
+                    {"params": model.backbone.graph_blocks.parameters(), "lr": args.graph_lr},
+                ]
+            else:
+                groups = [
+                    {
+                        "params": model.backbone.head.parameters()
+                        if args.direction_head_only
+                        else model.backbone.parameters(),
+                        "lr": args.backbone_lr,
+                    }
+                ]
+            groups.append({"params": model.point_head.parameters(), "lr": args.point_lr})
+            optimizer = torch.optim.AdamW(
+                groups,
+                weight_decay=1e-4,
+                fused=device.type == "cuda",
+            )
     scaler = torch.cuda.amp.GradScaler(enabled=device.type == "cuda")
     initial = {
         "pred_val": evaluate(model, pred_val, device),
@@ -458,7 +634,12 @@ def main() -> None:
     best_score = initial["score"] if initial_admissible else float("inf")
     for step in range(1, args.steps + 1):
         model.train()
-        if args.direction_head_only:
+        if args.score_column_only:
+            model.eval()
+        elif args.graph_only:
+            model.eval()
+            model.backbone.graph_blocks.train()
+        elif args.direction_head_only:
             model.backbone.embed.eval()
             model.backbone.encoder.eval()
         optimizer.zero_grad(set_to_none=True)
@@ -478,11 +659,13 @@ def main() -> None:
                 angular = loss_function(
                     direction,
                     target_dir,
-                    "mae" if name == "pred" else "trimmed_angular",
-                    1.0,
+                    args.pred_direction_loss if name == "pred" else "trimmed_angular",
+                    args.pred_direction_power if name == "pred" else 1.0,
                     None,
-                    8.0,
+                    args.pred_direction_cap_deg if name == "pred" else 8.0,
                 )
+                if name == "pred":
+                    angular = angular * args.pred_direction_scale
                 transverse = point_loss(
                     point, target_point, target_dir, valid, args.anchor_scale_m, "line_huber"
                 )

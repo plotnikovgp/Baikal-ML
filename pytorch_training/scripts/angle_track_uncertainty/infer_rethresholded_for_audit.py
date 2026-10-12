@@ -45,6 +45,7 @@ def selected_batch(
     channels_per_string: int,
     sample_start_event: int,
     event_stride: int,
+    score_feature: bool = False,
 ):
     starts = np.asarray(group["ev_starts/data"][begin : end + 1], dtype=np.int64)
     first, last = int(starts[0]), int(starts[-1])
@@ -74,6 +75,9 @@ def selected_batch(
         normalized = (selected[:max_len] * stored_std + stored_mean - expected_mean) / expected_std
         if prep["center_time"]:
             normalized[:, 1] -= normalized[:, 1].mean()
+        if score_feature:
+            selected_probabilities = probabilities[lo:hi][choose][:max_len, None]
+            normalized = np.concatenate((normalized, selected_probabilities), axis=1)
         kept.append(
             (
                 event_id.decode() if isinstance(event_id, bytes) else str(event_id),
@@ -87,7 +91,7 @@ def selected_batch(
     if not kept:
         return [], None, None
     max_used = max(len(row[5]) for row in kept)
-    x = np.zeros((len(kept), max_used, 5), dtype=np.float32)
+    x = np.zeros((len(kept), max_used, 5 + int(score_feature)), dtype=np.float32)
     mask = np.zeros((len(kept), max_used), dtype=bool)
     for i, row in enumerate(kept):
         used = len(row[5])
