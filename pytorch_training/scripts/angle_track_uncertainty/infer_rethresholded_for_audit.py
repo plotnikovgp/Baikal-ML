@@ -103,6 +103,46 @@ def selected_batch(
     return kept, x, mask
 
 
+def added_hits_pass_photon_gate(
+    group: h5py.Group,
+    begin: int,
+    end: int,
+    source_indices: np.ndarray,
+    directions: np.ndarray,
+    anchors: np.ndarray,
+    high_threshold: float,
+    low_threshold: float,
+    maximum_residual_ns: float,
+    stored_mean: np.ndarray,
+    stored_std: np.ndarray,
+) -> np.ndarray:
+    """Check every added hit against the first-pass track and high-hit clock."""
+    starts = np.asarray(group["ev_starts/data"][begin : end + 1], dtype=np.int64)
+    first, last = int(starts[0]), int(starts[-1])
+    features = np.asarray(group["data/data"][first:last], dtype=np.float64)
+    features = features * stored_std.astype(np.float64) + stored_mean.astype(np.float64)
+    probabilities = np.asarray(group["signal_probability/data"][first:last])
+    passed = np.zeros(len(source_indices), dtype=bool)
+    photon_factor = np.sqrt(1.36**2 - 1.0)
+    for j, source_index in enumerate(source_indices):
+        event = int(source_index) - begin
+        lo, hi = int(starts[event] - first), int(starts[event + 1] - first)
+        probability = probabilities[lo:hi]
+        high = probability >= high_threshold
+        added = (probability >= low_threshold) & ~high
+        if not high.any() or not added.any():
+            continue
+        direction = directions[j] / np.linalg.norm(directions[j])
+        delta = features[lo:hi, 2:5] - anchors[j]
+        along = delta @ direction
+        transverse = np.linalg.norm(delta - along[:, None] * direction, axis=1)
+        expected_ns = (along + photon_factor * transverse) / 0.299792458
+        residual_ns = features[lo:hi, 1] - expected_ns
+        clock_ns = np.median(residual_ns[high])
+        passed[j] = np.max(np.abs(residual_ns[added] - clock_ns)) < maximum_residual_ns
+    return passed
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bundle", type=Path, required=True)
@@ -116,6 +156,11 @@ def main() -> None:
         help="Rerun upward events only when the lower threshold adds selected hits",
     )
     parser.add_argument("--gate-theta-max-deg", type=float, default=90.0)
+    parser.add_argument(
+        "--max-added-photon-residual-ns",
+        type=float,
+        help="Require every newly selected hit to agree with the first-pass photon clock",
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--start-event", type=int, default=0)
@@ -141,6 +186,10 @@ def main() -> None:
         raise ValueError("Conditional threshold must be positive and below the first threshold")
     if not 0 < args.gate_theta_max_deg < 180:
         raise ValueError("Gate theta must be between 0 and 180 degrees")
+    if args.max_added_photon_residual_ns is not None and (
+        args.max_added_photon_residual_ns <= 0 or args.conditional_low_threshold is None
+    ):
+        raise ValueError("Positive photon gate requires a conditional low threshold")
     if args.batch_size < 1 or args.threads < 1 or args.channels_per_string < 1:
         raise ValueError("Batch size, threads, and channels per string must be positive")
     if args.start_event < 0 or (args.max_events is not None and args.max_events < 1):
@@ -262,6 +311,24 @@ def main() -> None:
                         ],
                         dtype=np.int64,
                     )
+                    if len(rerun_indices) and args.max_added_photon_residual_ns is not None:
+                        first_pass_anchors = np.stack(
+                            [kept[index][4] + offset[index] for index in rerun_indices]
+                        )
+                        compatible = added_hits_pass_photon_gate(
+                            group,
+                            begin,
+                            end,
+                            np.asarray([kept[index][1] for index in rerun_indices]),
+                            direction[rerun_indices],
+                            first_pass_anchors,
+                            args.threshold,
+                            args.conditional_low_threshold,
+                            args.max_added_photon_residual_ns,
+                            stored_mean,
+                            stored_std,
+                        )
+                        rerun_indices = rerun_indices[compatible]
                     if len(rerun_indices):
                         low_indices = [low_lookup[kept[index][1]] for index in rerun_indices]
                         with torch.inference_mode():
@@ -306,6 +373,7 @@ def main() -> None:
                 "threshold": args.threshold,
                 "conditional_low_threshold": args.conditional_low_threshold,
                 "gate_theta_max_deg": args.gate_theta_max_deg,
+                "max_added_photon_residual_ns": args.max_added_photon_residual_ns,
                 "conditional_gate_events": conditional_gate_total,
                 "conditional_reruns": conditional_total,
                 "photon_residual_checkpoint": str(args.photon_residual_checkpoint)

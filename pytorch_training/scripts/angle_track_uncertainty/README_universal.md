@@ -1158,3 +1158,69 @@ python infer_rethresholded_for_audit.py \
   --threshold 0.70 --conditional-low-threshold 0.50 \
   --gate-theta-max-deg 90 --device cpu --output /path/to/predictions.csv
 ```
+
+## Added-hit photon-time gate (2026-10-13)
+
+The preceding theta-only conditional rule improves independent `nue2` but
+slightly hurts the external reco sample. An optional, more conservative
+`--max-added-photon-residual-ns 50` gate now checks **every** newly admitted
+hit against the first-pass track. It computes the idealized Cherenkov arrival
+time using positions in metres, times in ns, refractive index 1.36, and
+`c=0.299792458 m/ns`. The unknown event clock is estimated by the median
+residual of the original p>=0.70 hits. The same checkpoint is rerun at
+p>=0.50 only when first-pass theta is <90°, at least one hit is added, and
+all added hits are within 50 ns of that clock. The p>=0.70 two-string/eight-hit
+acceptance remains fixed; this is **not** an ensemble. This option does not
+recalibrate the uncertainty outputs.
+
+The 50 ns criterion was explored on the first two disjoint 2019 samples and
+the external reco comparison. A third, previously unused 100,000-event 2019
+`nue2` sample from 20 different source parts (`part-shift 4`) was then
+prepared with the unchanged frozen hit classifier. It has zero exact event-ID
+or generated-primary overlap with the first two samples and zero
+generated-primary overlap with the 2020 internal train union. On the same
+51,386 p>=0.70-accepted events, actual inference gives direction
+q50/q68/q95 **4.084°/7.743°/39.610°** at baseline and
+**3.855°/7.447°/39.062°** with the 50 ns gate. The paired q68 reduction is
+0.296°; its 95% source-part bootstrap interval is **[0.244°, 0.349°]**.
+This is independent evidence for the `nue2` gain, not a new model weight.
+
+| Paired cohort | N | Baseline q50/q68 | 50 ns gate q50/q68 |
+|---|---:|---:|---:|
+| 2020 internal, ID-masked/deduplicated all | 109,897 | 6.112°/9.516° | 6.090°/9.497° |
+| 2020 internal `nue2` | 8,673 | 3.177°/5.984° | 2.970°/5.628° |
+| 2020 internal `nuatm` | 14,121 | 1.994°/3.419° | 1.900°/3.284° |
+| 2020 internal `muatm` | 87,103 | 7.202°/10.613° | 7.202°/10.612° |
+| External reco `nue2`, paired fair sample | 57,316 | 2.862°/5.923° | 2.861°/5.916° |
+| External reco `nue2`, official reco cut | 54,424 | 2.738°/5.543° | 2.738°/5.537° |
+| External reco, ROOT-available 10/13 preliminary cuts | 44,189 | 2.327°/4.450° | 2.327°/4.452° |
+
+The external reco q68 changes are **not** statistically resolved: paired
+event-bootstrap 95% intervals are [-0.020°, +0.0001°] without and
+[-0.014°, +0.005°] with the older official reco cut. The 10/13 preliminary
+selection is only a superset of the supplied program's full 13-condition
+cut. These 2020 comparisons are descriptive because most generated
+primaries overlap training. On 26,229 MC events with a valid truth line,
+transverse anchor q68 improves 4.755 -> 4.656 m, while q95 rises
+17.625 -> 17.849 m; the tail needs further attention.
+
+On the same 4,924 experimental events and 87,103 unique `muatm` MC events,
+only two experimental and 55 `muatm` predictions rerun. With matching
+weights fixed from the baseline observed hits/strings, theta W1 changes
+3.062° -> 3.065°; additionally matching vertical hit spread gives
+0.375° -> 0.376°. These are effectively unchanged distributional checks,
+**not** experimental angular-resolution measurements. The saved
+[`theta_distribution.png`](results/conditional_photon_gate_v1/theta_distribution.png)
+shows both methods. The mode remains **experimental and off by default**:
+uncertainty heads are calibrated for p>=0.70 only, the external reco q68 gain
+is unproven, and the transverse-error q95 is slightly worse. It adds a
+second CPU pass for selected events; a 512-raw-event `nue2` smoke took
+10.4 s versus 8.4 s for a single pass on the same host (not a production
+throughput benchmark).
+
+Reproducible inputs, cohort counts, bootstrap intervals, and the plot are in
+[`results/conditional_photon_gate_v1/`](results/conditional_photon_gate_v1/).
+The third raw HDF5 has SHA256
+`191491f16c3fbf75ce3d62a9808585a7bf1ba3b10b1425055654d777d93441f5`.
+CPU example: add `--max-added-photon-residual-ns 50` to the command above,
+using an HDF5 prepared at p>=0.50.
