@@ -1,0 +1,114 @@
+{
+  "gt_signal_2s8h_2019_events": 51114,
+  "inputs": {
+    "photon_csv": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/2019_holdout/v4_photon_pair.csv",
+    "predicted_2019": "/home/plotnikovgp/tmp/angle_reconstruction/data/2019_nue2_predsignal_p070_test.h5",
+    "raw_2019": "/home/plotnikovgp/tmp/angle_reconstruction/data/2019_nue2_raw_holdout_100k.h5",
+    "reco_2020_fair": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/baikal_reco_signal_h8s2_trainnorm_faircompare_with_tres.h5",
+    "reco_2020_paired": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/reco_eval/paired_exact_photon_pair_fixed/reco_paired_events.npz",
+    "v4_csv": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/2019_holdout/v4.csv"
+  },
+  "photon_2019_all": {
+    "q50": 4.178243849793088,
+    "q68": 7.8436605672853075,
+    "q95": 40.584052343746315
+  },
+  "photon_2019_gt_cut": {
+    "q50": 4.147958476304563,
+    "q68": 7.760596820205898,
+    "q95": 39.37206348974957
+  },
+  "photon_2020_reco_paired": {
+    "q50": 2.862150567083982,
+    "q68": 5.922878446232572,
+    "q95": 42.57608337688958
+  },
+  "photon_minus_v4_2019_q68_bootstrap": {
+    "event_95pct": [
+      -0.06193467380306992,
+      0.0022602517577884956
+    ],
+    "source_part_95pct": [
+      -0.05595632254293559,
+      -0.008365218412495051
+    ]
+  },
+  "photon_minus_v4_2019_q68_deg": -0.03343610856098689,
+  "predicted_2019_events": 51473,
+  "raw_2019_events": 100000,
+  "selection": "frozen hit classifier p>=0.70, >=8 selected hits/2 strings; 2019 fair comparison additionally requires GT signal 2s8h",
+  "span_2019_median_m": 138.81908354705484,
+  "span_2020_median_m": 173.80380249023438,
+  "span_bins": [
+    {
+      "n_2019": 9722,
+      "n_2020": 1481,
+      "q68_2019_deg": 19.944136895430002,
+      "q68_2020_deg": 24.258141382307315,
+      "span_high_m": 100.0,
+      "span_low_m": 0.0
+    },
+    {
+      "n_2019": 19784,
+      "n_2020": 18911,
+      "q68_2019_deg": 8.9084379237241,
+      "q68_2020_deg": 9.618034456080531,
+      "span_high_m": 150.0,
+      "span_low_m": 100.0
+    },
+    {
+      "n_2019": 9478,
+      "n_2020": 14465,
+      "q68_2019_deg": 4.703666690212888,
+      "q68_2020_deg": 5.619727806589466,
+      "span_high_m": 200.0,
+      "span_low_m": 150.0
+    },
+    {
+      "n_2019": 5198,
+      "n_2020": 8472,
+      "q68_2019_deg": 3.5187184583033355,
+      "q68_2020_deg": 3.5605262508734543,
+      "span_high_m": 250.0,
+      "span_low_m": 200.0
+    },
+    {
+      "n_2019": 2689,
+      "n_2020": 4138,
+      "q68_2019_deg": 2.672639555876245,
+      "q68_2020_deg": 2.384672353290908,
+      "span_high_m": 300.0,
+      "span_low_m": 250.0
+    },
+    {
+      "n_2019": 2537,
+      "n_2020": 3524,
+      "q68_2019_deg": 2.4318430310587975,
+      "q68_2020_deg": 2.104462387010952,
+      "span_high_m": 400.0,
+      "span_low_m": 300.0
+    },
+    {
+      "n_2019": 1706,
+      "n_2020": 6325,
+      "q68_2019_deg": 1.9817075626685159,
+      "q68_2020_deg": 4.659014500014654,
+      "span_high_m": null,
+      "span_low_m": 400.0
+    }
+  ],
+  "span_standardized_2019_q68_deg": 5.189047641338051,
+  "span_standardized_target_coverage": 0.9999999999999999,
+  "span_theta_standardized_2019_q68_deg": 5.243712304571238,
+  "span_theta_standardized_target_coverage": 0.981488589573592,
+  "v4_2019_all": {
+    "q50": 4.285084619906955,
+    "q68": 7.877096675846294,
+    "q95": 40.56311515556699
+  },
+  "v4_2019_gt_cut": {
+    "q50": 4.252175535856094,
+    "q68": 7.790408639745407,
+    "q95": 39.35543182768515
+  }
+}

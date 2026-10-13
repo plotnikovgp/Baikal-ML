@@ -1,0 +1,15 @@
+{
+  "selection": "reco nue2, frozen hit classifier p>=0.70, at least 8 selected hits on 2 strings",
+  "source_events": {"train": 478897, "val": 59852},
+  "selected_events": {"train": 469625, "val": 58663},
+  "model": "v4 plus paired photon residual; only final direction rows updated",
+  "training": {"steps": 1500, "batch_size": 128, "learning_rate": 0.0003, "loss": "trimmed angular, 12 degree cap"},
+  "validation": {
+    "step_0": {"reco_val_q50_deg": 2.884594, "reco_val_q68_deg": 6.002183, "internal_pred_val_q68_deg": 4.342756, "gt_val_q68_deg": 3.944741},
+    "step_750": {"reco_val_q50_deg": 2.863001, "reco_val_q68_deg": 5.982345, "internal_pred_val_q68_deg": 4.414602, "gt_val_q68_deg": 3.951679}
+  },
+  "primary_disjoint_reco_val_events_after_selection": 631,
+  "min_events_required_for_promotion_in_revised_script": 1000,
+  "interpretation": "No checkpoint accepted. Reco-val shares generated primaries with reco-train; the primary-disjoint subset is too small and selected to be a reliable optimization target.",
+  "remote_run_directory": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/reco_aux/finalrows_lr3e4_1500"
+}

@@ -978,9 +978,13 @@ better at q50; the NN is better at q68. The missing three conditions could
 change both sample size and ranking. The supplied program's example file
 lists are for 2023, whereas this external comparison uses 2020 reco ROOT
 files; its preselection should not be called the same as the older official
-three-condition reco cut. A complete evaluation requires `trAnalysis`
-output from that program on these exact 2020 source ROOT files or its BARS
-runtime to calculate the missing variables. Full per-condition counts and
+three-condition reco cut. The raw ROOT contains the required event, geometry,
+mask, and reconstructed-track objects, so the missing conditions are
+calculable in principle. However, the BARS source/build found on cluster62
+has an older `BRecoMuonBDTEval` API without the three new getters; the local
+ROOT interpreter also fails to start with that installation. A compatible
+evaluator build or a validated reimplementation is required for exact 13/13
+cuts. Full per-condition counts and
 metrics are in
 [`results/reco_preliminary_partial/`](results/reco_preliminary_partial/).
 
@@ -1008,3 +1012,75 @@ checkpoint; no independent-test or experimental-data comparison is claimed,
 and the original production model remains unchanged. Configurations and
 per-step validation metrics are in
 [`results/photon_joint_fixed_v1/`](results/photon_joint_fixed_v1/).
+
+## Primary-overlap audit and independent 2019 holdout (2026-10-13)
+
+`audit_primary_overlap.py` compares the exact float32
+`(primary theta, primary phi, primary energy)` triple. A match establishes a
+shared **generated primary**, not necessarily an identical detector event:
+ten sampled cross-dataset pairs showed almost no identical
+`(channel, charge)` hit signatures. Nevertheless, file/ID-disjoint splits
+are not primary-disjoint:
+
+| Comparison | Same-primary fraction |
+|---|---:|
+| Reco val / test versus reco train | 94.48% / 94.77% |
+| Reco test versus internal 2020 predicted-hit + GT train | 97.74% |
+| Internal clean-GT val / test versus clean-GT train | 91.15% / 91.19% |
+
+Only **329 of 57,316** paired 2020 reco-test events have a primary absent
+from the internal 2020 train union. On those 329 events, paired-threshold NN
+direction q50/q68 is 3.479°/6.916° versus standard reco 3.672°/9.941°;
+the paired event-bootstrap 95% interval for NN-minus-reco q68 is
+[-7.30°, -1.21°]. This tiny subset cannot establish a precise independent
+reco-MC ranking. All earlier full reco-test numbers remain valid descriptive
+measurements but should **not** be described as primary-independent tests.
+The complete count audit is in
+[`results/primary_overlap_v1/`](results/primary_overlap_v1/).
+
+An exploratory reco-train auxiliary adaptation used the same frozen hit
+classifier, p>=0.70 and 2-string/8-hit cut, retaining 469,625 train and
+58,663 val events. Only the final photon-head direction rows were trainable.
+At step 750, reco-val q68 changed 6.002° -> 5.982°, while independent
+internal predicted-hit validation q68 worsened 4.343° -> 4.415°; the
+original run saved no checkpoint. After the primary audit,
+`train_reco_aux_direction.py` was tightened to log primary-disjoint controls
+and require at least 1,000 primary-unseen reco-val events before promotion;
+this dataset has only **631** after hit selection, so no future candidate
+from this split can pass that gate. Neither the exploratory run nor its
+reco-val score is a basis for deployment. This 631-event slice has baseline
+q68 24.7° and is highly selection-biased, not a representative replacement
+for the full reco-val. The stricter primary-unseen internal GT-val control
+contains 3,385 events and baseline q68 4.567° versus 3.945° on the original
+47,792-event ID-masked control; these also have different event mixes.
+The exploratory run settings and key validation values are archived in
+[`results/reco_aux_v1/`](results/reco_aux_v1/).
+
+For a stronger out-of-season check, `extract_independent_2019_raw.py`
+selected the first 5,000 raw nue2 events from each of 20 evenly spaced
+2019 source parts, without inspecting labels. The resulting 100,000-event
+sample has **zero** matching generated-primary triples with the 2020 train
+union, and zero exact event-ID matches with the hit-classifier's train/val/test
+files. The same frozen hit classifier at p>=0.70 retained 51,473 events,
+with selected-hit precision 99.52% and signal recall 97.13% within those
+events. `audit_2019_holdout.py` measures the unchanged v4 and paired-photon
+direction models:
+
+| 2019 predicted-hit selection | N | v4 q50/q68 | v4 + paired photon q50/q68 |
+|---|---:|---:|---:|
+| p>=0.70, >=8 hits/2 strings | 51,473 | 4.285°/7.877° | 4.178°/7.844° |
+| Plus GT-signal >=8 hits/2 strings | 51,114 | 4.252°/7.790° | 4.148°/7.761° |
+
+The photon-minus-v4 q68 change on all 2019 events is -0.033°; its paired
+event-bootstrap interval is [-0.062°, +0.002°], so this is not a firm
+out-of-season gain. The apparent seasonal gap versus the 2020 paired reco
+set (q68 5.923°) is strongly confounded by topology: median GT-signal hit
+span is **139 m** in 2019 versus **174 m** in 2020, and 19.0% versus 2.6%
+of events have span <100 m. Reweighting the 2019 errors to the 2020 span
+distribution gives q68 **5.189°**; matching both span and true-theta bins
+gives **5.244°** (98.1% target-mass support). These are descriptive
+standardizations, not proof of causal equivalence or a replacement for a
+new primary-disjoint 2020 test. They do not support claiming severe
+2020-specific overfit from the raw seasonal q68 gap alone. Full metrics and
+span-bin counts are in
+[`results/2019_holdout_v1/`](results/2019_holdout_v1/).
