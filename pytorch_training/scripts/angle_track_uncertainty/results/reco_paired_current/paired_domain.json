@@ -1,0 +1,63 @@
+{
+  "experimental_events": 4924,
+  "unique_muatm_mc_events": 25054,
+  "matched_theta_w1_before_deg": 2.974835464206852,
+  "matched_theta_w1_after_deg": 2.950952326942767,
+  "w1_delta_after_minus_before_ci95_deg": [
+    -0.0453272662020814,
+    0.012512459162361123
+  ],
+  "experimental_direction_change_q50_q68_deg": [
+    0.8255535884905791,
+    1.0829285659459553
+  ],
+  "experiment_theta_q10_q50_q90_before_deg": [
+    116.81085205078125,
+    140.8287124633789,
+    162.49710998535156
+  ],
+  "experiment_theta_q10_q50_q90_after_deg": [
+    116.86070175170899,
+    140.79043579101562,
+    162.44402160644532
+  ],
+  "matching_support": {
+    "exp_outside_mc_support_count": 0,
+    "exp_outside_mc_support_fraction": 0.0,
+    "mc_effective_sample_size": 23408.628579834665,
+    "mc_nonzero_weight_count": 25054,
+    "hit_edges": [
+      8,
+      10,
+      12,
+      16,
+      24,
+      40
+    ],
+    "string_edges": [
+      2,
+      3,
+      4,
+      6,
+      9
+    ]
+  },
+  "warning": "Experimental data have no angle truth; W1 is distributional only.",
+  "zspread_matched_theta_w1_before_deg": 0.36793362773515464,
+  "zspread_matched_theta_w1_after_deg": 0.40799316599997915,
+  "zspread_w1_delta_after_minus_before_ci95_deg": [
+    -0.01683177937934713,
+    0.07294226448320638
+  ],
+  "zspread_matching_support": {
+    "exp_unsupported_events": 0,
+    "exp_unsupported_fraction": 0.0,
+    "mc_effective_sample_size": 21070.6564101088,
+    "bin_edges": {
+      "z_std_m": [
+        33.07643508911133,
+        51.159297943115234
+      ]
+    }
+  }
+}

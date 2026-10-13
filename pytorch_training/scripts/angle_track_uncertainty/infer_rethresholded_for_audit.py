@@ -116,6 +116,7 @@ def main() -> None:
     parser.add_argument("--max-events", type=int, default=None)
     parser.add_argument("--event-stride", type=int, default=1)
     parser.add_argument("--threads", type=int, default=4)
+    parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     parser.add_argument("--channels-per-string", type=int, default=36)
     parser.add_argument(
         "--center-time-alpha",
@@ -137,6 +138,9 @@ def main() -> None:
     if not 0.0 <= args.center_time_alpha <= 1.0:
         raise ValueError("Center-time alpha must be between zero and one")
     torch.set_num_threads(args.threads)
+    if args.device == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA requested but unavailable")
+    device = torch.device(args.device)
     bundle = torch.load(args.bundle, map_location="cpu", weights_only=True)
     full_model = build_model(bundle["model_config"])
     full_model.load_state_dict(bundle["state_dict"], strict=True)
@@ -152,6 +156,7 @@ def main() -> None:
         )
         model.load_state_dict(saved["model"], strict=True)
         model.eval()
+    model = model.to(device)
     prep = bundle["preprocessing"]
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
@@ -189,9 +194,11 @@ def main() -> None:
             if not kept:
                 continue
             with torch.inference_mode():
-                direction, offset = model(torch.from_numpy(x), torch.from_numpy(mask))
-            direction = direction.numpy()
-            offset = offset.numpy()
+                direction, offset = model(
+                    torch.from_numpy(x).to(device), torch.from_numpy(mask).to(device)
+                )
+            direction = direction.cpu().numpy()
+            offset = offset.cpu().numpy()
             theta = np.rad2deg(np.arccos(np.clip(direction[:, 2], -1, 1)))
             phi = np.mod(np.rad2deg(np.arctan2(direction[:, 1], direction[:, 0])), 360)
             for i, row in enumerate(kept):

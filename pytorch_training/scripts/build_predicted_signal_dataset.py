@@ -303,6 +303,7 @@ def process_split(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True)
+    parser.add_argument("--splits", nargs="+", choices=SPLITS, default=SPLITS)
     parser.add_argument("--output", required=True)
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--model-norm-source", required=True)
@@ -353,7 +354,7 @@ def main() -> None:
         norm_group = output.create_group("norm_param")
         norm_group.create_dataset("mean", data=output_mean)
         norm_group.create_dataset("std", data=output_std)
-        for split in SPLITS:
+        for split in args.splits:
             if split not in source:
                 continue
             summaries[split] = process_split(

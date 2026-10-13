@@ -842,3 +842,68 @@ uncertainty heads have not been recalibrated for this direction/point
 correction. Experimental events have no truth hit labels or directions,
 and may include multiple `muatm` tracks; MC error rates above must not
 be presented as experimental resolution.
+
+## Short-topology follow-up and exact reco-test check (2026-10-13)
+
+`audit_direction_hypotheses.py` and `audit_refit_hypotheses.py` show on
+the leak-free validation split that choosing among fixed azimuth rotations
+by photon-time residuals is worse than the original direction. Even an
+oracle choosing the best of four azimuths only changes short-span (<120 m)
+q68 from 17.024° to 15.044°. We do not use a multi-hypothesis selector.
+
+`train_short_topology.py` fine-tunes v4 with 4x smoothly weighted loss for
+short real-hit-span events (still using predicted-hit thinning, a clean GT
+stream, and single-track `muatm`). Its validation improvement is small.
+`interpolate_short_topology.py` finds no weight interpolation meeting a
+predeclared overall-q68 and short-span gate. `replace_bundle_base.py`
+creates a **training-only** bundle containing the short-tuned base; its
+uncertainty heads are stale and must not be deployed. `train_photon_residual.py`
+then trains a 3k-step physical-time correction on that base. On the
+deduplicated 26,229-event internal test, v4+photon and short+photon have
+angular q68 4.707° and 4.705° respectively; the paired-bootstrap interval
+for the latter-minus-former q68 difference is [-0.034°, +0.032°]. The
+short+photon >=20° count is 1,559 versus 1,585 for v4+photon, but the
+short-span q68 improvement remains statistically uncertain. Thus this
+fine-tune is not established as a meaningful overall advance.
+
+For an exact external check, use the historical reco-normalized input
+`/home/plotnikovgp/baikal/data/baikal_reco_reco_h8s2_norm.h5` on cluster63,
+**not** the similarly named `baikal_reco_h8s2_norm.h5` on cluster62.
+`build_predicted_signal_dataset.py --splits test` runs the frozen
+`noise_sig_tres_abs_merged` classifier, keeps p>=0.70 hits, then enforces
+>=8 selected hits on >=2 unique strings. It yields 58,100 events, of
+which exactly 57,316 overlap the corrected fair all-GT-signal reco-test
+file. `infer_rethresholded_for_audit.py --device cuda` evaluates the v4,
+v4+photon and short+photon direction models. `evaluate_reco_paired_current.py`
+joins on exact event IDs, computes vector/angular errors in degrees, and
+applies the official cut to all methods identically:
+`fCovMatrixStatus == 3`, `fInitRecDelta < 20`, and
+`fFuncValue / (fNHits - 5) < 30`. Its standard-reco no-cut q68 exactly
+reproduces the historical 9.620°, confirming source and angle conventions.
+
+| Reco-test selection | N | Standard reco q50/q68 | v4 q50/q68 | v4+photon q50/q68 | short+photon q50/q68 |
+|---|---:|---:|---:|---:|---:|
+| No official cut | 57,316 | 2.833°/9.620° | 3.068°/6.014° | **2.877°/5.943°** | 2.873°/5.953° |
+| Official cut | 54,424 | 2.568°/8.388° | 2.935°/5.671° | **2.756°/5.549°** | 2.738°/5.567° |
+
+The paired-event 95% bootstrap interval for v4+photon minus standard
+reco q68 is [-3.90°, -3.47°] without the official cut and
+[-3.06°, -2.66°] with it. At q50 the standard reco is slightly better:
+v4+photon minus reco is +0.044° (interval crosses zero) without the cut
+and +0.189° with it. The short fine-tune's q68 change against v4+photon
+is not resolved on this external set (CI [-0.022°, +0.045°] no cut;
+[-0.006°, +0.050°] official cut). At GT-signal span >=450 m, with the
+official cut, standard reco q50/q68 is 1.90°/6.97° versus v4+photon
+2.30°/4.92° (N=5,023). This is a *minimum hit-span* selection, not
+the reconstructed path length and not a disjoint length bin.
+
+The experimental-versus-single-track-`muatm` theta check does not establish
+a material domain improvement for short+photon over v4+photon:
+hit/string-matched W1 2.975° -> 2.951° (paired-bootstrap delta CI includes
+zero); also matching observed z-spread gives 0.368° -> 0.408° (CI includes
+zero). Experimental data have no direction truth.
+
+Reproducible metric tables, paired-bootstrap output and plots are in
+[`results/reco_paired_current/`](results/reco_paired_current/). The two
+photon-correction checkpoints are experimental; the production v4
+uncertainty heads are **not** recalibrated for either correction.
