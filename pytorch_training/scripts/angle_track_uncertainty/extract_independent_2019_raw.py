@@ -54,7 +54,9 @@ def main() -> None:
     parser.add_argument(
         "--exclude-manifest",
         type=Path,
-        help="Reject any source part present in this earlier extraction manifest",
+        action="append",
+        default=[],
+        help="Reject source parts from an earlier manifest; may be repeated",
     )
     args = parser.parse_args()
     if args.parts < 1 or args.events_per_part < 1:
@@ -72,11 +74,12 @@ def main() -> None:
             raise ValueError("Part shift must be within the source-part count")
         part_indices = (part_indices + args.part_shift) % len(parts)
         selected_parts = [parts[i] for i in part_indices]
-        if args.exclude_manifest is not None:
-            excluded = set(json.loads(args.exclude_manifest.read_text())["selected_parts"])
-            overlap = excluded.intersection(selected_parts)
-            if overlap:
-                raise ValueError(f"Source parts overlap excluded manifest: {sorted(overlap)}")
+        excluded = set()
+        for manifest in args.exclude_manifest:
+            excluded.update(json.loads(manifest.read_text())["selected_parts"])
+        overlap = excluded.intersection(selected_parts)
+        if overlap:
+            raise ValueError(f"Source parts overlap excluded manifests: {sorted(overlap)}")
     with h5py.File(args.source, "r") as source, h5py.File(args.output, "x") as output:
         src = source["nue2_2019"]
         norm = output.create_group("norm_param")
@@ -116,7 +119,10 @@ def main() -> None:
             "source": str(args.source),
             "selected_parts": selected_parts,
             "part_shift": args.part_shift,
-            "exclude_manifest": str(args.exclude_manifest) if args.exclude_manifest else None,
+            "exclude_manifest": (
+                str(args.exclude_manifest[0]) if len(args.exclude_manifest) == 1 else None
+            ),
+            "exclude_manifests": [str(manifest) for manifest in args.exclude_manifest],
             "events_per_part": args.events_per_part,
             "events": events,
             "hits": hits,

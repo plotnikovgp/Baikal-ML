@@ -1351,3 +1351,78 @@ This checkpoint is **not promoted to production** pending full exact reco
 preselection, cross-period investigation of the line discrepancy, and
 uncertainty-head recalibration. It remains a single model, not an ensemble;
 the conditional gate itself can require a second CPU pass.
+
+### Exact preliminary-cut runtime audit
+
+Cluster62 does have ROOT 6.34.04 and a BARS checkout at
+`/home/ivkhar/BARS/bars_source/bars` (local commit `b9accaef`,
+2025-02-27). The supplied `fillTrackAnalysisTree_v1.0.cc` does **not**
+compile against that checkout: its `BRecoMuonBDTEval` lacks
+`InitBDT_v3_LE/HE`, the seven-argument `EvalVars`, and getters for
+`fLogPHit_30_min`, `fQacc_20`, `fQtot_20`, and `fTRes_30_med`; the energy
+helpers are also absent. The source ROOT does contain the `BRecoMuon`,
+unfiltered `BEvent`, `ScanfitMask`, geometry, and channel-mask branches.
+Thus the 10/13 ROOT-field selection above remains a superset, **not** the
+full 13/13 cut. A newer compatible BARS checkout/container is needed for
+the supplied program's exact three derived conditions; no numerical
+substitute has been presented as an exact result.
+
+## Sixth independent `nue2` holdout and primary-disjoint audit (2026-10-13)
+
+A sixth raw 2019 holdout F was reserved **after** choosing the point-only
+checkpoint and 50 ns gate. It uses 20 new source parts (`part-shift 10`),
+100,000 raw events, and the same frozen signal classifier. The extractor
+now accepts repeated `--exclude-manifest` arguments and rejected overlap
+with all five earlier holdouts. A separate audit found zero common source
+parts, exact event IDs, or exact generated primaries between F and each of
+A/B/C/D/E. F also has zero generated-primary overlap with the 2020
+training union. All 100,000 raw events have a unique valid truth line.
+At p>=0.50 the classifier keeps 56,274 events; selected-hit precision is
+98.882% and recall within kept events is 99.020%. Fixed p>=0.70 and
+2-string/8-hit acceptance leaves **51,580** paired events. The raw HDF5
+SHA256 is `e88afc94dfe3ee9ba13fd600f6d21d77ff3c408d7f559d559f8db247e12931a0`.
+
+| F method | Direction q50/q68/q95 [degrees] | Transverse line q50/q68/q95 [m] |
+|---|---:|---:|
+| Original point, p>=0.70 | 4.109/7.737/40.340 | 3.929/6.308/19.839 |
+| Point-only, p>=0.70 | 4.109/7.737/40.340 | 3.847/6.216/19.665 |
+| Original point, 50 ns gate | 3.908/7.422/39.720 | 3.809/6.171/19.983 |
+| Point-only, 50 ns gate | 3.911/7.424/39.720 | 3.722/6.074/19.737 |
+
+Point-only versus original at the **same** gate changes line q68 by
+-0.097 m, with a 95% source-part-bootstrap interval [-0.123, -0.071] m;
+line q95 changes by -0.246 m, interval [-0.406, -0.132] m. The angle-q68
+interval [0.000, +0.015] degrees does not establish an improvement; the
+direction rows themselves remain frozen, while 163/51,580 gate decisions
+change through the first-pass point. Relative to the original p>=0.70
+pipeline, the point-only gate improves direction q68 by 0.314 degrees
+(95% interval [0.253, 0.358]) and line q68 by 0.234 m (interval
+[0.201, 0.267]). This replicates the independent E direction/line result
+without an ensemble or model selection on F. The manifests, classifier
+summary, overlap checks, and paired bootstrap result are in
+[`results/point_consistency_v1/`](results/point_consistency_v1/).
+
+`audit_timegate_mc_quality.py` now optionally excludes every exact
+generated primary seen in either 2020 training stream, in addition to the
+existing test-ID mask and deduplication. This leaves 99,429/109,897
+internal test events overall, but only **841/8,673 `nue2`** events. On the
+full 8,673, the old 50 ns gate direction q68 is 5.628 degrees and line
+q68 is 6.213 m; on the 841 primary-disjoint `nue2`, they are 16.011
+degrees and 10.132 m. The point-only gate changes the latter line q68 to
+9.889 m, with a wide 95% event-bootstrap change interval [-0.507,
++0.066] m. Thus the reassuring full-2020 `nue2` numbers are heavily
+affected by reused generated primaries, while the strictly novel subset
+is small and compositionally different. Neither is a substitute for the
+large independent 2019 holdouts.
+
+A 3,000-step direction-only continuation was also tested, freezing the
+shared hit layers and point-vote rows. The final point coordinates can
+still move slightly because the model projects them perpendicular to the
+updated direction. No step passed the predicted-hit direction-q68 guard
+and improved the existing validation score; no checkpoint was selected.
+The complete validation snapshots are in
+[`results/point_consistency_v1/direction_only_pilot/`](results/point_consistency_v1/direction_only_pilot/).
+The point-only candidate remains experimental for universal deployment:
+the reco gain is unresolved, the exact 13-condition reco cut needs a newer
+BARS evaluator, and uncertainty heads are calibrated for the older input
+rule.

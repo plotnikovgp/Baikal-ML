@@ -1,0 +1,44 @@
+{
+  "arguments": {
+    "batch_size": 256,
+    "channels_per_string": 36,
+    "checkpoint": "/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/checkpoints/noise_sig_experiments/noise_sig_tres_abs_merged/best.ckpt",
+    "cls_layers": 0,
+    "compression": "lzf",
+    "device": "cuda",
+    "ff_size": 512,
+    "heads": 1,
+    "hidden": 128,
+    "layers": 5,
+    "max_kept_test": 0,
+    "max_kept_train": 0,
+    "max_kept_val": 0,
+    "min_hits": 8,
+    "min_strings": 2,
+    "model_norm_source": "/home/plotnikovgp/baikal/data/baikal_mc_merged_m50-na15-nue15_all_smaller_norm.h5",
+    "model_type": "encoder_two_head",
+    "output": "/home/plotnikovgp/tmp/angle_reconstruction/data/2019_nue2_predsignal_p050_holdout_f.h5",
+    "output_norm_group": "norm_param",
+    "output_norm_source": "/home/plotnikovgp/tmp/angle_reconstruction/data/baikal_reco_predsignal_p090_2s8h_nuebestnorm.h5",
+    "particle": "nue2",
+    "q_cap": -1.0,
+    "source": "/home/plotnikovgp/tmp/angle_reconstruction/data/2019_nue2_raw_holdout_f_100k.h5",
+    "splits": [
+      "test"
+    ],
+    "threshold": 0.5,
+    "tres_layers": 0
+  },
+  "summaries": {
+    "test": {
+      "kept_events": 56274,
+      "kept_hits": 1337679,
+      "particle_eligible_events": 100000,
+      "selected_hit_precision": 0.9888157024218814,
+      "source_events_scanned": 100000,
+      "truth_noise_selected": 14961,
+      "truth_signal_recall_within_kept_events": 0.9902006875239555,
+      "truth_signal_selected": 1322718
+    }
+  }
+}

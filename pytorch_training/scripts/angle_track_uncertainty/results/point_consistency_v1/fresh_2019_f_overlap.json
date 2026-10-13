@@ -1,0 +1,32 @@
+{
+  "candidate": "/home/plotnikovgp/tmp/angle_reconstruction/data/2019_nue2_raw_holdout_f_100k.h5",
+  "candidate_events": 100000,
+  "candidate_source_parts": 20,
+  "references": {
+    "/home/plotnikovgp/tmp/angle_reconstruction/data/2019_nue2_raw_holdout_100k.h5": {
+      "source_part_overlap": 0,
+      "event_id_overlap": 0,
+      "generated_primary_overlap": 0
+    },
+    "/home/plotnikovgp/tmp/angle_reconstruction/data/2019_nue2_raw_holdout_b_100k.h5": {
+      "source_part_overlap": 0,
+      "event_id_overlap": 0,
+      "generated_primary_overlap": 0
+    },
+    "/home/plotnikovgp/tmp/angle_reconstruction/data/2019_nue2_raw_holdout_c_100k.h5": {
+      "source_part_overlap": 0,
+      "event_id_overlap": 0,
+      "generated_primary_overlap": 0
+    },
+    "/home/plotnikovgp/tmp/angle_reconstruction/data/2019_nue2_raw_holdout_d_100k.h5": {
+      "source_part_overlap": 0,
+      "event_id_overlap": 0,
+      "generated_primary_overlap": 0
+    },
+    "/home/plotnikovgp/tmp/angle_reconstruction/data/2019_nue2_raw_holdout_e_100k.h5": {
+      "source_part_overlap": 0,
+      "event_id_overlap": 0,
+      "generated_primary_overlap": 0
+    }
+  }
+}

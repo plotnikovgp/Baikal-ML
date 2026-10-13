@@ -10,6 +10,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 import pandas as pd
+from audit_primary_overlap import primary_keys
 
 
 def direction_error(frame: pd.DataFrame, truth: np.ndarray) -> np.ndarray:
@@ -24,6 +25,14 @@ def direction_error(frame: pd.DataFrame, truth: np.ndarray) -> np.ndarray:
 
 def q(values: np.ndarray) -> list[float]:
     return np.quantile(values, [0.5, 0.68, 0.95]).tolist()
+
+
+def novel_primary_mask(
+    test: np.ndarray, predicted_train: np.ndarray, gt_train: np.ndarray
+) -> tuple[np.ndarray, int]:
+    """Exclude every exact generated primary used by either training stream."""
+    train_primaries = np.union1d(primary_keys(predicted_train), primary_keys(gt_train))
+    return ~np.isin(primary_keys(test), train_primaries), len(train_primaries)
 
 
 def paired_interval(new: np.ndarray, old: np.ndarray) -> list[float]:
@@ -43,10 +52,14 @@ def main() -> None:
     parser.add_argument("--prepared-p070", type=Path, required=True)
     parser.add_argument("--masks", type=Path, required=True)
     parser.add_argument("--anchor-targets", type=Path, required=True)
+    parser.add_argument("--train-predicted", type=Path)
+    parser.add_argument("--train-gt", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.output.exists():
         raise FileExistsError(args.output)
+    if (args.train_predicted is None) != (args.train_gt is None):
+        raise ValueError("Provide both training sources for primary-disjoint metrics")
     old = pd.read_csv(args.baseline)
     new = pd.read_csv(args.candidate)
     if not old.event_id.equals(new.event_id):
@@ -93,7 +106,29 @@ def main() -> None:
     stages = {"all": np.ones(len(new), dtype=bool)}
     stages.update({name: particles == name for name in ("nue2", "nuatm", "muatm")})
     result = {"mask": "pred_test from masks_v2, then first exact event ID", "stages": {}}
+    if args.train_predicted is not None:
+        with h5py.File(args.train_predicted) as h5:
+            predicted_train = np.asarray(h5["train/prime_prty/data"])
+        with h5py.File(args.train_gt) as h5:
+            gt_train = np.asarray(h5["train/prime_prty/data"])
+        novel, train_primaries_count = novel_primary_mask(truth, predicted_train, gt_train)
+        result["primary_disjoint"] = {
+            "fingerprint": "exact float32 theta, phi, energy",
+            "train_predicted": str(args.train_predicted),
+            "train_gt": str(args.train_gt),
+            "unique_train_primaries": int(train_primaries_count),
+            "test_events": int(novel.sum()),
+            "test_fraction": float(novel.mean()),
+        }
+        stages.update(
+            {
+                f"primary_disjoint_{name}": novel & selected
+                for name, selected in stages.copy().items()
+            }
+        )
     for name, selected in stages.items():
+        if not selected.any():
+            continue
         old_subset, new_subset = old_error[selected], new_error[selected]
         result["stages"][name] = {
             "n": int(selected.sum()),

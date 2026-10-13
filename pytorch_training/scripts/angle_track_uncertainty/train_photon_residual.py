@@ -71,25 +71,27 @@ def optimizer_groups(
     base_learning_rate: float,
     train_base_heads: bool,
     point_only_head: bool = False,
+    direction_only_head: bool = False,
 ) -> tuple[list[dict], list[torch.nn.Parameter]]:
     """Materialize parameter lists so clipping cannot exhaust optimizer inputs."""
-    if point_only_head and train_base_heads:
-        raise ValueError("Point-only mode cannot unfreeze the base heads")
-    if point_only_head:
+    if point_only_head and direction_only_head:
+        raise ValueError("Choose one photon-head output to train")
+    if (point_only_head or direction_only_head) and train_base_heads:
+        raise ValueError("Single-output mode cannot unfreeze the base heads")
+    if point_only_head or direction_only_head:
         model.hit_head.requires_grad_(False)
         output_layer = model.hit_head[-1]
         if not isinstance(output_layer, torch.nn.Linear) or output_layer.out_features != 4:
-            raise TypeError("Point-only mode requires the four-coefficient photon head")
+            raise TypeError("Single-output mode requires the four-coefficient photon head")
         output_layer.weight.requires_grad_(True)
         output_layer.bias.requires_grad_(True)
-        # Rows 0:2 vote for direction; rows 2:4 vote for the point. With
-        # upstream layers frozen and zero weight decay, direction is exact.
-        output_layer.weight.register_hook(
-            lambda gradient: torch.cat((torch.zeros_like(gradient[:2]), gradient[2:]), dim=0)
-        )
-        output_layer.bias.register_hook(
-            lambda gradient: torch.cat((torch.zeros_like(gradient[:2]), gradient[2:]), dim=0)
-        )
+        # Rows 0:2 vote for direction; rows 2:4 vote for the point. Frozen
+        # upstream layers and zero weight decay preserve the other output.
+        active = [0.0, 0.0, 1.0, 1.0] if point_only_head else [1.0, 1.0, 0.0, 0.0]
+        weight_mask = output_layer.weight.new_tensor(active)[:, None]
+        bias_mask = output_layer.bias.new_tensor(active)
+        output_layer.weight.register_hook(lambda gradient: gradient * weight_mask)
+        output_layer.bias.register_hook(lambda gradient: gradient * bias_mask)
         groups = [
             {
                 "params": [output_layer.weight, output_layer.bias],
@@ -173,6 +175,11 @@ def main() -> None:
         help="Update only photon-head point-vote rows, preserving direction exactly",
     )
     parser.add_argument(
+        "--direction-only-head",
+        action="store_true",
+        help="Update only direction-vote rows; point-vote weights stay frozen but final point is reprojected",
+    )
+    parser.add_argument(
         "--point-selection",
         action="store_true",
         help="Select by predicted-hit line q68, with GT-line and tail guards",
@@ -232,7 +239,8 @@ def main() -> None:
         or (
             (args.consistency_weight or args.point_consistency_weight) and not args.paired_threshold
         )
-        or (args.point_only_head and args.train_base_heads)
+        or (args.point_only_head and args.direction_only_head)
+        or ((args.point_only_head or args.direction_only_head) and args.train_base_heads)
         or (args.point_selection and not args.point_only_head)
     ):
         raise ValueError("Invalid loss weight or learning rate")
@@ -264,6 +272,7 @@ def main() -> None:
         base_learning_rate=args.base_learning_rate,
         train_base_heads=args.train_base_heads,
         point_only_head=args.point_only_head,
+        direction_only_head=args.direction_only_head,
     )
     optimizer = torch.optim.AdamW(
         parameter_groups,
