@@ -75,7 +75,7 @@ def quantiles(values: np.ndarray, mask: np.ndarray) -> dict[str, float]:
     return {"q50": float(np.quantile(selected, 0.5)), "q68": float(np.quantile(selected, 0.68))}
 
 
-def make_plot(rows: list[dict], output: Path, stage: str) -> None:
+def make_plot(rows: list[dict], output: Path, stage: str, comparison_label: str) -> None:
     current = [r for r in rows if r["stage"] == stage]
     x = np.asarray([r["min_gt_span_m"] for r in current])
     colors = {
@@ -88,7 +88,7 @@ def make_plot(rows: list[dict], output: Path, stage: str) -> None:
         "standard_reco": "Standard reco",
         "v4": "Universal v4",
         "v4_photon": "v4 + photon",
-        "short_photon": "Short + photon",
+        "short_photon": comparison_label,
     }
     fig, axes = plt.subplots(1, 3, figsize=(17, 5))
     for axis, component in zip(axes, ("direction", "theta", "phi")):
@@ -124,6 +124,11 @@ def main() -> None:
     parser.add_argument("--quality-sidecar", type=Path, required=True)
     parser.add_argument(
         "--prediction", nargs=2, action="append", metavar=("NAME", "CSV"), required=True
+    )
+    parser.add_argument(
+        "--comparison-label",
+        default="Short + photon",
+        help="Plot label for the short_photon comparison slot",
     )
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
@@ -194,6 +199,7 @@ def main() -> None:
         "fair_source": str(args.fair_source),
         "quality_sidecar": str(args.quality_sidecar),
         "prediction_files": {name: str(path) for name, path in args.prediction},
+        "comparison_label": args.comparison_label,
         "predicted_selected_events": len(predictions["v4"][0]),
         "paired_events": len(ids),
         "official_pass_events": int(official.sum()),
@@ -213,7 +219,7 @@ def main() -> None:
         },
     )
     for stage in ("no_official_cut", "official_reco_cut"):
-        make_plot(rows, args.output_dir, stage)
+        make_plot(rows, args.output_dir, stage, args.comparison_label)
     print(
         json.dumps(
             {

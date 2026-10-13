@@ -1,0 +1,109 @@
+{
+  "baseline": "runs/physical_time_audit/photon_residual_3k/test/paired_unique_events.csv",
+  "candidate": "runs/physical_time_audit/photon_head_pair_fixed_3k/test/paired_unique_events.csv",
+  "replicates": 500,
+  "groups": {
+    "all": {
+      "count": 26229,
+      "before_q50_deg": 2.6254866,
+      "after_q50_deg": 2.6119125,
+      "before_q68_deg": 4.707282748,
+      "after_q68_deg": 4.700899800000001,
+      "q50_delta_ci95_deg": [
+        -0.0247453174999999,
+        0.00038038749999991695
+      ],
+      "q68_delta_ci95_deg": [
+        -0.021956913799999332,
+        0.006648031000000741
+      ],
+      "before_ge20": 1585,
+      "after_ge20": 1580
+    },
+    "muatm": {
+      "count": 3435,
+      "before_q50_deg": 5.7429366,
+      "after_q50_deg": 5.704606,
+      "before_q68_deg": 9.989133280000006,
+      "after_q68_deg": 9.9716906,
+      "q50_delta_ci95_deg": [
+        -0.09278744999999977,
+        0.019532062499999763
+      ],
+      "q68_delta_ci95_deg": [
+        -0.108172501,
+        0.0592156009999959
+      ],
+      "before_ge20": 533,
+      "after_ge20": 533
+    },
+    "nuatm": {
+      "count": 14121,
+      "before_q50_deg": 2.0107565,
+      "after_q50_deg": 1.9876763,
+      "before_q68_deg": 3.4248057200000006,
+      "after_q68_deg": 3.411762080000001,
+      "q50_delta_ci95_deg": [
+        -0.03271290000000009,
+        -0.00739047000000005
+      ],
+      "q68_delta_ci95_deg": [
+        -0.029692012500000108,
+        0.008009215499999231
+      ],
+      "before_ge20": 290,
+      "after_ge20": 290
+    },
+    "nue2": {
+      "count": 8673,
+      "before_q50_deg": 3.1991267,
+      "after_q50_deg": 3.1787221,
+      "before_q68_deg": 5.99146404,
+      "after_q68_deg": 5.991158532,
+      "q50_delta_ci95_deg": [
+        -0.04627818000000015,
+        -0.001117657499999855
+      ],
+      "q68_delta_ci95_deg": [
+        -0.03461452400000005,
+        0.025577279099999607
+      ],
+      "before_ge20": 762,
+      "after_ge20": 757
+    },
+    "span_lt120": {
+      "count": 5599,
+      "before_q50_deg": 8.157996,
+      "after_q50_deg": 8.132316,
+      "before_q68_deg": 14.044053080000003,
+      "after_q68_deg": 14.023488120000003,
+      "q50_delta_ci95_deg": [
+        -0.046912125000000277,
+        0.03358599999999967
+      ],
+      "q68_delta_ci95_deg": [
+        -0.04788366299999942,
+        0.045788533999998514
+      ],
+      "before_ge20": 1243,
+      "after_ge20": 1241
+    },
+    "span_ge200": {
+      "count": 10490,
+      "before_q50_deg": 1.4726154999999999,
+      "after_q50_deg": 1.43838635,
+      "before_q68_deg": 2.442983640000001,
+      "after_q68_deg": 2.4217484680000005,
+      "q50_delta_ci95_deg": [
+        -0.04776622875000007,
+        -0.015258421249999848
+      ],
+      "q68_delta_ci95_deg": [
+        -0.04119800999999997,
+        -0.005681595599999847
+      ],
+      "before_ge20": 34,
+      "after_ge20": 33
+    }
+  }
+}

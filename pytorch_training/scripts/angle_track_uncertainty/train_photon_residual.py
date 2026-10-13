@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Train one physics-residual direction/line head over the frozen v4 model."""
+"""Train or fine-tune one physics-residual direction/line model."""
 
 from __future__ import annotations
 
@@ -40,6 +40,7 @@ def data_loader(
     keep: np.ndarray | None = None,
     single_muatm_only: bool = False,
     thinning: bool = False,
+    paired_threshold: float = 0.0,
     shuffle: bool = False,
 ):
     data = AdaptedTrackDataset(
@@ -55,16 +56,53 @@ def data_loader(
         expected_mean=mean,
         expected_std=std,
         single_muatm_only=single_muatm_only,
-        pred_thinning_prob=0.5 if thinning else 0.0,
-        pred_threshold_min=0.70,
-        pred_threshold_max=0.90,
+        pred_thinning_prob=1.0 if paired_threshold else (0.5 if thinning else 0.0),
+        pred_threshold_min=paired_threshold if paired_threshold else 0.70,
+        pred_threshold_max=paired_threshold if paired_threshold else 0.90,
+        return_unthinned=bool(paired_threshold),
     )
     return make_loader(data, workers, shuffle, seed)
+
+
+def optimizer_groups(
+    model: PhotonResidualUpgrade,
+    *,
+    hit_learning_rate: float,
+    base_learning_rate: float,
+    train_base_heads: bool,
+) -> tuple[list[dict], list[torch.nn.Parameter]]:
+    """Materialize parameter lists so clipping cannot exhaust optimizer inputs."""
+    groups = [{"params": list(model.hit_head.parameters()), "lr": hit_learning_rate}]
+    if train_base_heads:
+        model.base.backbone.head.requires_grad_(True)
+        model.base.point_head.requires_grad_(True)
+        groups.append(
+            {
+                "params": list(model.base.backbone.head.parameters())
+                + list(model.base.point_head.parameters()),
+                "lr": base_learning_rate,
+            }
+        )
+    trainable = [parameter for group in groups for parameter in group["params"]]
+    if not trainable or not all(parameter.requires_grad for parameter in trainable):
+        raise RuntimeError("Optimizer has no valid trainable parameters")
+    return groups, trainable
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bundle", type=Path, required=True)
+    parser.add_argument(
+        "--initial-checkpoint",
+        type=Path,
+        help="Resume a trusted local photon-residual checkpoint instead of zero-init",
+    )
+    parser.add_argument(
+        "--train-base-heads",
+        action="store_true",
+        help="Also train the direction and point heads; keep the encoder frozen",
+    )
+    parser.add_argument("--base-learning-rate", type=float, default=1e-5)
     parser.add_argument("--pred-data", type=Path, required=True)
     parser.add_argument("--pred-anchors", type=Path, required=True)
     parser.add_argument("--gt-data", type=Path, required=True)
@@ -80,6 +118,13 @@ def main() -> None:
     parser.add_argument("--learning-rate", type=float, default=5e-4)
     parser.add_argument("--gt-weight", type=float, default=0.4)
     parser.add_argument("--point-weight", type=float, default=0.5)
+    parser.add_argument(
+        "--paired-threshold",
+        type=float,
+        default=0.0,
+        help="Train simultaneously on original p>=0.70 and a fixed higher-p view",
+    )
+    parser.add_argument("--consistency-weight", type=float, default=0.0)
     parser.add_argument("--gt-val-stride", type=int, default=6)
     parser.add_argument("--seed", type=int, default=743)
     args = parser.parse_args()
@@ -95,7 +140,15 @@ def main() -> None:
         < 1
     ):
         raise ValueError("Counts must be positive")
-    if not 0 <= args.gt_weight <= 1 or args.learning_rate <= 0 or args.point_weight < 0:
+    if (
+        not 0 <= args.gt_weight <= 1
+        or args.learning_rate <= 0
+        or args.base_learning_rate <= 0
+        or args.point_weight < 0
+        or args.consistency_weight < 0
+        or (args.paired_threshold and not 0.70 <= args.paired_threshold <= 1.0)
+        or (args.consistency_weight and not args.paired_threshold)
+    ):
         raise ValueError("Invalid loss weight or learning rate")
     args.output_dir.mkdir(parents=True, exist_ok=True)
     (args.output_dir / "config.json").write_text(
@@ -114,9 +167,17 @@ def main() -> None:
         torch.from_numpy(std),
         hidden=args.hidden,
     ).to(device)
+    if args.initial_checkpoint is not None:
+        saved = torch.load(args.initial_checkpoint, map_location="cpu", weights_only=False)
+        model.load_state_dict(saved["model"], strict=True)
+    parameter_groups, trainable = optimizer_groups(
+        model,
+        hit_learning_rate=args.learning_rate,
+        base_learning_rate=args.base_learning_rate,
+        train_base_heads=args.train_base_heads,
+    )
     optimizer = torch.optim.AdamW(
-        model.hit_head.parameters(),
-        lr=args.learning_rate,
+        parameter_groups,
         weight_decay=1e-4,
         fused=device.type == "cuda",
     )
@@ -162,7 +223,8 @@ def main() -> None:
             args.workers,
             args.seed + 2,
             single_muatm_only=True,
-            thinning=True,
+            thinning=not bool(args.paired_threshold),
+            paired_threshold=args.paired_threshold,
             shuffle=True,
         )
     )
@@ -200,9 +262,15 @@ def main() -> None:
             ("pred", pred_train, 1.0 - args.gt_weight),
             ("gt", gt_train, args.gt_weight),
         ):
-            x, target, mask, _particle, target_point, valid = next_nonempty(source)
+            batch = next_nonempty(source)
+            x, target, mask, _particle, target_point, valid = batch[:6]
             x, target, mask = x.to(device), target.to(device), mask.to(device)
             target_point, valid = target_point.to(device), valid.to(device)
+            if name == "pred" and args.paired_threshold:
+                original_x, original_mask, original_point = batch[6:9]
+                original_x = original_x.to(device)
+                original_mask = original_mask.to(device)
+                original_point = original_point.to(device)
             with torch.autocast("cuda", dtype=torch.bfloat16, enabled=device.type == "cuda"):
                 direction, point = model(x, mask)
                 angular = loss_function(
@@ -221,10 +289,32 @@ def main() -> None:
                     50.0,
                     "line_huber",
                 )
-                loss = weight * (angular + args.point_weight * transverse)
+                if name == "pred" and args.paired_threshold:
+                    original_direction, original_prediction_point = model(original_x, original_mask)
+                    original_angular = loss_function(
+                        original_direction, target, "mae", 1.0, None, 8.0
+                    )
+                    original_transverse = point_loss(
+                        original_prediction_point,
+                        original_point,
+                        target,
+                        valid,
+                        50.0,
+                        "line_huber",
+                    )
+                    angular = 0.5 * (angular + original_angular)
+                    transverse = 0.5 * (transverse + original_transverse)
+                    consistency = loss_function(
+                        direction, original_direction, "mae", 1.0, None, 8.0
+                    )
+                else:
+                    consistency = angular.new_zeros(())
+                loss = weight * (
+                    angular + args.point_weight * transverse + args.consistency_weight * consistency
+                )
             loss.backward()
             losses[name] = float(loss.detach())
-        torch.nn.utils.clip_grad_norm_(model.hit_head.parameters(), 1.0)
+        torch.nn.utils.clip_grad_norm_(trainable, 1.0)
         optimizer.step()
         if step % 100 == 0:
             print(f"step={step} losses={losses}", flush=True)

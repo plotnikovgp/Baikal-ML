@@ -87,6 +87,7 @@ class AdaptedTrackDataset(BatchedTrackDataset):
         pred_thinning_prob: float = 0.0,
         pred_threshold_min: float = 0.70,
         pred_threshold_max: float = 0.90,
+        return_unthinned: bool = False,
         span_crop_prob: float = 0.0,
         span_crop_min_keep: float = 0.75,
         span_crop_max_keep: float = 0.90,
@@ -105,6 +106,7 @@ class AdaptedTrackDataset(BatchedTrackDataset):
         self.pred_thinning_prob = pred_thinning_prob
         self.pred_threshold_min = pred_threshold_min
         self.pred_threshold_max = pred_threshold_max
+        self.return_unthinned = return_unthinned
         self.span_crop_prob = span_crop_prob
         self.span_crop_min_keep = span_crop_min_keep
         self.span_crop_max_keep = span_crop_max_keep
@@ -119,6 +121,17 @@ class AdaptedTrackDataset(BatchedTrackDataset):
             self.has_signal_probability = f"{self.split}/signal_probability/data" in h5
         if pred_thinning_prob > 0 and not self.has_signal_probability:
             raise ValueError("Predicted-hit thinning requires signal_probability/data")
+        if return_unthinned and (
+            pred_thinning_prob <= 0
+            or score_feature
+            or span_crop_prob > 0
+            or rotate_z_prob > 0
+            or time_jitter_ns > 0
+            or event_time_jitter_ns > 0
+            or coord_jitter_m > 0
+            or charge_log_jitter > 0
+        ):
+            raise ValueError("Paired threshold views require thinning without other augmentations")
         if keep is not None and len(keep) < self.n_events:
             raise ValueError(f"Selection mask too short for {self.split}")
         self.source_mean = torch.tensor(self.target_mean, dtype=torch.float32)
@@ -169,6 +182,8 @@ class AdaptedTrackDataset(BatchedTrackDataset):
                 prob = prob[selection]
             if self.pred_thinning_prob > 0 and selection.any():
                 original_centroid_m = original_centroid_m[selection]
+        if self.return_unthinned:
+            original_x, original_mask, original_point = x, mask, point
         if self.pred_thinning_prob > 0 and len(x):
             x, mask, point = thin_predicted_hits(
                 x,
@@ -219,6 +234,18 @@ class AdaptedTrackDataset(BatchedTrackDataset):
                 event_time_jitter_ns=self.event_time_jitter_ns,
                 coord_jitter_m=self.coord_jitter_m,
                 charge_log_jitter=self.charge_log_jitter,
+            )
+        if self.return_unthinned:
+            return (
+                x,
+                direction,
+                mask,
+                particle,
+                point,
+                valid,
+                original_x,
+                original_mask,
+                original_point,
             )
         return x, direction, mask, particle, point, valid
 

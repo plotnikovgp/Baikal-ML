@@ -1,0 +1,174 @@
+{
+  "selection": "Exact common nue2 reco test; predicted signal p>=0.70 and 8 hits/2 strings at NN input",
+  "available_cut_count": 10,
+  "full_preliminary_cut_count": 13,
+  "missing_conditions": [
+    "fLogPHit_30_min > -9",
+    "fQacc_20 / fQtot_20 > 0.05",
+    "fTRes_30_med < 60"
+  ],
+  "theta_rec_lt_80": "Disabled in supplied C++ source; not applied",
+  "event_id_mapping_checks": {
+    "fTimeTerm": 0,
+    "fNHits": 0,
+    "fNStrings": 0,
+    "fThetaRec": 0,
+    "fPhiRec": 0
+  },
+  "root_sidecar_angles_exact": true,
+  "paired_bootstrap_repetitions": 300,
+  "cut_counts": [
+    {
+      "cut": "fNHits >= 8",
+      "pass_individually": 57316,
+      "pass_sequentially": 57316
+    },
+    {
+      "cut": "fNStrings >= 2",
+      "pass_individually": 57316,
+      "pass_sequentially": 57316
+    },
+    {
+      "cut": "fCovMatrStat == 3",
+      "pass_individually": 55406,
+      "pass_sequentially": 55406
+    },
+    {
+      "cut": "fScfMaxTheta < 1.7",
+      "pass_individually": 52824,
+      "pass_sequentially": 51026
+    },
+    {
+      "cut": "fEvCenterZ < 220",
+      "pass_individually": 55924,
+      "pass_sequentially": 50245
+    },
+    {
+      "cut": "fZDist > 70",
+      "pass_individually": 53875,
+      "pass_sequentially": 47860
+    },
+    {
+      "cut": "log10(fTimeTerm/(fNHits-5)) < 1.1",
+      "pass_individually": 56277,
+      "pass_sequentially": 47070
+    },
+    {
+      "cut": "fNTriplets/fNHits > 0.1",
+      "pass_individually": 55283,
+      "pass_sequentially": 45386
+    },
+    {
+      "cut": "fThetaErr < 2.5",
+      "pass_individually": 54592,
+      "pass_sequentially": 44325
+    },
+    {
+      "cut": "fNCalls < 350",
+      "pass_individually": 56960,
+      "pass_sequentially": 44189
+    }
+  ],
+  "results": {
+    "no_additional_cut": {
+      "count": 57316,
+      "standard_reco": {
+        "q50_deg": 2.833034038543701,
+        "q68_deg": 9.61976318359375,
+        "ge20_count": 12725
+      },
+      "v4_photon": {
+        "q50_deg": 2.8770554457556416,
+        "q68_deg": 5.942756421061912,
+        "ge20_count": 6825
+      },
+      "paired_threshold_candidate": {
+        "q50_deg": 2.862150567083982,
+        "q68_deg": 5.922878446232572,
+        "ge20_count": 6831
+      },
+      "candidate_minus_standard_reco_q68": {
+        "delta_deg": -3.696884737361179,
+        "ci95_deg": [
+          -3.944621644619105,
+          -3.4854172066753786
+        ]
+      }
+    },
+    "official_reco_cut": {
+      "count": 54424,
+      "standard_reco": {
+        "q50_deg": 2.567502021789551,
+        "q68_deg": 8.38825283050537,
+        "ge20_count": 11197
+      },
+      "v4_photon": {
+        "q50_deg": 2.7560546636129986,
+        "q68_deg": 5.548652074376975,
+        "ge20_count": 6016
+      },
+      "paired_threshold_candidate": {
+        "q50_deg": 2.737865994336776,
+        "q68_deg": 5.542486318799201,
+        "ge20_count": 6023
+      },
+      "candidate_minus_standard_reco_q68": {
+        "delta_deg": -2.84576651170617,
+        "ci95_deg": [
+          -3.047546738900093,
+          -2.670009530129955
+        ]
+      }
+    },
+    "root_available_preliminary_10_of_13": {
+      "count": 44189,
+      "standard_reco": {
+        "q50_deg": 2.031146764755249,
+        "q68_deg": 5.730037193298349,
+        "ge20_count": 7074
+      },
+      "v4_photon": {
+        "q50_deg": 2.341827288115524,
+        "q68_deg": 4.468024435101216,
+        "ge20_count": 3800
+      },
+      "paired_threshold_candidate": {
+        "q50_deg": 2.3273411134938975,
+        "q68_deg": 4.450029118474675,
+        "ge20_count": 3801
+      },
+      "candidate_minus_standard_reco_q68": {
+        "delta_deg": -1.280008074823674,
+        "ci95_deg": [
+          -1.4177938287436813,
+          -1.1264205428958958
+        ]
+      }
+    },
+    "official_and_root_available_preliminary": {
+      "count": 43736,
+      "standard_reco": {
+        "q50_deg": 1.9906596541404724,
+        "q68_deg": 5.5244182586669925,
+        "ge20_count": 6806
+      },
+      "v4_photon": {
+        "q50_deg": 2.3137233387879252,
+        "q68_deg": 4.394525994728976,
+        "ge20_count": 3685
+      },
+      "paired_threshold_candidate": {
+        "q50_deg": 2.301380499194398,
+        "q68_deg": 4.373761999120307,
+        "ge20_count": 3686
+      },
+      "candidate_minus_standard_reco_q68": {
+        "delta_deg": -1.1506562595466852,
+        "ci95_deg": [
+          -1.2744103739963695,
+          -1.026626354007557
+        ]
+      }
+    }
+  }
+}
