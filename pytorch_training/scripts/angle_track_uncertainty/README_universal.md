@@ -635,9 +635,15 @@ interval for the change [-1.057°, -0.563°]). That advantage did not
 survive longer training: the selected 9,000-step checkpoint has W1
 3.012°, with change interval [-0.195°, +0.207°]. Thus the apparently
 better domain alignment of the undertrained model traded away MC truth
-accuracy and was not robust. Experimental data have no truth angles;
-W1 is distributional only. The current v4 production checkpoint and
-its calibrated uncertainty heads remain unchanged.
+accuracy and was not robust. A later, stricter audit also matches
+observed vertical hit spread: on the *same* paired events, v4's
+geometry-conditional W1 is 0.364°, whereas the 5,000-step raw model's
+is 1.613° (paired 95% change interval [+0.745°, +1.379°]) and the
+selected 9,000-step model's is 0.954° ([+0.219°, +0.734°]). The
+apparent early marginal improvement therefore hid a deterioration
+within geometry-matched events. Experimental data have no truth angles;
+neither W1 is an accuracy measurement. The current v4 production
+checkpoint and its calibrated uncertainty heads remain unchanged.
 
 Commands are in `run_joint_raw_5k.sh`,
 `run_joint_raw_hard_continue_10k.sh`, and `run_joint_raw_domain.sh`.
@@ -669,6 +675,11 @@ conditional shift. The result strongly indicates that the original
 3° **marginal** theta difference is confounded by event geometry.
 It does not establish experimental angular accuracy or justify forcing
 the network's output distribution to match unweighted MC.
+`compare_domain_models_paired.py` now accepts `--exp-input-features`
+and `--mc-input-features` to report both the original hit/string-matched
+W1 and the vertical-spread-conditioned W1 for any candidate on the
+same event IDs, with paired bootstrap intervals. The raw-hit pilot's
+re-audit JSON is in [`results/joint_raw_v1/`](results/joint_raw_v1/).
 
 `--center-time-alpha` is an optional *diagnostic* input transform in
 `infer_rethresholded_for_audit.py`; the default is zero and preserves

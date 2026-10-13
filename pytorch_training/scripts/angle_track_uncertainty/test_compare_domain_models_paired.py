@@ -1,7 +1,7 @@
 """Regression test for exact-ID paired domain comparisons."""
 
 import pandas as pd
-from compare_domain_models_paired import aligned
+from compare_domain_models_paired import aligned, with_z_spread
 
 
 def test_aligned_reorders_identical_ids(tmp_path):
@@ -30,3 +30,26 @@ def test_aligned_reorders_identical_ids(tmp_path):
     assert ordered_before.event_id.tolist() == ["a", "b"]
     assert ordered_after.event_id.tolist() == ["a", "b"]
     assert ordered_after.theta_deg.tolist() == [111.0, 121.0]
+
+
+def test_z_spread_features_align_by_event_id(tmp_path):
+    predictions = pd.DataFrame(
+        {
+            "event_id": ["a", "b"],
+            "n_hits": [8, 12],
+            "n_strings": [2, 3],
+            "theta_deg": [110.0, 120.0],
+        }
+    )
+    features = pd.DataFrame(
+        {
+            "event_id": ["b", "a"],
+            "n_hits": [12, 8],
+            "n_strings": [3, 2],
+            "z_std_m": [50.0, 30.0],
+        }
+    )
+    path = tmp_path / "features.csv"
+    features.to_csv(path, index=False)
+    result = with_z_spread(predictions, path)
+    assert result.z_std_m.tolist() == [30.0, 50.0]
