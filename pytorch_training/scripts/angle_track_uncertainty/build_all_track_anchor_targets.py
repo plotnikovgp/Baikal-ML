@@ -60,9 +60,11 @@ def raw_particle_points(
     expected_prefix = particle.split("_")[0].encode()
     for index, event_id in enumerate(event_ids):
         pieces = bytes(event_id).split(b"_")
-        if len(pieces) != 3 or pieces[0] != expected_prefix:
+        if len(pieces) < 3 or pieces[0] != expected_prefix:
             continue
-        source_parts[index] = pieces[1]
+        # 2020 IDs are particle_part_event; 2019 parts can themselves
+        # contain an underscore, e.g. nue2_1000_4_0 -> part_1000_4.
+        source_parts[index] = b"_".join(pieces[1:-1])
         parsed[index] = True
 
     root = source[particle]

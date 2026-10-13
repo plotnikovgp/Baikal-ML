@@ -1224,3 +1224,130 @@ The third raw HDF5 has SHA256
 `191491f16c3fbf75ce3d62a9808585a7bf1ba3b10b1425055654d777d93441f5`.
 CPU example: add `--max-added-photon-residual-ns 50` to the command above,
 using an HDF5 prepared at p>=0.50.
+
+## Independent 2019 truth-line check and fourth holdout (2026-10-13)
+
+`build_all_track_anchor_targets.py` now resolves 2019 IDs with a two-part
+source-part suffix such as `nue2_1000_4_0`. The companion
+`extract_2019_truth_points.py` recovers the cluster-local true track point
+from the source MC. The original third holdout C has a valid single truth
+line for all 100,000 raw events. A **fourth** holdout D selected 20 previously
+unused source parts (`part-shift 6`), yielding 95,144 raw events. It has zero
+exact event-ID or generated-primary overlap with A/B/C, and zero
+generated-primary overlap with the 2020 training union. The frozen hit
+classifier at p>=0.50 kept 54,207 events, with selected-hit precision 98.90%
+and recall 99.01% within kept events. Nineteen D raw rows have IDs repeated
+across detector clusters and are excluded from the truth-line comparison;
+this prevents a wrong cluster-local point from being joined to an event.
+
+The paired p>=0.70 acceptance and the 50 ns added-hit gate were unchanged.
+Each row is the same fixed cohort for all methods; q values are q50/q68/q95:
+
+| Independent `nue2` set | N | Direction baseline | Direction gate | Line baseline | Line gate |
+|---|---:|---:|---:|---:|---:|
+| C | 51,386 | 4.084°/7.743°/39.610° | 3.855°/7.447°/39.062° | 3.869/6.236/19.260 m | 3.754/6.104/19.353 m |
+| D | 49,803 | 4.159°/7.817°/39.677° | 3.915°/7.472°/39.002° | 3.894/6.284/19.428 m | 3.782/6.146/19.389 m |
+
+On D, the gate-minus-baseline direction-q68 source-part-bootstrap 95%
+interval is [-0.388°, -0.299°]; line-q68 improves by 0.139 m. The line-q95
+change from the second pass is not consistent across C and D. A *diagnostic*
+midpoint of the two predicted absolute points gives line q68/q95
+6.111/19.201 m on C and 6.168/19.340 m on D. Its q68 improvement over
+the first-pass point is supported by source-part bootstraps in both samples;
+on D the q95 change interval is [-0.239, -0.026] m. This midpoint averages
+two predictions, so it is **not a production candidate** under the
+single-model/no-ensemble requirement. It identifies point-head instability
+under hit-threshold changes and motivates a learned single-output
+point-consistency loss instead. The shipped inference path remains unchanged.
+
+The D raw HDF5 SHA256 is
+`c5b2c84e1aa80c029a61687c0e9aaa1428b6c8676d27e44148ba7a10cbf7ed87`.
+Its manifest, classifier summary, primary-overlap audit, and the paired
+truth-line metrics with bootstrap intervals are in
+[`results/conditional_photon_gate_v1/`](results/conditional_photon_gate_v1/).
+
+## Point-only photon-head continuation (2026-10-13)
+
+The conditional gate changes the selected hits and can move the predicted
+track point. `train_photon_residual.py` now supports an absolute-point
+consistency term across p>=0.70 and p>=0.90 hit views. A controlled
+`--point-only-head` mode freezes the base model, shared photon layers, and
+the two direction-output rows; it updates only the final point-vote rows.
+`--point-selection` selects on predicted-hit line q68, with guards against
+direction or clean-GT line degradation. The earlier angle-oriented selector
+did not evaluate the working predicted-hit line and selected no point-only
+checkpoint. These flags are opt-in and leave the previous default unchanged.
+
+Two 2,000-step joint direction+point trials illustrate the trade-off: with
+point-consistency weights 1.0 and 0.3, predicted-hit line q68 reached
+4.294 and 4.301 m at step 2,000 (from 4.315 m), but direction q68 rose
+from 4.343 to 4.350 degrees in both cases, violating the existing angle
+guard. A point-only trial under the inherited angle-oriented selector
+preserved direction but saved no improved checkpoint. The point-specific
+selector below uses the same training trajectory and saves step 1,500.
+
+The selected step-1500 checkpoint is
+`runs/physical_time_audit/photon_point_only_selected_2k/best.pt` under the
+angle-reconstruction workspace (SHA256
+`fd4d674392eabef558a5ddee2dbfa019cda6018b7da35329413b9cc632488fc3`).
+A state-dict audit confirms that every shared and direction parameter is
+bitwise unchanged from `photon_head_pair_fixed_3k/best.pt`; only the last
+point rows changed. On the predicted-hit validation set (5,406 events),
+line q68 is 4.315 -> 4.299 m and q95 is 13.784 -> 13.540 m, while
+direction q68 remains 4.343 degrees. Clean-GT line q68 moves 5.969 ->
+5.983 m; the selection guard allows up to 0.05 m.
+
+For an untouched **fifth** 2019 `nue2` sample E, 20 new source parts
+(`part-shift 8`) yield 100,000 raw events. There is zero exact event-ID or
+generated-primary overlap with A/B/C/D or the 2020 training union. The
+frozen signal classifier at p>=0.50 keeps 56,681 events; its selected-hit
+precision/recall are 98.901%/99.008% within that kept set. All 52,129
+p>=0.70-accepted events have a unique valid truth line. On this *same*
+cohort, q values below are q50/q68/q95:
+
+| E method | Direction [degrees] | Transverse line [m] |
+|---|---:|---:|
+| Original point, p>=0.70 | 4.138/7.857/40.801 | 3.891/6.267/20.144 |
+| Point-only, p>=0.70 | 4.138/7.857/40.801 | 3.815/6.186/19.990 |
+| Original point, 50 ns gate | 3.933/7.537/40.514 | 3.779/6.151/20.165 |
+| Point-only, 50 ns gate | 3.933/7.540/40.520 | 3.688/6.041/20.008 |
+
+For the point-only gate versus original gate, the source-part-bootstrap
+95% interval of the line-q68 change is [-0.133, -0.077] m, and line-q95
+is [-0.262, -0.051] m. The direction-q68 interval is [-0.003, +0.010]
+degrees, consistent with no change. Only 161 of 52,129 gate decisions
+changed. These are genuine independent-sample point improvements, not
+prediction averaging.
+
+The shift is **not uniform across datasets**: on the ID-masked,
+deduplicated internal 2020 MC test, 26,229 events with a valid truth line
+give line q68 4.656 -> 4.673 m for old versus point-only gate (paired
+bootstrap interval [-0.009, +0.038] m). Direction q68 on all 109,897
+events is 9.497 -> 9.498 degrees (interval [-0.001, +0.002] degrees).
+The internal 2020 test shares generated primaries with the training union,
+so it is descriptive, not an independent promotion criterion. On the
+external reco comparison, direction q68 is 5.916 degrees for both gates
+on the 57,316-event paired cohort; with the existing official reco cut it
+is 5.537 -> 5.538 degrees, and on the available 10/13 preliminary-cut
+superset it is 4.452 -> 4.454 degrees. The full 13-condition preliminary
+selection is **not yet reproduced**: three derived quantities require the
+ROOT/BARS evaluator from the supplied `fillTrackAnalysisTree_v1.0.cc`.
+The cluster62 source ROOT has the underlying `BRecoMuon`, `BEvent`,
+`ScanfitMask`, geometry, and channel-mask branches; the limitation is the
+runtime/evaluator, not missing raw data.
+
+For the same fixed 4,924 experimental and 87,103 unique `muatm` MC
+events, only 2 and 56 predictions respectively rerun. Baseline-matched
+theta Wasserstein-1 distance changes 3.062 -> 3.064 degrees when matching
+hits/strings, and 0.375 -> 0.376 degrees when also matching observed
+vertical hit spread. This detects no substantial new theta-distribution
+shift, but it is **not** a truth-quality measure on experiment.
+
+Results and reproducibility manifests are in
+[`results/point_consistency_v1/`](results/point_consistency_v1/). The E raw
+HDF5 SHA256 is
+`b197aacc50b448e0735e6eb27743c4efcf385a5f1550e8e37f2a503b36f47733`.
+This checkpoint is **not promoted to production** pending full exact reco
+preselection, cross-period investigation of the line discrepancy, and
+uncertainty-head recalibration. It remains a single model, not an ensemble;
+the conditional gate itself can require a second CPU pass.

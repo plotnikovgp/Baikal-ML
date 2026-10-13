@@ -1,0 +1,31 @@
+{
+  "source": "/home3/ivkhar/Baikal/data/h5s/baikal_mc_merged.h5",
+  "selected_parts": [
+    "part_1001_3",
+    "part_1006_4",
+    "part_1012_0",
+    "part_1017_1",
+    "part_1022_1",
+    "part_1027_3",
+    "part_1032_4",
+    "part_1038_0",
+    "part_1043_2",
+    "part_1048_2",
+    "part_1053_4",
+    "part_1059_0",
+    "part_1064_2",
+    "part_1069_3",
+    "part_1074_4",
+    "part_1080_1",
+    "part_1085_2",
+    "part_1090_4",
+    "part_1096_0",
+    "part_1001_2"
+  ],
+  "part_shift": 8,
+  "exclude_manifest": "/home/plotnikovgp/tmp/2019_nue2_raw_holdout_100k.json",
+  "events_per_part": 5000,
+  "events": 100000,
+  "hits": 4883017,
+  "selection": "evenly spaced source parts; first N events per part; no truth-hit selection"
+}

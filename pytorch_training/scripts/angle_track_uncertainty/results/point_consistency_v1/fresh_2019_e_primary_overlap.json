@@ -1,0 +1,84 @@
+{
+  "fingerprint": "exact float32 primary theta, phi, energy",
+  "gt_vs_gt_train": {
+    "test": {
+      "events": 403171,
+      "new_primary": 35513,
+      "same_primary": 367658,
+      "same_primary_fraction": 0.9119157875938497
+    },
+    "val": {
+      "events": 393947,
+      "new_primary": 34875,
+      "same_primary": 359072,
+      "same_primary_fraction": 0.9114728631008739
+    }
+  },
+  "interpretation": "shared generated primary; not necessarily identical detector hits",
+  "paths": {
+    "gt_2020": "/home/plotnikovgp/tmp/angle_reconstruction/data/baikal_mc_merged2020_signal_8-2_angl_norm.h5",
+    "predicted_2020": "/home/plotnikovgp/tmp/angle_reconstruction/data/baikal_2020_all_predsignal_p070_2s8h.h5",
+    "raw_2019": "/home/plotnikovgp/tmp/angle_reconstruction/data/2019_nue2_raw_holdout_e_100k.h5",
+    "reco_2020": "/home/plotnikovgp/baikal/data/baikal_reco_reco_h8s2_norm.h5"
+  },
+  "predicted_vs_internal_train": {
+    "test": {
+      "events": 192458,
+      "new_primary": 102862,
+      "same_primary": 89596,
+      "same_primary_fraction": 0.46553533758014737
+    },
+    "val": {
+      "events": 51901,
+      "new_primary": 30389,
+      "same_primary": 21512,
+      "same_primary_fraction": 0.41448141654303383
+    }
+  },
+  "raw_2019_vs_internal_train": {
+    "events": 100000,
+    "new_primary": 100000,
+    "same_primary": 0,
+    "same_primary_fraction": 0.0
+  },
+  "reco_vs_internal_train": {
+    "test": {
+      "events": 59310,
+      "new_primary": 1342,
+      "same_primary": 57968,
+      "same_primary_fraction": 0.9773731242623503
+    },
+    "train": {
+      "events": 478897,
+      "new_primary": 10787,
+      "same_primary": 468110,
+      "same_primary_fraction": 0.9774753235038014
+    },
+    "val": {
+      "events": 59852,
+      "new_primary": 1404,
+      "same_primary": 58448,
+      "same_primary_fraction": 0.9765421372719374
+    }
+  },
+  "reco_vs_reco_train": {
+    "test": {
+      "events": 59310,
+      "new_primary": 3103,
+      "same_primary": 56207,
+      "same_primary_fraction": 0.9476816725678637
+    },
+    "val": {
+      "events": 59852,
+      "new_primary": 3306,
+      "same_primary": 56546,
+      "same_primary_fraction": 0.9447637505847758
+    }
+  },
+  "unique_train_primaries": {
+    "gt_2020": 1086601,
+    "internal_union": 3022664,
+    "predicted_2020": 2415930,
+    "reco_2020": 155802
+  }
+}

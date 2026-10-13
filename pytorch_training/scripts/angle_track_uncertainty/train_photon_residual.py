@@ -70,9 +70,35 @@ def optimizer_groups(
     hit_learning_rate: float,
     base_learning_rate: float,
     train_base_heads: bool,
+    point_only_head: bool = False,
 ) -> tuple[list[dict], list[torch.nn.Parameter]]:
     """Materialize parameter lists so clipping cannot exhaust optimizer inputs."""
-    groups = [{"params": list(model.hit_head.parameters()), "lr": hit_learning_rate}]
+    if point_only_head and train_base_heads:
+        raise ValueError("Point-only mode cannot unfreeze the base heads")
+    if point_only_head:
+        model.hit_head.requires_grad_(False)
+        output_layer = model.hit_head[-1]
+        if not isinstance(output_layer, torch.nn.Linear) or output_layer.out_features != 4:
+            raise TypeError("Point-only mode requires the four-coefficient photon head")
+        output_layer.weight.requires_grad_(True)
+        output_layer.bias.requires_grad_(True)
+        # Rows 0:2 vote for direction; rows 2:4 vote for the point. With
+        # upstream layers frozen and zero weight decay, direction is exact.
+        output_layer.weight.register_hook(
+            lambda gradient: torch.cat((torch.zeros_like(gradient[:2]), gradient[2:]), dim=0)
+        )
+        output_layer.bias.register_hook(
+            lambda gradient: torch.cat((torch.zeros_like(gradient[:2]), gradient[2:]), dim=0)
+        )
+        groups = [
+            {
+                "params": [output_layer.weight, output_layer.bias],
+                "lr": hit_learning_rate,
+                "weight_decay": 0.0,
+            }
+        ]
+    else:
+        groups = [{"params": list(model.hit_head.parameters()), "lr": hit_learning_rate}]
     if train_base_heads:
         model.base.backbone.head.requires_grad_(True)
         model.base.point_head.requires_grad_(True)
@@ -89,6 +115,45 @@ def optimizer_groups(
     return groups, trainable
 
 
+def point_consistency_loss(
+    point: torch.Tensor,
+    x: torch.Tensor,
+    mask: torch.Tensor,
+    original_point: torch.Tensor,
+    original_x: torch.Tensor,
+    original_mask: torch.Tensor,
+    target_direction: torch.Tensor,
+    valid: torch.Tensor,
+    mean: torch.Tensor,
+    std: torch.Tensor,
+) -> torch.Tensor:
+    """Compare physical lines, not centroid-relative offsets, across hit cuts."""
+
+    def physical_centroid(features: torch.Tensor, selected: torch.Tensor) -> torch.Tensor:
+        positions = features[..., 2:5].float() * std[2:5] + mean[2:5]
+        count = selected.sum(dim=1, keepdim=True).clamp_min(1)
+        return (positions * selected[..., None]).sum(dim=1) / count
+
+    anchor = point.float() + physical_centroid(x, mask)
+    original_anchor = original_point.float() + physical_centroid(original_x, original_mask)
+    return point_loss(anchor, original_anchor, target_direction, valid, 50.0, "line_huber")
+
+
+def point_selection(result: dict, initial: dict) -> tuple[float, bool]:
+    """Select on working predicted-hit line q68 while guarding angle and tail."""
+    pred = result["pred_val"]
+    gt = result["gt_val_clean"]
+    pred_initial = initial["pred_val"]
+    gt_initial = initial["gt_val_clean"]
+    admissible = (
+        pred["direction_deg"]["q68"] <= pred_initial["direction_deg"]["q68"] + 1e-4
+        and gt["direction_deg"]["q68"] <= gt_initial["direction_deg"]["q68"] + 1e-4
+        and gt["line_m"]["q68"] <= gt_initial["line_m"]["q68"] + 0.05
+        and pred["line_m"]["q95"] <= pred_initial["line_m"]["q95"] + 0.20
+    )
+    return float(pred["line_m"]["q68"]), admissible
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bundle", type=Path, required=True)
@@ -101,6 +166,16 @@ def main() -> None:
         "--train-base-heads",
         action="store_true",
         help="Also train the direction and point heads; keep the encoder frozen",
+    )
+    parser.add_argument(
+        "--point-only-head",
+        action="store_true",
+        help="Update only photon-head point-vote rows, preserving direction exactly",
+    )
+    parser.add_argument(
+        "--point-selection",
+        action="store_true",
+        help="Select by predicted-hit line q68, with GT-line and tail guards",
     )
     parser.add_argument("--base-learning-rate", type=float, default=1e-5)
     parser.add_argument("--pred-data", type=Path, required=True)
@@ -125,6 +200,12 @@ def main() -> None:
         help="Train simultaneously on original p>=0.70 and a fixed higher-p view",
     )
     parser.add_argument("--consistency-weight", type=float, default=0.0)
+    parser.add_argument(
+        "--point-consistency-weight",
+        type=float,
+        default=0.0,
+        help="Transverse consistency of absolute track points across paired hit cuts",
+    )
     parser.add_argument("--gt-val-stride", type=int, default=6)
     parser.add_argument("--seed", type=int, default=743)
     args = parser.parse_args()
@@ -146,8 +227,13 @@ def main() -> None:
         or args.base_learning_rate <= 0
         or args.point_weight < 0
         or args.consistency_weight < 0
+        or args.point_consistency_weight < 0
         or (args.paired_threshold and not 0.70 <= args.paired_threshold <= 1.0)
-        or (args.consistency_weight and not args.paired_threshold)
+        or (
+            (args.consistency_weight or args.point_consistency_weight) and not args.paired_threshold
+        )
+        or (args.point_only_head and args.train_base_heads)
+        or (args.point_selection and not args.point_only_head)
     ):
         raise ValueError("Invalid loss weight or learning rate")
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -161,6 +247,8 @@ def main() -> None:
     full_model.load_state_dict(bundle["state_dict"], strict=True)
     mean = np.asarray(bundle["preprocessing"]["input_norm_mean"], dtype=np.float32)
     std = np.asarray(bundle["preprocessing"]["input_norm_std"], dtype=np.float32)
+    mean_device = torch.from_numpy(mean).to(device)
+    std_device = torch.from_numpy(std).to(device)
     model = PhotonResidualUpgrade(
         full_model.base,
         torch.from_numpy(mean),
@@ -175,6 +263,7 @@ def main() -> None:
         hit_learning_rate=args.learning_rate,
         base_learning_rate=args.base_learning_rate,
         train_base_heads=args.train_base_heads,
+        point_only_head=args.point_only_head,
     )
     optimizer = torch.optim.AdamW(
         parameter_groups,
@@ -248,7 +337,10 @@ def main() -> None:
         "gt_val_clean": evaluate(model, gt_val, device),
     }
     initial["step"] = 0
-    initial["score"] = validation_score(initial, 0.5, 0.03)
+    initial["legacy_score"] = validation_score(initial, 0.5, 0.03)
+    initial["score"] = (
+        point_selection(initial, initial)[0] if args.point_selection else initial["legacy_score"]
+    )
     (args.output_dir / "val_step_0.json").write_text(json.dumps(initial, indent=2) + "\n")
     print("validation " + json.dumps(initial, sort_keys=True), flush=True)
     best_score = initial["score"]
@@ -307,13 +399,35 @@ def main() -> None:
                     consistency = loss_function(
                         direction, original_direction, "mae", 1.0, None, 8.0
                     )
+                    point_consistency = (
+                        point_consistency_loss(
+                            point,
+                            x,
+                            mask,
+                            original_prediction_point,
+                            original_x,
+                            original_mask,
+                            target,
+                            valid,
+                            mean_device,
+                            std_device,
+                        )
+                        if args.point_consistency_weight
+                        else angular.new_zeros(())
+                    )
                 else:
                     consistency = angular.new_zeros(())
+                    point_consistency = angular.new_zeros(())
                 loss = weight * (
-                    angular + args.point_weight * transverse + args.consistency_weight * consistency
+                    angular
+                    + args.point_weight * transverse
+                    + args.consistency_weight * consistency
+                    + args.point_consistency_weight * point_consistency
                 )
             loss.backward()
             losses[name] = float(loss.detach())
+            if name == "pred" and step % 100 == 0:
+                losses["point_consistency"] = float(point_consistency.detach())
         torch.nn.utils.clip_grad_norm_(trainable, 1.0)
         optimizer.step()
         if step % 100 == 0:
@@ -324,11 +438,15 @@ def main() -> None:
                 "gt_val_clean": evaluate(model, gt_val, device),
             }
             result["step"] = step
-            result["score"] = validation_score(result, 0.5, 0.03)
-            result["admissible"] = (
-                result["pred_val"]["direction_deg"]["q68"] <= pred_limit
-                and result["gt_val_clean"]["direction_deg"]["q68"] <= gt_limit
-            )
+            result["legacy_score"] = validation_score(result, 0.5, 0.03)
+            if args.point_selection:
+                result["score"], result["admissible"] = point_selection(result, initial)
+            else:
+                result["score"] = result["legacy_score"]
+                result["admissible"] = (
+                    result["pred_val"]["direction_deg"]["q68"] <= pred_limit
+                    and result["gt_val_clean"]["direction_deg"]["q68"] <= gt_limit
+                )
             (args.output_dir / f"val_step_{step}.json").write_text(
                 json.dumps(result, indent=2) + "\n"
             )
