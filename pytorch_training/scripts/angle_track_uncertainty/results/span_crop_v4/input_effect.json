@@ -1,0 +1,24 @@
+{
+  "rows_including_duplicate_event_ids": 25972,
+  "probability": 0.5,
+  "min_keep_fraction": 0.65,
+  "max_keep_fraction": 0.85,
+  "applied_fraction": 0.32985522870783923,
+  "z_std_old_q50_q68_m": [
+    47.071699142456055,
+    61.09992309570313
+  ],
+  "z_std_new_q50_q68_m": [
+    42.38241958618164,
+    55.7488525390625
+  ],
+  "hits_old_q50_q68": [
+    12.0,
+    15.0
+  ],
+  "hits_new_q50_q68": [
+    11.0,
+    13.0
+  ],
+  "min_new_hits": 8
+}

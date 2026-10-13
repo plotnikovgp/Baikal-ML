@@ -20,6 +20,7 @@ import torch.nn.functional as F
 from physics_feature_upgrade import upgrade_track_model_physics_features
 from physics_graph_upgrade import upgrade_track_model_graph
 from softscore_model import upgrade_track_model
+from span_crop_augmentation import crop_vertical_span
 from torch import nn
 from track_augmentation import augment_track_batch
 from train_angle_signal import (
@@ -86,6 +87,9 @@ class AdaptedTrackDataset(BatchedTrackDataset):
         pred_thinning_prob: float = 0.0,
         pred_threshold_min: float = 0.70,
         pred_threshold_max: float = 0.90,
+        span_crop_prob: float = 0.0,
+        span_crop_min_keep: float = 0.75,
+        span_crop_max_keep: float = 0.90,
         score_feature: bool = False,
         score_jitter: float = 0.0,
         rotate_z_prob: float = 0.0,
@@ -101,6 +105,9 @@ class AdaptedTrackDataset(BatchedTrackDataset):
         self.pred_thinning_prob = pred_thinning_prob
         self.pred_threshold_min = pred_threshold_min
         self.pred_threshold_max = pred_threshold_max
+        self.span_crop_prob = span_crop_prob
+        self.span_crop_min_keep = span_crop_min_keep
+        self.span_crop_max_keep = span_crop_max_keep
         self.score_feature = score_feature
         self.score_jitter = score_jitter
         self.rotate_z_prob = rotate_z_prob
@@ -176,6 +183,19 @@ class AdaptedTrackDataset(BatchedTrackDataset):
                 self.pred_thinning_prob,
                 self.pred_threshold_min,
                 self.pred_threshold_max,
+            )
+        if self.span_crop_prob > 0 and len(x):
+            x, mask, point = crop_vertical_span(
+                x,
+                mask,
+                direction,
+                point,
+                valid,
+                self.expected_mean,
+                self.expected_std,
+                probability=self.span_crop_prob,
+                min_keep_fraction=self.span_crop_min_keep,
+                max_keep_fraction=self.span_crop_max_keep,
             )
         if self.score_feature:
             if len(x):
@@ -375,6 +395,9 @@ def main() -> None:
     parser.add_argument("--pred-thinning-prob", type=float, default=0.0)
     parser.add_argument("--pred-threshold-min", type=float, default=0.70)
     parser.add_argument("--pred-threshold-max", type=float, default=0.90)
+    parser.add_argument("--span-crop-prob", type=float, default=0.0)
+    parser.add_argument("--span-crop-min-keep", type=float, default=0.75)
+    parser.add_argument("--span-crop-max-keep", type=float, default=0.90)
     parser.add_argument("--score-feature", action="store_true")
     parser.add_argument("--score-jitter", type=float, default=0.0)
     parser.add_argument("--rotate-z-prob", type=float, default=0.0)
@@ -420,6 +443,10 @@ def main() -> None:
         raise ValueError("pred-thinning-prob must be between 0 and 1")
     if not 0.70 <= args.pred_threshold_min <= args.pred_threshold_max <= 1:
         raise ValueError("Invalid predicted-hit threshold interval")
+    if not 0 <= args.span_crop_prob <= 1:
+        raise ValueError("span-crop-prob must be in [0, 1]")
+    if not 0 < args.span_crop_min_keep <= args.span_crop_max_keep <= 1:
+        raise ValueError("Invalid span-crop kept-hit fraction interval")
     if args.score_jitter < 0:
         raise ValueError("Score jitter must be nonnegative")
     if not 0 <= args.rotate_z_prob <= 1:
@@ -557,6 +584,9 @@ def main() -> None:
             pred_thinning_prob=pred_thinning_prob,
             pred_threshold_min=args.pred_threshold_min,
             pred_threshold_max=args.pred_threshold_max,
+            span_crop_prob=args.span_crop_prob if train_aug else 0.0,
+            span_crop_min_keep=args.span_crop_min_keep,
+            span_crop_max_keep=args.span_crop_max_keep,
             score_feature=args.score_feature,
             score_jitter=args.score_jitter if split == "train" else 0.0,
             rotate_z_prob=args.rotate_z_prob if train_aug else 0.0,

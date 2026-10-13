@@ -710,3 +710,35 @@ v4 and its uncertainty calibration remain the selected production model.
 Compact results and the theta overlay are in
 [`results/domain_input_shift_v2/`](results/domain_input_shift_v2/) and
 [`results/pair_vote_v4/`](results/pair_vote_v4/).
+
+## Vertical-span crop on predicted hits
+
+`span_crop_augmentation.py` implements a training-only, event-wise trim of
+the lowest or highest selected hits in physical z. It preserves at least
+eight hits on at least two strings and recomputes the line-point target
+relative to the new hit centroid; the truth line is unchanged. This tests
+whether the shorter vertical extent seen in experimental data can be
+simulated without changing the production inference interface. It is
+applied only to the predicted-hit training stream, after stochastic
+signal-probability thresholding, never to validation/test or the clean
+GT-hit stream. The `--span-crop-*` defaults are disabled, so older runs
+and the v4 bundle are unchanged.
+
+On 25,972 sampled muatm-MC validation rows (including repeated event IDs),
+probability 0.5 and a retained-hit fraction of 0.65--0.85 applied a crop
+to 33.0% of events. Median z spread decreased from 47.07 to 42.38 m;
+median selected hits decreased from 12 to 11. This is only an input
+composition check, not a domain or accuracy improvement.
+
+`run_span_crop_v4_3k.sh` ran a same-seed no-crop control and the crop
+variant for 3,000 steps from exactly the same v4 checkpoint, with the
+same leakage-free split, single-track-muatm filter, and validation rule.
+Both selected **step 0** (score 6.8395). The best post-start crop score
+was 6.8518 at step 2,000: predicted-hit angle/line q68 4.4815°/4.7024 m
+and GT nue2 angle q68 4.0874°, versus v4's 4.4689°/4.6906 m and
+4.0886°. The best post-start control score was 6.8645 at step 2,500:
+4.5008°/4.7319 m and 4.1003°. These differences are validation-only;
+neither model warrants independent-test or experimental-domain inference.
+The unchanged v4 bundle remains selected. The compact validation table
+and input-composition audit are in
+[`results/span_crop_v4/`](results/span_crop_v4/).

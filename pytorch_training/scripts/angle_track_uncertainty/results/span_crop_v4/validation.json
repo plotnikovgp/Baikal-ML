@@ -1,0 +1,46 @@
+{
+  "baseline": {
+    "step": 0,
+    "score": 6.839451774406434,
+    "pred_angle_q68_deg": 4.4689,
+    "pred_line_q68_m": 4.6906,
+    "gt_nue2_angle_q68_deg": 4.0886
+  },
+  "control": {
+    "best_selected_step": 0,
+    "best_post_start": {
+      "step": 2500,
+      "score": 6.864451572418213,
+      "pred_angle_q68_deg": 4.500785827636719,
+      "pred_line_q68_m": 4.731913375854492,
+      "gt_nue2_angle_q68_deg": 4.100336856842041
+    },
+    "final": {
+      "step": 3000,
+      "score": 6.881654472541809,
+      "pred_angle_q68_deg": 4.5134428024292,
+      "pred_line_q68_m": 4.7299683570861815,
+      "gt_nue2_angle_q68_deg": 4.106213607788086
+    }
+  },
+  "crop": {
+    "best_selected_step": 0,
+    "best_post_start": {
+      "step": 2000,
+      "score": 6.851784868240357,
+      "pred_angle_q68_deg": 4.481506633758546,
+      "pred_line_q68_m": 4.702384757995606,
+      "gt_nue2_angle_q68_deg": 4.087408504486084
+    },
+    "final": {
+      "step": 3000,
+      "score": 6.8884288116455075,
+      "pred_angle_q68_deg": 4.489069843292237,
+      "pred_line_q68_m": 4.747157573699951,
+      "gt_nue2_angle_q68_deg": 4.122625827789307
+    }
+  },
+  "selection": "Minimum combined validation score with admissibility gate; lower is better",
+  "independent_test_ran": false,
+  "experimental_domain_inference_ran": false
+}
