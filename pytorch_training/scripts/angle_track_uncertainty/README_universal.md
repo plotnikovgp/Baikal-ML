@@ -1415,6 +1415,25 @@ affected by reused generated primaries, while the strictly novel subset
 is small and compositionally different. Neither is a substitute for the
 large independent 2019 holdouts.
 
+`audit_primary_composition.py` checks whether this gap is only a
+low-statistics/low-energy sample effect. The 841 primary-disjoint `nue2`
+events have a median of 8 retained hits and median log10(primary energy)
+of 3.757, versus 13 hits and 4.689 for the 7,832 reused-primary
+events. Reweighting the latter to the novel group's hit-count, energy,
+and true-theta cells gives direction q68 **9.535 degrees**, still below
+the novel group's 16.011 degrees (all 841 novel events have support).
+On the independent 2019 F set, the 8-9-hit stratum has 8,048 events and
+direction q50/q68 of **6.605/13.383 degrees**, compared with
+2.277/3.790 degrees for the 14,243 events with at least 24 hits.
+Difficulty composition therefore explains part, but not all, of the
+2020 gap. This is not a causal test of memorization: unobserved source
+and detector covariates may differ too. In particular,
+`train_mixed_universal.py` initializes from specialist checkpoints that
+already saw some 2020 primaries, so a primary-disjoint mask applied only
+to the final fine-tune would not create a genuinely independent model.
+The machine-readable 2020 audit is in
+[`results/primary_composition_v1/`](results/primary_composition_v1/).
+
 A 3,000-step direction-only continuation was also tested, freezing the
 shared hit layers and point-vote rows. The final point coordinates can
 still move slightly because the model projects them perpendicular to the
