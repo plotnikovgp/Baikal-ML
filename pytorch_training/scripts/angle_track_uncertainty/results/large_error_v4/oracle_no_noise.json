@@ -1,0 +1,41 @@
+{
+  "unique_test_events": 26229,
+  "any_selected_noise_events": 5394,
+  "oracle_cut_eligible_events": 3352,
+  "original_q50_q68": [
+    2.762334951039426,
+    4.782937801151369
+  ],
+  "oracle_or_original_q50_q68": [
+    2.6944071112256025,
+    4.674377529207197
+  ],
+  "original_ge20": 1576,
+  "oracle_or_original_ge20": 1492,
+  "eligible_original_ge20": 226,
+  "eligible_oracle_ge20": 142,
+  "eligible_oracle_improves_fraction": 0.6124701670644391,
+  "by_particle": {
+    "muatm": {
+      "events": 539,
+      "original_ge20": 91,
+      "oracle_ge20": 57,
+      "original_q68": 11.829641230013243,
+      "oracle_q68": 9.276244617198685
+    },
+    "nuatm": {
+      "events": 1259,
+      "original_ge20": 32,
+      "oracle_ge20": 21,
+      "original_q68": 4.144706621036762,
+      "oracle_q68": 3.2574657495275776
+    },
+    "nue2": {
+      "events": 1554,
+      "original_ge20": 103,
+      "oracle_ge20": 64,
+      "original_q68": 5.191730668697789,
+      "oracle_q68": 4.5089259092390686
+    }
+  }
+}

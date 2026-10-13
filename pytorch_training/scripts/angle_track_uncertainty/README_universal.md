@@ -742,3 +742,75 @@ neither model warrants independent-test or experimental-domain inference.
 The unchanged v4 bundle remains selected. The compact validation table
 and input-composition audit are in
 [`results/span_crop_v4/`](results/span_crop_v4/).
+
+## What the large-error events look like
+
+`audit_large_angle_errors.py` runs the unchanged v4 checkpoint on the
+leakage-free predicted-hit **test** mask, filters multi-track `muatm` as in
+training, and joins each output to MC-only hit labels and `t_res` for
+diagnosis. It keeps the normal `p>=0.70`, 2-string/8-hit input. There are
+27,038 selected rows but only **26,229 unique event IDs**; all analyses
+below count each ID once. Direction q50/q68/q95 is
+2.762°/4.783°/22.902°. Large error means angle >=20°, and occurs in
+1,576 events (6.0%): 533/3,435 single-track `muatm`, 288/14,121
+`nuatm`, and 755/8,673 `nue2`.
+
+The strongest observable correlate is the maximum 3D separation of the
+selected hits. Of 2,524 events with span <100 m, 749 (29.7%) have >=20°
+error. Of 10,490 with span >=200 m, only 32 (0.31%) do. The trend holds
+within each particle type: for `muatm` 36.5% versus 0.26%, `nuatm` 21.3%
+versus 0.17%, and `nue2` 28.3% versus 0.86%. This is an association, not
+proof that artificially increasing span would fix the same events.
+Nearly half (785/1,576) of the large-error cases have exactly eight hits.
+
+Hit composition matters even at similar span. MC origin labels below zero
+are common in `nuatm` and rare in `nue2`, consistent with track-like versus
+cascade-like hits; the exact sign ontology comes from the external MC mask.
+Within single-track `muatm` at 100--150 m span, events with <25% negative
+labels have 201/1,015 (19.8%) large errors, versus 16/364 (4.4%) when
+25--75% of labels are negative. For all `muatm`, 490/2,091 (23.4%) of the
+low-negative-label group are large errors, versus 0/273 in the >=75%
+negative-label group. The analogous pattern is present in `nuatm` and
+`nue2`; the [risk plot](results/large_error_v4/risk_by_span_and_hit_label.png)
+shows the per-particle rates and sample sizes are in `summary.json`.
+
+Some extreme failures are mostly azimuthal ambiguity. Among the 106
+events with angle error >=90°, median absolute theta error is only 8.4°,
+100/106 have span <120 m, and 61/106 have exactly eight selected hits.
+For 105 with sufficiently nonvertical directions, median absolute phi
+error is 135°. These events often have nearly horizontal truth directions;
+the sparse/compact hit pattern can support a badly wrong azimuth even when
+theta is close.
+
+False-positive signal/noise hits contribute, but are not the whole story.
+At least one selected hit has MC label zero in 5,394/26,229 events. Their
+>=20° error rate is 710/5,394 (13.2%), versus 866/20,835 (4.2%) when
+none have label zero. Thus 55% of the large-error events have **no**
+selected label-zero hit. `oracle_remove_noise.py` removes label-zero hits
+using forbidden-at-inference MC truth, only if the resulting event still
+passes 2 strings/8 hits. Just 3,352 events remain eligible. This oracle
+changes unique-test q68 4.783° to 4.674° (paired event-bootstrap 95%
+interval for the change [-0.135°, -0.075°]) and the >=20° count 1,576 to
+1,492 (112 rescued, 28 newly above threshold). It is an upper-bound
+diagnostic for the signal/noise stage, **not** a deployable reconstruction
+metric. Most severe failures therefore require better handling of short,
+cascade-heavy topology, not only a tighter `p` threshold.
+
+`audit_photon_time_model.py` verifies that a Cherenkov arrival-time formula
+in metres/nanoseconds is informative at the true MC line: median event-wise
+absolute residual is 4.2 ns for single-track `muatm`, 1.4 ns for `nuatm`,
+and 2.8 ns for `nue2` at effective refractive index 1.36, versus 132,
+345, and 137 ns after reversing the true direction (the latter numbers
+use index 1.33). Yet the validation-only `fit_photon_track.py` nonlinear
+fit from v4 worsens overall angular q68 from 4.469° to 4.711° with a
+5° direction prior; stronger 2° and 1° priors give 4.530° and 4.470°.
+The 2° prior improves line q68 4.691 to 4.546 m and `nuatm` angle q68
+3.477° to 3.322°, but worsens `muatm` angle 10.584° to 11.700°.
+No physics fit is promoted. `photon_residual_upgrade.py` and
+`train_photon_residual.py` prepare a zero-initialized, single-model learned
+correction from per-hit physical time residuals; only a one-step smoke test
+has run, so there is **no quality claim** for that candidate yet.
+The production v4 checkpoint and MC--experimental theta comparison remain
+unchanged. Experimental events have no truth hit labels or directions, and
+may include multiple `muatm` tracks; MC error rates above must not be
+presented as experimental resolution.
