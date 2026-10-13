@@ -1434,6 +1434,31 @@ to the final fine-tune would not create a genuinely independent model.
 The machine-readable 2020 audit is in
 [`results/primary_composition_v1/`](results/primary_composition_v1/).
 
+`compare_2019_2020_nue2_novel.py` joins the same 841 events to the sixth
+independent 2019 F holdout and reproduces the recorded per-event hit
+thresholds from their p>=0.50 files. F has 51,580 events and q68 7.422
+degrees overall; after reweighting F to the novel 2020 hit-count, primary
+energy and true-theta cells, its q68 is 13.138 degrees (all 841 novel
+events supported; effective comparison sample size 11,177). Matching
+observed z-span as well gives 12.399 degrees on 839/841 novel events.
+The remaining gap is therefore not resolved by those coarse covariates.
+MC-only label-zero hits differ sharply: at fixed p>=0.70, 589/841
+novel-2020 events contain at least one, versus 5,633/51,580 F events.
+With the current 50 ns gate, the counts are 606/841 versus 7,344/51,580,
+and the median label-zero fraction is 0.125 in novel 2020 versus zero in
+F. Reweighting on hit count and this forbidden-at-
+experiment label-zero fraction reverses the comparison (F q68 23.153
+degrees versus 15.971 degrees for the supported 837 novel events), but
+the effective F sample drops to 995 and the result is not causal.
+On the same 841 novel-2020 IDs, fixed p>=0.70 q68 is 16.277 degrees
+versus 16.011 degrees with the gate, so the gate is not the source of the
+large discrepancy. An oracle removal of all selected label-zero hits
+would leave **532/841** novel events with fewer than eight hits, even
+before checking strings. A stricter signal/noise threshold alone cannot
+fix this group while preserving the 2-string/8-hit input cut; sparse-hit
+robustness is the next model target. None of these MC-label diagnostics
+transfers directly to experiment, where labels and true angles are absent.
+
 A 3,000-step direction-only continuation was also tested, freezing the
 shared hit layers and point-vote rows. The final point coordinates can
 still move slightly because the model projects them perpendicular to the

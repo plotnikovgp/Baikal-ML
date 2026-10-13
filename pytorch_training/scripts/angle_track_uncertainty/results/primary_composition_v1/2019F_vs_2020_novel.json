@@ -1,0 +1,314 @@
+{
+  "reference": "primary-disjoint 2020 nue2, ID-deduplicated pred_test mask, old 50 ns gate",
+  "comparison": "2019 F nue2, old 50 ns gate",
+  "groups": {
+    "2020_novel": {
+      "n": 841,
+      "events_with_label_zero_hit": 606,
+      "events_below_8_hits_after_oracle_zero_removal": 532,
+      "angle_q10_q50_q68_q90_deg": [
+        1.2321488837989572,
+        8.705395031958233,
+        16.011476290823772,
+        54.06342337748682
+      ],
+      "hits_q10_q50_q68_q90": [
+        8.0,
+        8.0,
+        9.0,
+        11.0
+      ],
+      "strings_q10_q50_q68_q90": [
+        2.0,
+        3.0,
+        3.0,
+        4.0
+      ],
+      "log10_energy_q10_q50_q68_q90": [
+        2.8077199459075928,
+        3.7566375732421875,
+        4.260634326934815,
+        5.116929054260254
+      ],
+      "true_theta_q10_q50_q68_q90_deg": [
+        19.193099975585938,
+        55.24071502685547,
+        68.23657379150391,
+        84.03248596191406
+      ],
+      "z_span_q10_q50_q68_q90_m": [
+        59.937957763671875,
+        90.05194854736328,
+        119.64883728027344,
+        209.9960174560547
+      ],
+      "noise_fraction_q10_q50_q68_q90": [
+        0.0,
+        0.125,
+        0.125,
+        0.2222222238779068
+      ],
+      "negative_label_fraction_q10_q50_q68_q90": [
+        0.0,
+        0.125,
+        0.3584415674209598,
+        0.75
+      ],
+      "positive_label_fraction_q10_q50_q68_q90": [
+        0.1818181872367859,
+        0.7142857313156128,
+        0.875,
+        1.0
+      ],
+      "abs_tres_median_q10_q50_q68_q90_ns": [
+        1.3066802024841309,
+        2.6378231048583984,
+        3.8952179431915295,
+        13.294303894042969
+      ]
+    },
+    "2019_F": {
+      "n": 51580,
+      "events_with_label_zero_hit": 7344,
+      "events_below_8_hits_after_oracle_zero_removal": 327,
+      "angle_q10_q50_q68_q90_deg": [
+        0.7892950680740746,
+        3.907900831426278,
+        7.421823268628146,
+        23.6447769520106
+      ],
+      "hits_q10_q50_q68_q90": [
+        9.0,
+        15.0,
+        21.0,
+        46.0
+      ],
+      "strings_q10_q50_q68_q90": [
+        2.0,
+        3.0,
+        4.0,
+        5.0
+      ],
+      "log10_energy_q10_q50_q68_q90": [
+        3.100650763511658,
+        4.365558862686157,
+        4.858144149780274,
+        5.737347364425659
+      ],
+      "true_theta_q10_q50_q68_q90_deg": [
+        21.963473510742187,
+        52.558631896972656,
+        65.38633850097656,
+        82.07924880981444
+      ],
+      "z_span_q10_q50_q68_q90_m": [
+        45.29091377258301,
+        105.01799774169922,
+        135.4169921875,
+        254.48950195312497
+      ],
+      "noise_fraction_q10_q50_q68_q90": [
+        0.0,
+        0.0,
+        0.0,
+        0.03703703731298447
+      ],
+      "negative_label_fraction_q10_q50_q68_q90": [
+        0.0,
+        0.10000000149011612,
+        0.20000000298023224,
+        0.46666666865348816
+      ],
+      "positive_label_fraction_q10_q50_q68_q90": [
+        0.5,
+        0.8918918967247009,
+        0.9473684430122375,
+        1.0
+      ],
+      "abs_tres_median_q10_q50_q68_q90_ns": [
+        2.170329785346985,
+        3.7331762313842773,
+        4.552706527709961,
+        7.508562850952147
+      ]
+    }
+  },
+  "matching": {
+    "hits": {
+      "cells": 5,
+      "reference_supported": 841,
+      "reference_coverage": 1.0,
+      "comparison_supported": 45011,
+      "comparison_effective_sample_size": 12225.695474760443,
+      "maximum_comparison_event_weight": 0.08374751491053678,
+      "reference_q50_q68_deg": [
+        8.705395031958233,
+        16.011476290823772
+      ],
+      "comparison_matched_q50_q68_deg": [
+        6.268116293774875,
+        12.470204551474307
+      ]
+    },
+    "hits_energy": {
+      "cells": 22,
+      "reference_supported": 841,
+      "reference_coverage": 1.0,
+      "comparison_supported": 41071,
+      "comparison_effective_sample_size": 11989.269698547687,
+      "maximum_comparison_event_weight": 0.0958904109589041,
+      "reference_q50_q68_deg": [
+        8.705395031958233,
+        16.011476290823772
+      ],
+      "comparison_matched_q50_q68_deg": [
+        6.3129622064266835,
+        12.73700805337805
+      ]
+    },
+    "hits_energy_theta": {
+      "cells": 52,
+      "reference_supported": 841,
+      "reference_coverage": 1.0,
+      "comparison_supported": 31181,
+      "comparison_effective_sample_size": 11176.844483980403,
+      "maximum_comparison_event_weight": 0.1409090909090909,
+      "reference_q50_q68_deg": [
+        8.705395031958233,
+        16.011476290823772
+      ],
+      "comparison_matched_q50_q68_deg": [
+        6.424410601321338,
+        13.137754896965125
+      ]
+    },
+    "hits_energy_theta_strings": {
+      "cells": 110,
+      "reference_supported": 840,
+      "reference_coverage": 0.9988109393579072,
+      "comparison_supported": 22956,
+      "comparison_effective_sample_size": 8470.221834025031,
+      "maximum_comparison_event_weight": 0.35135135135135137,
+      "reference_q50_q68_deg": [
+        8.727489834795161,
+        16.029741239784613
+      ],
+      "comparison_matched_q50_q68_deg": [
+        5.7268755512651595,
+        11.359088588445143
+      ]
+    },
+    "hits_strings_zspan": {
+      "cells": 39,
+      "reference_supported": 839,
+      "reference_coverage": 0.9976218787158145,
+      "comparison_supported": 28456,
+      "comparison_effective_sample_size": 8865.150730951069,
+      "maximum_comparison_event_weight": 0.4,
+      "reference_q50_q68_deg": [
+        8.705395031958233,
+        15.991166898735152
+      ],
+      "comparison_matched_q50_q68_deg": [
+        5.156989646192678,
+        10.107310013178921
+      ]
+    },
+    "hits_energy_theta_zspan": {
+      "cells": 104,
+      "reference_supported": 839,
+      "reference_coverage": 0.9976218787158145,
+      "comparison_supported": 23877,
+      "comparison_effective_sample_size": 9111.826994097153,
+      "maximum_comparison_event_weight": 0.6842105263157895,
+      "reference_q50_q68_deg": [
+        8.634684451438863,
+        15.944400965209136
+      ],
+      "comparison_matched_q50_q68_deg": [
+        6.094630400645109,
+        12.399452322198847
+      ]
+    },
+    "hits_noise": {
+      "cells": 16,
+      "reference_supported": 837,
+      "reference_coverage": 0.995243757431629,
+      "comparison_supported": 45008,
+      "comparison_effective_sample_size": 994.9681184910274,
+      "maximum_comparison_event_weight": 3.5135135135135136,
+      "reference_q50_q68_deg": [
+        8.705395031958233,
+        15.971155851011936
+      ],
+      "comparison_matched_q50_q68_deg": [
+        9.814604317755423,
+        23.153070679686305
+      ]
+    },
+    "hits_noise_negative": {
+      "cells": 56,
+      "reference_supported": 817,
+      "reference_coverage": 0.9714625445897741,
+      "comparison_supported": 41369,
+      "comparison_effective_sample_size": 989.8253098446463,
+      "maximum_comparison_event_weight": 4.777777777777778,
+      "reference_q50_q68_deg": [
+        8.817276481736231,
+        16.185118309936495
+      ],
+      "comparison_matched_q50_q68_deg": [
+        11.905748730611208,
+        28.356095385239477
+      ]
+    }
+  },
+  "log10_energy_internal_edges": [
+    3.468350648880005,
+    4.085055351257324,
+    4.625476360321045,
+    5.23783016204834
+  ],
+  "2020_novel_slices": {
+    "no_label_zero_hit": {
+      "n": 235,
+      "angle_q10_q50_q68_q90_deg": [
+        0.880537566432631,
+        5.357368654120804,
+        9.25228737111919,
+        22.243773878573045
+      ],
+      "median_hits": 9.0
+    },
+    "some_label_zero_hit": {
+      "n": 606,
+      "angle_q10_q50_q68_q90_deg": [
+        1.5043699145455423,
+        11.07605667618401,
+        20.791737015556055,
+        58.61159398879377
+      ],
+      "median_hits": 8.0
+    },
+    "negative_label_majority": {
+      "n": 161,
+      "angle_q10_q50_q68_q90_deg": [
+        0.6272978765159125,
+        3.0996019313773893,
+        5.68789073648654,
+        11.412192679651627
+      ],
+      "median_hits": 8.0
+    },
+    "positive_label_majority": {
+      "n": 568,
+      "angle_q10_q50_q68_q90_deg": [
+        1.8958506238242172,
+        13.260680796979013,
+        23.395707182345866,
+        69.14261572335919
+      ],
+      "median_hits": 8.0
+    }
+  }
+}

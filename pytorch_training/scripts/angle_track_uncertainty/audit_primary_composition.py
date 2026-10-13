@@ -47,6 +47,8 @@ def matched_error(
         "novel_supported": int(novel_supported.sum()),
         "novel_coverage": float(novel_supported.sum() / novel.sum()),
         "reused_supported": int(reused_supported.sum()),
+        "reused_effective_sample_size": float(weights.sum() ** 2 / np.sum(weights**2)),
+        "maximum_reused_event_weight": float(weights.max()),
         "novel_q50_q68_deg": np.quantile(error[novel_supported], [0.5, 0.68]).tolist(),
         "reused_matched_q50_q68_deg": [
             weighted_quantile(error[reused_supported], weights, q) for q in (0.5, 0.68)
