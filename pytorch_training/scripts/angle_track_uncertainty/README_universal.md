@@ -983,3 +983,28 @@ output from that program on these exact 2020 source ROOT files or its BARS
 runtime to calculate the missing variables. Full per-condition counts and
 metrics are in
 [`results/reco_preliminary_partial/`](results/reco_preliminary_partial/).
+
+## Corrected joint photon/base-head training (2026-10-13)
+
+After fixing the exhausted-optimizer-iterator bug noted above, two actual
+joint continuations were run from the original v4+photon checkpoint. Both
+updated the photon residual head and the direction/point output heads while
+keeping the Transformer encoder frozen. The first used hit/base learning
+rates 2e-5/2e-6, 40% clean-GT loss weight, and 4,000 steps. The second
+changed only the clean-GT weight to 10% and ran 3,000 steps. The same
+leak-free masks, predicted-hit thinning, and single-track-muatm training
+filter were used.
+
+| Validation | Start | 40%-GT joint, step 4,000 | 10%-GT joint, step 3,000 |
+|---|---:|---:|---:|
+| Predicted-hit angle q68 | 4.351° | 4.394° | 4.383° |
+| Clean-GT nue2 angle q68 | 3.954° | 3.924° | 3.947° |
+| Predeclared validation score | 6.629 | 6.616 | 6.640 |
+
+Every post-start checkpoint in both runs failed the predicted-hit q68
+non-regression gate. The clean-GT gain in the 40%-GT run does not outweigh
+the working-input degradation. Neither run produced an admissible
+checkpoint; no independent-test or experimental-data comparison is claimed,
+and the original production model remains unchanged. Configurations and
+per-step validation metrics are in
+[`results/photon_joint_fixed_v1/`](results/photon_joint_fixed_v1/).
