@@ -1,0 +1,66 @@
+{
+  "status": "experimental_not_promoted",
+  "selection": "Frozen hit classifier, original p>=0.70 2-string/8-hit acceptance. One unchanged angle/point checkpoint predicts first; rerun at p>=0.50 only for first-pass theta<90 degrees when new hits are added.",
+  "sha256": {
+    "hit_classifier": "be9cc39b93dd6a57a69233faf6755278e3f202c56de3de7d1cc8d2d4a8b1e93d",
+    "v4_bundle": "6609323e3c91e18d53e5438bd5d39cd34d33f98eee7f8685232d11c45776fd81",
+    "paired_photon_checkpoint": "f3ee0e9d5fb37b1d3a7e5b4e8e745699e4209cb79222cb25a49e5b2df16cd514",
+    "fresh_2019_raw_hdf5": "199eca9aaf1392301592cd2247706530872f9d69141926e68b6ee0284d8ad7e3"
+  },
+  "fresh_2019_nue2": {
+    "raw_events": 100000,
+    "prepared_p050_events": 56072,
+    "paired_original_p070_2s8h_events": 51360,
+    "source_parts": 20,
+    "overlap_old_2019_event_ids": 0,
+    "overlap_old_2019_primaries": 0,
+    "overlap_2020_train_primaries": 0,
+    "conditional_reruns": 21315,
+    "p070_direction_deg": {"q50": 4.1379, "q68": 7.8709, "q95": 39.9966},
+    "conditional_direction_deg": {"q50": 3.7246, "q68": 6.9985, "q95": 37.7356},
+    "conditional_minus_p070_q68_source_part_bootstrap_95pct_deg": [-0.9401, -0.7932]
+  },
+  "internal_2020_id_masked_deduplicated": {
+    "all": {"n": 109897, "p070_q68_deg": 9.5157, "conditional_q68_deg": 9.4771},
+    "nue2": {"n": 8673, "p070_q68_deg": 5.9835, "conditional_q68_deg": 5.4171},
+    "nuatm": {"n": 14121, "p070_q68_deg": 3.4186, "conditional_q68_deg": 3.3103},
+    "muatm": {"n": 87103, "p070_q68_deg": 10.6135, "conditional_q68_deg": 10.6036}
+  },
+  "external_reco_2020_nue2": {
+    "without_official_cut": {
+      "n": 57316,
+      "p070_q50_q68_deg": [2.8622, 5.9229],
+      "conditional_q50_q68_deg": [2.8672, 5.9500],
+      "standard_reco_q50_q68_deg": [2.8330, 9.6198],
+      "conditional_minus_p070_q68_event_bootstrap_95pct_deg": [0.0074, 0.0425]
+    },
+    "with_official_cut": {
+      "n": 54424,
+      "p070_q50_q68_deg": [2.7379, 5.5425],
+      "conditional_q50_q68_deg": [2.7425, 5.5598],
+      "standard_reco_q50_q68_deg": [2.5675, 8.3883],
+      "conditional_minus_p070_q68_event_bootstrap_95pct_deg": [0.0050, 0.0344]
+    }
+  },
+  "track_line_2020_valid": {
+    "n": 26229,
+    "p070_q50_q68_q95_m": [2.9531, 4.7548, 17.6248],
+    "conditional_q50_q68_q95_m": [2.8903, 4.7200, 18.5901]
+  },
+  "experimental_theta_domain": {
+    "common_experimental_events": 4924,
+    "unique_muatm_mc_events": 87103,
+    "conditional_reruns_experiment": 26,
+    "hit_string_matched_w1_p070_deg": 3.0622,
+    "hit_string_matched_w1_conditional_deg": 3.0336,
+    "hit_string_zspread_matched_w1_p070_deg": 0.3749,
+    "hit_string_zspread_matched_w1_conditional_deg": 0.3736,
+    "experimental_truth_available": false
+  },
+  "limitations": [
+    "The external reco set becomes slightly worse, so the conditional mode is not a universal improvement.",
+    "The 2020 MC test is ID-masked, not primary-disjoint; the second 2019 seasonal sample supplies an independent primary check for nue2.",
+    "The photon direction/point correction and input rule do not have recalibrated uncertainty heads.",
+    "Experiment-vs-MC theta agreement is distributional, not angular resolution on experimental data."
+  ]
+}

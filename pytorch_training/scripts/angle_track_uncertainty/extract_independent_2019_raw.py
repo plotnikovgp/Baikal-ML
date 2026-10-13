@@ -45,19 +45,40 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--parts", type=int, default=20)
     parser.add_argument("--events-per-part", type=int, default=5000)
+    parser.add_argument(
+        "--part-shift",
+        type=int,
+        default=0,
+        help="Cyclic offset of the evenly spaced source-part indices",
+    )
+    parser.add_argument(
+        "--exclude-manifest",
+        type=Path,
+        help="Reject any source part present in this earlier extraction manifest",
+    )
     args = parser.parse_args()
     if args.parts < 1 or args.events_per_part < 1:
         raise ValueError("parts and events-per-part must be positive")
     if args.output.exists():
         raise FileExistsError(f"Refusing to overwrite {args.output}")
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    with h5py.File(args.source, "r") as source, h5py.File(args.output, "x") as output:
-        src = source["nue2_2019"]
-        parts = sorted(src["ev_ids"])
+    # Validate the requested partition before creating an output HDF5.
+    with h5py.File(args.source, "r") as source:
+        parts = sorted(source["nue2_2019/ev_ids"])
         part_indices = np.unique(
             np.linspace(0, len(parts) - 1, min(args.parts, len(parts)), dtype=int)
         )
+        if not 0 <= args.part_shift < len(parts):
+            raise ValueError("Part shift must be within the source-part count")
+        part_indices = (part_indices + args.part_shift) % len(parts)
         selected_parts = [parts[i] for i in part_indices]
+        if args.exclude_manifest is not None:
+            excluded = set(json.loads(args.exclude_manifest.read_text())["selected_parts"])
+            overlap = excluded.intersection(selected_parts)
+            if overlap:
+                raise ValueError(f"Source parts overlap excluded manifest: {sorted(overlap)}")
+    with h5py.File(args.source, "r") as source, h5py.File(args.output, "x") as output:
+        src = source["nue2_2019"]
         norm = output.create_group("norm_param")
         norm.create_dataset("mean", data=np.zeros(5, dtype=np.float32))
         norm.create_dataset("std", data=np.ones(5, dtype=np.float32))
@@ -94,6 +115,8 @@ def main() -> None:
         manifest = {
             "source": str(args.source),
             "selected_parts": selected_parts,
+            "part_shift": args.part_shift,
+            "exclude_manifest": str(args.exclude_manifest) if args.exclude_manifest else None,
             "events_per_part": args.events_per_part,
             "events": events,
             "hits": hits,

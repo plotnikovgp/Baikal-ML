@@ -1084,3 +1084,77 @@ new primary-disjoint 2020 test. They do not support claiming severe
 2020-specific overfit from the raw seasonal q68 gap alone. Full metrics and
 span-bin counts are in
 [`results/2019_holdout_v1/`](results/2019_holdout_v1/).
+
+## Conditional lower hit threshold (2026-10-13)
+
+The frozen signal/noise classifier at p>=0.50 supplies useful hits that a
+p>=0.70 cut misses for clean upward-going events. Merely lowering the global
+threshold is **not** safe: on 109,897 deduplicated, ID-masked 2020 MC-test
+events it changes direction q68 from 9.516° to 9.822°, driven by multi-track
+`muatm`, and worsens the hit/string-matched experimental-vs-`muatm` theta W1
+from 3.062° to 3.895° on the same accepted events.
+
+`infer_rethresholded_for_audit.py` therefore supports an optional two-pass
+*single-checkpoint* rule: require the original p>=0.70 two-string/eight-hit
+cut, predict once, and rerun at p>=0.50 only if the first-pass theta is below
+90° **and** the lower threshold adds at least one hit. No event that fails
+the original cut is newly accepted. The script validates that the prepared
+HDF5 actually contains hits down to the requested threshold and records
+`selected_threshold` per output row. The optional second pass uses the
+same model weights, not an ensemble; on 4,924 experimental events it was
+needed only 26 times. A 512-raw-event CPU smoke on upward `nue2` took 10.6 s
+versus 8.4 s for a single pass on the same host; this is not a production
+throughput benchmark.
+
+The first 2019 holdout showed a gated q68 reduction from 7.844° to 6.986°.
+To avoid selecting on that already inspected sample,
+`extract_independent_2019_raw.py --part-shift 2 --exclude-manifest ...` made
+a *second* 100,000-event sample from 20 different source parts. It has zero
+exact event-ID or generated-primary overlap with the first 2019 sample and
+zero generated-primary overlap with the 2020 train union. On its 51,360
+common p>=0.70-accepted events, the unchanged direction model changes
+q50/q68 from **4.138°/7.871° to 3.725°/6.999°**. The paired q68 change is
+-0.872°; 95% source-part bootstrap interval **[-0.940°, -0.793°]**.
+
+| Paired evaluation | N | p>=0.70 q50/q68 | Conditional q50/q68 |
+|---|---:|---:|---:|
+| 2020 internal all, ID-masked/deduplicated | 109,897 | 6.112°/9.516° | 6.082°/9.477° |
+| 2020 internal `nue2` | 8,673 | 3.177°/5.984° | 2.895°/5.417° |
+| 2020 internal `nuatm` | 14,121 | 1.994°/3.419° | 1.921°/3.310° |
+| 2020 internal `muatm` | 87,103 | 7.202°/10.614° | 7.198°/10.604° |
+| External reco-2020 `nue2`, no official reco cut | 57,316 | 2.862°/5.923° | 2.867°/5.950° |
+| External reco-2020 `nue2`, official reco cut | 54,424 | 2.738°/5.543° | 2.743°/5.560° |
+
+The external reco deterioration is small but statistically resolved: its
+q68 change has paired event-bootstrap 95% intervals [+0.007°, +0.043°]
+without and [+0.005°, +0.034°] with the official cut. Both NN variants
+still beat standard reco q68 on those same events (9.620°/8.388°). The
+likely input reason is measurable: among events common to p>=0.70, hits
+with 0.50<=p<0.70 occur in 42.6% of first-holdout-2019 `nue2` events
+and 58.5% of internal-2020 `nue2` events, with truth-signal purities
+79.5% and 72.7%; on the external reco set they occur in only 3.0% of
+events and their purity is 32.5%. This is a dataset-composition
+association, not an experimental truth measurement.
+
+For the same 4,924 experimental events and 87,103 unique `muatm` MC events,
+hit/string-matched theta W1 changes from 3.062° to 3.034°; also matching
+observed vertical hit spread gives 0.375° to 0.374°. Experimental truth is
+unknown, so this only checks that the new rule does not visibly distort
+the measured theta distribution. On 26,229 MC events with a valid truth
+line, transverse line q68 improves from 4.755 to 4.720 m, but q95 worsens
+from 17.62 to 18.59 m. The direction/point correction and conditional
+input rule have **not** been recalibrated with the uncertainty heads.
+This mode is available for further evaluation, **not promoted as the
+default production pipeline**. Detailed counts are in
+[`results/conditional_threshold_v1/`](results/conditional_threshold_v1/).
+
+CPU example using a p>=0.50-prepared HDF5 and the same v4/photon weights:
+
+```bash
+python infer_rethresholded_for_audit.py \
+  --bundle runs/mixed_universal/universal_angle_track_uncertainty_v4.pt \
+  --photon-residual-checkpoint runs/physical_time_audit/photon_head_pair_fixed_3k/best.pt \
+  --data /path/to/predsignal_p050.h5 --split test \
+  --threshold 0.70 --conditional-low-threshold 0.50 \
+  --gate-theta-max-deg 90 --device cpu --output /path/to/predictions.csv
+```

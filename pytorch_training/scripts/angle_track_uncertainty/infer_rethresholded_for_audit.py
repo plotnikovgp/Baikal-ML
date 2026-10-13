@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit a bundled direction/point model after rethresholding prepared p>=0.70 hits.
+"""Audit a bundled direction/point model after rethresholding prepared hits.
 
 The HDF5 must contain per-hit signal probabilities and channel IDs. Events
 that fail the post-threshold two-string/eight-hit cut are omitted. Uncertainty
@@ -110,6 +110,12 @@ def main() -> None:
     parser.add_argument("--data", type=Path, required=True)
     parser.add_argument("--split", default="test")
     parser.add_argument("--threshold", type=float, required=True)
+    parser.add_argument(
+        "--conditional-low-threshold",
+        type=float,
+        help="Rerun upward events only when the lower threshold adds selected hits",
+    )
+    parser.add_argument("--gate-theta-max-deg", type=float, default=90.0)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--start-event", type=int, default=0)
@@ -127,8 +133,14 @@ def main() -> None:
     args = parser.parse_args()
     if args.output.exists():
         raise FileExistsError(f"Refusing to overwrite {args.output}")
-    if not 0.70 <= args.threshold <= 1:
-        raise ValueError("Threshold must be between 0.70 and 1.00")
+    if not 0 < args.threshold <= 1:
+        raise ValueError("Threshold must be between 0 and 1")
+    if args.conditional_low_threshold is not None and not (
+        0 < args.conditional_low_threshold < args.threshold
+    ):
+        raise ValueError("Conditional threshold must be positive and below the first threshold")
+    if not 0 < args.gate_theta_max_deg < 180:
+        raise ValueError("Gate theta must be between 0 and 180 degrees")
     if args.batch_size < 1 or args.threads < 1 or args.channels_per_string < 1:
         raise ValueError("Batch size, threads, and channels per string must be positive")
     if args.start_event < 0 or (args.max_events is not None and args.max_events < 1):
@@ -160,7 +172,29 @@ def main() -> None:
     prep = bundle["preprocessing"]
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
+    # A prepared file cannot restore hits discarded at its original threshold.
+    # Validate before opening the output so an invalid request leaves no CSV.
+    with h5py.File(args.data, "r") as h5:
+        metadata = json.loads(h5.attrs.get("metadata_json", "{}"))
+        source_threshold = metadata.get("arguments", {}).get("threshold")
+        if source_threshold is not None and args.threshold < float(source_threshold) - 1e-6:
+            raise ValueError(
+                f"Requested threshold {args.threshold} is below the prepared "
+                f"source threshold {source_threshold}; the omitted hits cannot be recovered"
+            )
+        if (
+            source_threshold is not None
+            and args.conditional_low_threshold is not None
+            and args.conditional_low_threshold < float(source_threshold) - 1e-6
+        ):
+            raise ValueError(
+                f"Conditional threshold {args.conditional_low_threshold} is below the "
+                f"prepared source threshold {source_threshold}"
+            )
+
     kept_total = 0
+    conditional_gate_total = 0
+    conditional_total = 0
     with h5py.File(args.data, "r") as h5, args.output.open("w", newline="") as stream:
         group = h5[args.split]
         for key in ("signal_probability/data", "channels/data"):
@@ -174,7 +208,8 @@ def main() -> None:
         end_event = (
             total if args.max_events is None else min(total, args.start_event + args.max_events)
         )
-        writer = csv.DictWriter(stream, fieldnames=FIELDS)
+        fields = FIELDS + (("selected_threshold",) if args.conditional_low_threshold else ())
+        writer = csv.DictWriter(stream, fieldnames=fields)
         writer.writeheader()
         for begin in range(args.start_event, end_event, args.batch_size):
             end = min(begin + args.batch_size, end_event)
@@ -199,32 +234,80 @@ def main() -> None:
                 )
             direction = direction.cpu().numpy()
             offset = offset.cpu().numpy()
+            used_low_threshold = np.zeros(len(kept), dtype=bool)
+            if args.conditional_low_threshold is not None:
+                first_theta = np.rad2deg(np.arccos(np.clip(direction[:, 2], -1, 1)))
+                gate_indices = np.flatnonzero(first_theta < args.gate_theta_max_deg)
+                conditional_gate_total += len(gate_indices)
+                if len(gate_indices):
+                    low_kept, low_x, low_mask = selected_batch(
+                        group,
+                        begin,
+                        end,
+                        args.conditional_low_threshold,
+                        prep,
+                        stored_mean,
+                        stored_std,
+                        args.channels_per_string,
+                        args.start_event,
+                        args.event_stride,
+                        center_time_alpha=args.center_time_alpha,
+                    )
+                    low_lookup = {row[1]: index for index, row in enumerate(low_kept)}
+                    rerun_indices = np.asarray(
+                        [
+                            index
+                            for index in gate_indices
+                            if low_kept[low_lookup[kept[index][1]]][2] > kept[index][2]
+                        ],
+                        dtype=np.int64,
+                    )
+                    if len(rerun_indices):
+                        low_indices = [low_lookup[kept[index][1]] for index in rerun_indices]
+                        with torch.inference_mode():
+                            low_direction, low_offset = model(
+                                torch.from_numpy(low_x[low_indices]).to(device),
+                                torch.from_numpy(low_mask[low_indices]).to(device),
+                            )
+                        direction[rerun_indices] = low_direction.cpu().numpy()
+                        offset[rerun_indices] = low_offset.cpu().numpy()
+                        for high_index, low_index in zip(rerun_indices, low_indices):
+                            kept[high_index] = low_kept[low_index]
+                        used_low_threshold[rerun_indices] = True
+                        conditional_total += len(rerun_indices)
             theta = np.rad2deg(np.arccos(np.clip(direction[:, 2], -1, 1)))
             phi = np.mod(np.rad2deg(np.arctan2(direction[:, 1], direction[:, 0])), 360)
             for i, row in enumerate(kept):
                 anchor = row[4] + offset[i]
-                writer.writerow(
-                    {
-                        "event_id": row[0],
-                        "source_event_index": row[1],
-                        "n_hits": row[2],
-                        "n_strings": row[3],
-                        "theta_deg": float(theta[i]),
-                        "phi_deg": float(phi[i]),
-                        "direction_x": float(direction[i, 0]),
-                        "direction_y": float(direction[i, 1]),
-                        "direction_z": float(direction[i, 2]),
-                        "anchor_x_m": float(anchor[0]),
-                        "anchor_y_m": float(anchor[1]),
-                        "anchor_z_m": float(anchor[2]),
-                    }
-                )
+                record = {
+                    "event_id": row[0],
+                    "source_event_index": row[1],
+                    "n_hits": row[2],
+                    "n_strings": row[3],
+                    "theta_deg": float(theta[i]),
+                    "phi_deg": float(phi[i]),
+                    "direction_x": float(direction[i, 0]),
+                    "direction_y": float(direction[i, 1]),
+                    "direction_z": float(direction[i, 2]),
+                    "anchor_x_m": float(anchor[0]),
+                    "anchor_y_m": float(anchor[1]),
+                    "anchor_z_m": float(anchor[2]),
+                }
+                if args.conditional_low_threshold is not None:
+                    record["selected_threshold"] = (
+                        args.conditional_low_threshold if used_low_threshold[i] else args.threshold
+                    )
+                writer.writerow(record)
             kept_total += len(kept)
     print(
         json.dumps(
             {
                 "output": str(args.output),
                 "threshold": args.threshold,
+                "conditional_low_threshold": args.conditional_low_threshold,
+                "gate_theta_max_deg": args.gate_theta_max_deg,
+                "conditional_gate_events": conditional_gate_total,
+                "conditional_reruns": conditional_total,
                 "photon_residual_checkpoint": str(args.photon_residual_checkpoint)
                 if args.photon_residual_checkpoint is not None
                 else None,
