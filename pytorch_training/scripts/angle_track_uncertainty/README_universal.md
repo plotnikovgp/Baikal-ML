@@ -643,3 +643,59 @@ Commands are in `run_joint_raw_5k.sh`,
 `run_joint_raw_hard_continue_10k.sh`, and `run_joint_raw_domain.sh`.
 The large raw files, ID indices, and checkpoints remain on cluster63.
 Compact audit JSON is in [`results/joint_raw_v1/`](results/joint_raw_v1/).
+
+## Input-composition audit and equivariant pair-vote pilot
+
+`audit_input_domain_shift.py` compares event-level physical hit summaries
+on the fixed p>=0.70, 2s8h experimental (4,924 events) and unique
+muatm-MC validation (25,054 events) cohorts. It checks each CSV event ID
+against its HDF5 source row. After the established hit/string-count
+matching, the experiment has shorter vertical hit spread (median
+40.81 versus 47.53 m) and time spread (178.46 versus 193.36 ns), and
+slightly lower mean signal probability (0.8876 versus 0.8947).
+These are **observed input differences**, not proof of detector or model
+error; the true particle composition of experimental events is unknown.
+
+`match_domain_covariates.py` checks whether the theta-distribution
+comparison is sensitive to that composition. With only hit/string
+matching, v4 experiment–muatm-MC theta W1 is 3.007°. Also matching by
+three coarse bins of *observed vertical hit spread* reduces it to
+0.364°. All experimental events have matching MC support and effective
+MC sample size remains 21,071 of 25,054. The paired-bootstrap 95%
+interval for the W1 change is [-2.997°, -2.072°]. Within the three
+vertical-spread bins, hit/string-matched theta W1 is 0.553°, 0.709°,
+and 1.081°: the marginal 0.364° value should not be mistaken for zero
+conditional shift. The result strongly indicates that the original
+3° **marginal** theta difference is confounded by event geometry.
+It does not establish experimental angular accuracy or justify forcing
+the network's output distribution to match unweighted MC.
+
+`--center-time-alpha` is an optional *diagnostic* input transform in
+`infer_rethresholded_for_audit.py`; the default is zero and preserves
+v4 behavior. On every fourth event of the fixed cohort (1,231
+experimental and 6,493 unique muatm MC), full time centering changed
+experimental directions by only 0.23° median. Overall muatm-MC angle
+q68 changed from 10.958° to 11.017° and matched theta W1 from 2.703°
+to 2.729°. A small single-track subset improved, but this did not
+outweigh the all-muatm and domain results. No preprocessing change was
+promoted.
+
+`pair_vote_residual.py` tests a distinct architecture from the earlier
+hidden-state graph blocks: at most 32 time-quantile hits form directed
+pairs; a small network uses physical distances, time residuals, charge,
+and alignment with v4's direction to cast azimuth-equivariant vector
+votes. Its final layer is zero-initialized, so step 0 exactly equals
+v4. The v4 backbone and point head are frozen, and only one residual
+head is trained; this is a single model, not an ensemble. Unit tests
+check identity initialization, gradients, time-translation invariance,
+and z-rotation equivariance of the vote. In a 3,000-step pilot with
+the same leakage-free masks and single-muatm training filter, the
+best predeclared validation score remained at **step 0**. The
+post-start step-2,500 predicted-hit angle q68 was 4.4677° versus
+4.4689° at start, but GT nue2 q68 and the combined score worsened;
+step 3,000 was 4.4876°. This sub-0.002° validation-only fluctuation
+does not warrant independent-test or experimental-domain evaluation.
+v4 and its uncertainty calibration remain the selected production model.
+Compact results and the theta overlay are in
+[`results/domain_input_shift_v2/`](results/domain_input_shift_v2/) and
+[`results/pair_vote_v4/`](results/pair_vote_v4/).

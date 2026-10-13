@@ -46,6 +46,7 @@ def selected_batch(
     sample_start_event: int,
     event_stride: int,
     score_feature: bool = False,
+    center_time_alpha: float = 0.0,
 ):
     starts = np.asarray(group["ev_starts/data"][begin : end + 1], dtype=np.int64)
     first, last = int(starts[0]), int(starts[-1])
@@ -73,8 +74,9 @@ def selected_batch(
         selected = features[lo:hi][choose]
         center_m = (selected[:, 2:5] * stored_std[2:5] + stored_mean[2:5]).mean(0)
         normalized = (selected[:max_len] * stored_std + stored_mean - expected_mean) / expected_std
-        if prep["center_time"]:
-            normalized[:, 1] -= normalized[:, 1].mean()
+        alpha = 1.0 if prep["center_time"] else center_time_alpha
+        if alpha:
+            normalized[:, 1] -= alpha * normalized[:, 1].mean()
         if score_feature:
             selected_probabilities = probabilities[lo:hi][choose][:max_len, None]
             normalized = np.concatenate((normalized, selected_probabilities), axis=1)
@@ -113,6 +115,12 @@ def main() -> None:
     parser.add_argument("--event-stride", type=int, default=1)
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--channels-per-string", type=int, default=36)
+    parser.add_argument(
+        "--center-time-alpha",
+        type=float,
+        default=0.0,
+        help="Diagnostic removal of the event-mean time from the model input; 0 preserves the bundle",
+    )
     args = parser.parse_args()
     if args.output.exists():
         raise FileExistsError(f"Refusing to overwrite {args.output}")
@@ -124,6 +132,8 @@ def main() -> None:
         raise ValueError("Start event must be nonnegative and max events positive")
     if args.event_stride < 1:
         raise ValueError("Event stride must be positive")
+    if not 0.0 <= args.center_time_alpha <= 1.0:
+        raise ValueError("Center-time alpha must be between zero and one")
     torch.set_num_threads(args.threads)
     bundle = torch.load(args.bundle, map_location="cpu", weights_only=True)
     full_model = build_model(bundle["model_config"])
@@ -161,6 +171,7 @@ def main() -> None:
                 args.channels_per_string,
                 args.start_event,
                 args.event_stride,
+                center_time_alpha=args.center_time_alpha,
             )
             if not kept:
                 continue
@@ -194,6 +205,7 @@ def main() -> None:
             {
                 "output": str(args.output),
                 "threshold": args.threshold,
+                "center_time_alpha": args.center_time_alpha,
                 "source_events": end_event - args.start_event,
                 "source_event_offset": args.start_event,
                 "event_stride": args.event_stride,
