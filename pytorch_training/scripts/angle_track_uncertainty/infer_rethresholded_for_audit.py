@@ -17,6 +17,7 @@ import h5py
 import numpy as np
 import torch
 from bundle_universal_model import build_model
+from photon_residual_upgrade import PhotonResidualUpgrade
 
 FIELDS = (
     "event_id",
@@ -105,6 +106,7 @@ def selected_batch(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bundle", type=Path, required=True)
+    parser.add_argument("--photon-residual-checkpoint", type=Path)
     parser.add_argument("--data", type=Path, required=True)
     parser.add_argument("--split", default="test")
     parser.add_argument("--threshold", type=float, required=True)
@@ -139,6 +141,17 @@ def main() -> None:
     full_model = build_model(bundle["model_config"])
     full_model.load_state_dict(bundle["state_dict"], strict=True)
     model = full_model.base.eval()
+    if args.photon_residual_checkpoint is not None:
+        # This trusted local training checkpoint contains argparse Path values.
+        saved = torch.load(args.photon_residual_checkpoint, map_location="cpu", weights_only=False)
+        model = PhotonResidualUpgrade(
+            model,
+            torch.tensor(bundle["preprocessing"]["input_norm_mean"]),
+            torch.tensor(bundle["preprocessing"]["input_norm_std"]),
+            hidden=saved["args"]["hidden"],
+        )
+        model.load_state_dict(saved["model"], strict=True)
+        model.eval()
     prep = bundle["preprocessing"]
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
@@ -205,6 +218,9 @@ def main() -> None:
             {
                 "output": str(args.output),
                 "threshold": args.threshold,
+                "photon_residual_checkpoint": str(args.photon_residual_checkpoint)
+                if args.photon_residual_checkpoint is not None
+                else None,
                 "center_time_alpha": args.center_time_alpha,
                 "source_events": end_event - args.start_event,
                 "source_event_offset": args.start_event,

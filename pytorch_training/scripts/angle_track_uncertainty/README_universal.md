@@ -806,11 +806,39 @@ fit from v4 worsens overall angular q68 from 4.469° to 4.711° with a
 5° direction prior; stronger 2° and 1° priors give 4.530° and 4.470°.
 The 2° prior improves line q68 4.691 to 4.546 m and `nuatm` angle q68
 3.477° to 3.322°, but worsens `muatm` angle 10.584° to 11.700°.
-No physics fit is promoted. `photon_residual_upgrade.py` and
-`train_photon_residual.py` prepare a zero-initialized, single-model learned
-correction from per-hit physical time residuals; only a one-step smoke test
-has run, so there is **no quality claim** for that candidate yet.
-The production v4 checkpoint and MC--experimental theta comparison remain
-unchanged. Experimental events have no truth hit labels or directions, and
-may include multiple `muatm` tracks; MC error rates above must not be
-presented as experimental resolution.
+No direct physics fit is promoted. `photon_residual_upgrade.py` and
+`train_photon_residual.py` implement a zero-initialized, single-model learned
+correction from per-hit physical time residuals. A 3,000-step run selected
+step 3,000 on the predeclared validation score. On the independent
+predicted-hit test, after deduplicating 27,038 rows to 26,229 event IDs,
+angle q50/q68 changes from **2.762°/4.783° to 2.625°/4.707°**, and
+transverse line q68 from **5.213 to 4.764 m**. The paired-bootstrap 95%
+interval for the angle q68 change is [-0.104°, -0.048°]. By particle,
+angle q68 changes from 10.041° to 9.989° (`muatm`), 3.487° to 3.425°
+(`nuatm`), and 6.065° to 5.991° (`nue2`).
+
+This correction **does not fix the severe tail**: error >=20° occurs in
+1,576 events for v4 and 1,585 for the correction (13 rescued, 22 newly
+severe). At hit span <100 m, angle q68 is 18.832° versus 18.852°.
+An observed physical diagnostic is still useful: among events with span
+<150 m, >=20° errors occur in 3.8% when the median absolute photon-time
+residual to the predicted line is <2 ns, versus 28.4% at 16--32 ns and
+34.3% above 32 ns. This is a test-set association, not a fitted or
+externally validated quality cut.
+
+`infer_rethresholded_for_audit.py --photon-residual-checkpoint` evaluates
+the same correction on experimental and muatm-MC events after the same
+signal/noise threshold and 2-string/8-hit cut. For p>=0.70, the
+hit/string-matched theta Wasserstein distance is 3.007° before and
+2.975° after. Adding observed z-spread matching gives 0.364° before
+and 0.368° after; the paired-bootstrap interval for this change includes
+zero. Thus no evidence of a material theta-domain shift was found.
+Compact test, validation, and domain results, including a before/after
+theta plot, are in [`results/photon_residual_v4/`](results/photon_residual_v4/).
+The experimental checkpoint remains at
+`track_anchor/runs/physical_time_audit/photon_residual_3k/best.pt` on
+cluster63. It has **not** replaced the production v4 bundle, whose
+uncertainty heads have not been recalibrated for this direction/point
+correction. Experimental events have no truth hit labels or directions,
+and may include multiple `muatm` tracks; MC error rates above must not
+be presented as experimental resolution.
