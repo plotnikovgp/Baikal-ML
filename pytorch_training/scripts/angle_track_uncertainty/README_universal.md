@@ -1986,3 +1986,60 @@ python infer_rethresholded_for_audit.py \
 Rows with `selected_threshold=0.50` expose raw sigmas but deliberately
 have blank calibrated radius columns. The frozen signal/noise classifier
 that prepares the HDF5 is separate from this checkpoint and command.
+
+## What still limits the median on the external reco cohort (2026-10-14)
+
+The latest [paired input audit](results/reco_input_gap_gate200_v2/summary.json)
+joins the exact full-raw MC clusters, the p>=0.70 classifier-selected hits,
+the frozen v3 and 200 ns gate predictions, and ROOT reco **by event ID**.
+The raw HDF5 and paired reco arrays have different row orders; direct
+row-wise comparison is invalid. All results below use the same 42,003 nue2
+events passing the ROOT-observable preliminary 10/13 cut. This is
+descriptive: three original BRecoMuonBDTEval-derived cuts are unavailable,
+and some 2020 generated primaries overlap training.
+
+| Cohort | N | Standard reco direction q50/q68 | v3 gate200 q50/q68 |
+| --- | ---: | ---: | ---: |
+| All paired 10/13 events | 42,003 | 1.983° / 5.576° | **1.823° / 3.072°** |
+| Reco >=20 hits and >=12 triplets | 5,679 | **0.622° / 0.989°** | 0.832° / 1.223° |
+| Same, with >=90% raw true-signal-hit recall at p>=0.70 | 5,192 | **0.612° / 0.961°** | 0.817° / 1.201° |
+| NN 8-11 selected hits, <70% signal recall | 426 | **2.816°** / 6.734° | 2.964° / **5.361°** |
+
+Thus the clean, high-reco-quality precision gap remains when nearly all
+true signal hits survive the classifier. Missing hits are **not** a
+complete explanation. Both components contribute in the high-quality
+cohort: theta q50 is 0.420° NN versus 0.318° reco, and phi q50 is
+0.814° versus 0.593°. The same high-quality direction-q50 pattern holds
+in each source part A-E (NN 0.794-0.930° versus reco 0.575-0.659°), not
+just one source file. That does not remove the training-overlap caveat.
+
+Hit selection still matters at low multiplicity. With 8-11 selected hits
+and <70% raw signal recall, the *nominal* p>=0.70 NN q50 is 6.233°;
+the fixed gate200 lowers it to 2.964°. Conversely, when standard reco uses
+1-4 more fitted hits than the NN retains, its q50 is 1.215° versus
+1.839° for gate200 (4,336 events); when the NN has >=10 more selected
+hits, gate200 is 1.354° versus reco 2.095° (6,668 events). ROOT `fNHits`
+counts fitted reco hits, not all available raw hits, so this difference
+is an observational diagnostic, not proof that one algorithm discarded
+the other's exact hit set.
+
+At the common reco-median pivot of 1.983°, gate200 loses 5,828
+reco-good events and rescues 7,174 reco-bad events, a **net 1,346-event
+gain**. The two crossover groups have similar median signal recall
+(0.933 vs 0.947) and GT span (179 vs 178 m); losses have fewer selected
+hits (14 vs 17) and slightly smaller ROOT `fThetaErr` (0.467 vs 0.548).
+In the high-quality subset the NN still wins event-wise 42.5% of the
+time, but reco has the better central precision. These observations
+favor a precision-floor/timing-geometry hypothesis over a simple
+"long-track" or classifier-only diagnosis.
+
+The **unchanged p>=0.70** uncertainty radius is conservative on this
+external cohort: nominal `angle_r68_deg` covers 78.7% overall and 86.7%
+in the high-quality subset. This does *not* validate gate200 radii;
+they remain blank for changed-input rows. No model weights or
+experimental theta predictions changed in this audit. A targeted
+single-model timing/geometry correction should only be considered after
+independent-season validation and a repeated MC-vs-experiment theta check;
+another broad architecture sweep is not justified by these results.
+The executable audit is [`audit_reco_input_gap.py`](audit_reco_input_gap.py),
+with all strata in [`strata.csv`](results/reco_input_gap_gate200_v2/strata.csv).
