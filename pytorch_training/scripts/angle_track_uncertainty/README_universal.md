@@ -2406,3 +2406,33 @@ select a new threshold, look at 2019-B for this choice, or alter the
 checkpoint and MC/experimental predictions. The [full A sweep](results/photon_uncertainty_crossseason_v3/photon_gate_extended_2019_a.json)
 is reproducible with [`sweep_added_hit_photon_gate.py`](sweep_added_hit_photon_gate.py)
 and its `--photon-thresholds-ns` option.
+
+### Which high-quality reco events account for the central gap (2026-10-14)
+
+The [ID-matched precision-strata report](results/reco_precision_strata_v3.json)
+extends the 5,679-event 2020 diagnostic above. The broad 10/13 ROOT-observable
+cut and `fNHits>=20`, `fNTriplets>=12` selection are unchanged; the additional
+bins are descriptive, not a model-selection sweep.
+
+| High-quality subset | N | NN q50 / q68 | Standard reco q50 / q68 |
+| --- | ---: | ---: | ---: |
+| Reco 20–29 hits | 2,356 | 1.065° / **1.521°** | **0.979°** / 1.884° |
+| Reco 30–49 hits | 2,621 | 0.758° / 1.074° | **0.542° / 0.807°** |
+| Reco >=50 hits | 702 | 0.510° / 0.759° | **0.283° / 0.406°** |
+| Reco `fThetaErr<0.3°` | 3,734 | 0.695° / 0.980° | **0.472° / 0.703°** |
+| Reco `0.6°<=fThetaErr<1°` | 204 | **2.042° / 3.117°** | 6.856° / 22.016° |
+| Reco `fThetaErr>=1°` | 56 | **2.891° / 4.088°** | 29.595° / 57.002° |
+
+The high-quality reco q50 advantage is concentrated in events with
+many fitted hits/triplets and a low *reco-derived* angular-error estimate,
+while NN controls the unreliable-reco tail. It is not a single long-span
+pathology: the reco q50 remains lower in the 150–300 m, 300–450 m, and
+>=450 m span bins. `fThetaErr` is an output of standard reco, not a
+ground-truth quality label. Choosing a hybrid cutoff from this same cohort
+would be optimistic, especially because 2020 MC primaries may overlap the
+angle-model training set and three of the original 13 cuts are unavailable.
+
+The accessible 2019-v2 ROOT sample was also checked and contains only MC
+event/geometry trees, not a standard-reco direction; the inspected 2020
+test ROOT sample likewise lacks reco fields. An independent standard-reco
+cohort is still needed before claiming or deploying a precision hybrid.

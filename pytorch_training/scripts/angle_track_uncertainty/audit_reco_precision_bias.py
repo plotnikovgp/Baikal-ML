@@ -81,6 +81,7 @@ def main() -> None:
         ids = pair["event_ids"].astype("U")
         index = pair["fair_index"].astype(np.int64)
         reco_error = pair["standard_reco_direction_error_deg"].astype(float)
+        gt_span = pair["gt_span_m"].astype(float)
     if len(np.unique(ids)) != len(ids):
         raise ValueError("Duplicate paired IDs")
     root = pd.read_csv(args.root_fields).set_index("event_id", verify_integrity=True).reindex(ids)
@@ -148,6 +149,7 @@ def main() -> None:
         },
         "truth_theta_bins": {},
         "truth_phi_bins": {},
+        "high_quality_strata": {},
     }
     for name, values, edges in (
         ("truth_theta_bins", truth_angles[:, 0], [0, 30, 60, 90, 120, 150, 180.001]),
@@ -156,6 +158,29 @@ def main() -> None:
         for low, high_edge in zip(edges[:-1], edges[1:]):
             mask = high & (values >= low) & (values < high_edge)
             report[name][f"{low:g}-{high_edge:g}"] = score(mask, nn_all, reco_error)
+    selected_hits = gate["n_hits"].to_numpy(float)
+    for name, values, edges in (
+        ("reco_hits", root["fNHits"].to_numpy(float), [20, 30, 50, np.inf]),
+        ("reco_triplets", root["fNTriplets"].to_numpy(float), [12, 20, 40, np.inf]),
+        ("selected_hits", selected_hits, [0, 20, 35, 60, np.inf]),
+        (
+            "reco_minus_selected_hits",
+            root["fNHits"].to_numpy(float) - selected_hits,
+            [-np.inf, -10, -3, 3, 10, np.inf],
+        ),
+        ("gt_span_m", gt_span, [0, 150, 300, 450, np.inf]),
+        (
+            "reco_theta_error_estimate_deg",
+            root["fThetaErr"].to_numpy(float),
+            [0, 0.3, 0.6, 1.0, np.inf],
+        ),
+    ):
+        report["high_quality_strata"][name] = {}
+        for low, high_edge in zip(edges[:-1], edges[1:]):
+            mask = high & (values >= low) & (values < high_edge)
+            report["high_quality_strata"][name][f"{low:g}-{high_edge:g}"] = score(
+                mask, nn_all, reco_error
+            )
     args.output.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2), flush=True)
 
