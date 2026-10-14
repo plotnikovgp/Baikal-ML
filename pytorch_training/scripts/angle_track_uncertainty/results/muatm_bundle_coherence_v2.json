@@ -1,0 +1,230 @@
+{
+  "manifest": "/tmp/baikal-angle-coherence.Dxs2k0/manifest.npz",
+  "raw": "/home3/ivkhar/Baikal/data/h5s/baikal_mc_merged.h5",
+  "selected_unique_muatm_events": 112157,
+  "parts": 26,
+  "muon_multiplicity": {
+    "zero": 0,
+    "one": 4400,
+    "two_to_four": 17518,
+    "five_to_nine": 34104,
+    "ten_plus": 56135
+  },
+  "groups": {
+    "one": {
+      "n": 4400,
+      "nearest_muon_to_primary_deg": {
+        "q50": 6.613302226726415e-06,
+        "q68": 8.872676000826597e-06,
+        "q90": 1.3687032762131918e-05
+      },
+      "median_muon_to_primary_deg": {
+        "q50": 6.613302226726415e-06,
+        "q68": 8.872676000826597e-06,
+        "q90": 1.3687032762131918e-05
+      },
+      "leading_muon_to_primary_deg": {
+        "q50": 6.613302226726415e-06,
+        "q68": 8.872676000826597e-06,
+        "q90": 1.3687032762131918e-05
+      },
+      "weighted_axis_to_primary_deg": {
+        "q50": 6.557959812547711e-06,
+        "q68": 8.872676000826597e-06,
+        "q90": 1.3687032762131918e-05
+      },
+      "weighted_axis_spread_q68_deg": {
+        "q50": 0.0,
+        "q68": 0.0,
+        "q90": 0.0
+      },
+      "max_muon_to_primary_deg": {
+        "q50": 6.613302226726415e-06,
+        "q68": 8.872676000826597e-06,
+        "q90": 1.3687032762131918e-05
+      },
+      "transverse_start_spread_q68_m": {
+        "q50": 0.0,
+        "q68": 0.0,
+        "q90": 0.0
+      },
+      "axis_within_1deg": 1.0,
+      "axis_within_3deg": 1.0,
+      "axis_within_5deg": 1.0,
+      "all_muons_within_0p01deg": 1.0,
+      "max_individual_muon_to_primary_deg": 3.068838274056841e-05
+    },
+    "two_to_four": {
+      "n": 17518,
+      "nearest_muon_to_primary_deg": {
+        "q50": 6.585631019637063e-06,
+        "q68": 8.872676000826597e-06,
+        "q90": 1.3226604453452851e-05
+      },
+      "median_muon_to_primary_deg": {
+        "q50": 6.585631019637063e-06,
+        "q68": 8.872676000826597e-06,
+        "q90": 1.3226604453452851e-05
+      },
+      "leading_muon_to_primary_deg": {
+        "q50": 6.585631019637063e-06,
+        "q68": 8.872676000826597e-06,
+        "q90": 1.3226604453452851e-05
+      },
+      "weighted_axis_to_primary_deg": {
+        "q50": 6.557959812547711e-06,
+        "q68": 8.872676000826597e-06,
+        "q90": 1.319902026398418e-05
+      },
+      "weighted_axis_spread_q68_deg": {
+        "q50": 0.0,
+        "q68": 0.0,
+        "q90": 0.0
+      },
+      "max_muon_to_primary_deg": {
+        "q50": 6.585631019637063e-06,
+        "q68": 8.872676000826597e-06,
+        "q90": 1.3226604453452851e-05
+      },
+      "transverse_start_spread_q68_m": {
+        "q50": 14.154769539972056,
+        "q68": 19.756572528995957,
+        "q90": 33.92523864488403
+      },
+      "axis_within_1deg": 1.0,
+      "axis_within_3deg": 1.0,
+      "axis_within_5deg": 1.0,
+      "all_muons_within_0p01deg": 1.0,
+      "max_individual_muon_to_primary_deg": 3.153188473342577e-05
+    },
+    "five_to_nine": {
+      "n": 34104,
+      "nearest_muon_to_primary_deg": {
+        "q50": 6.722620413208828e-06,
+        "q68": 9.035490975690211e-06,
+        "q90": 1.3363671372914987e-05
+      },
+      "median_muon_to_primary_deg": {
+        "q50": 6.722620413208828e-06,
+        "q68": 9.035490975690211e-06,
+        "q90": 1.3363671372914987e-05
+      },
+      "leading_muon_to_primary_deg": {
+        "q50": 6.722620413208828e-06,
+        "q68": 9.035490975690211e-06,
+        "q90": 1.3363671372914987e-05
+      },
+      "weighted_axis_to_primary_deg": {
+        "q50": 6.668185343934157e-06,
+        "q68": 9.035490975690211e-06,
+        "q90": 1.3336370687868338e-05
+      },
+      "weighted_axis_spread_q68_deg": {
+        "q50": 0.0,
+        "q68": 0.0,
+        "q90": 0.0
+      },
+      "max_muon_to_primary_deg": {
+        "q50": 6.722620413208828e-06,
+        "q68": 9.035490975690211e-06,
+        "q90": 1.3363671372914987e-05
+      },
+      "transverse_start_spread_q68_m": {
+        "q50": 18.48501170280814,
+        "q68": 23.88857333690364,
+        "q90": 37.468286611879826
+      },
+      "axis_within_1deg": 1.0,
+      "axis_within_3deg": 1.0,
+      "axis_within_5deg": 1.0,
+      "all_muons_within_0p01deg": 1.0,
+      "max_individual_muon_to_primary_deg": 3.178515695259018e-05
+    },
+    "ten_plus": {
+      "n": 56135,
+      "nearest_muon_to_primary_deg": {
+        "q50": 6.776618231767655e-06,
+        "q68": 9.115808030550376e-06,
+        "q90": 1.3499346641909611e-05
+      },
+      "median_muon_to_primary_deg": {
+        "q50": 6.776618231767655e-06,
+        "q68": 9.115808030550376e-06,
+        "q90": 1.3499346641909611e-05
+      },
+      "leading_muon_to_primary_deg": {
+        "q50": 6.776618231767655e-06,
+        "q68": 9.115808030550376e-06,
+        "q90": 1.3499346641909611e-05
+      },
+      "weighted_axis_to_primary_deg": {
+        "q50": 6.776618231767655e-06,
+        "q68": 9.115808030550376e-06,
+        "q90": 1.3499346641909611e-05
+      },
+      "weighted_axis_spread_q68_deg": {
+        "q50": 0.0,
+        "q68": 0.0,
+        "q90": 0.0
+      },
+      "max_muon_to_primary_deg": {
+        "q50": 6.776618231767655e-06,
+        "q68": 9.115808030550376e-06,
+        "q90": 1.3499346641909611e-05
+      },
+      "transverse_start_spread_q68_m": {
+        "q50": 20.526926441697057,
+        "q68": 25.65711672097226,
+        "q90": 38.89797339811578
+      },
+      "axis_within_1deg": 1.0,
+      "axis_within_3deg": 1.0,
+      "axis_within_5deg": 1.0,
+      "all_muons_within_0p01deg": 1.0,
+      "max_individual_muon_to_primary_deg": 3.0461897115740756e-05
+    },
+    "multi_all": {
+      "n": 107757,
+      "nearest_muon_to_primary_deg": {
+        "q50": 6.722620413208828e-06,
+        "q68": 9.035490975690211e-06,
+        "q90": 1.344524082641768e-05
+      },
+      "median_muon_to_primary_deg": {
+        "q50": 6.722620413208828e-06,
+        "q68": 9.035490975690211e-06,
+        "q90": 1.344524082641768e-05
+      },
+      "leading_muon_to_primary_deg": {
+        "q50": 6.722620413208828e-06,
+        "q68": 9.035490975690211e-06,
+        "q90": 1.344524082641768e-05
+      },
+      "weighted_axis_to_primary_deg": {
+        "q50": 6.722620413208828e-06,
+        "q68": 9.035490975690211e-06,
+        "q90": 1.3418106104862006e-05
+      },
+      "weighted_axis_spread_q68_deg": {
+        "q50": 0.0,
+        "q68": 0.0,
+        "q90": 0.0
+      },
+      "max_muon_to_primary_deg": {
+        "q50": 6.722620413208828e-06,
+        "q68": 9.035490975690211e-06,
+        "q90": 1.344524082641768e-05
+      },
+      "transverse_start_spread_q68_m": {
+        "q50": 19.05489240219825,
+        "q68": 24.354078352076993,
+        "q90": 37.79692244151167
+      },
+      "axis_within_1deg": 1.0,
+      "axis_within_3deg": 1.0,
+      "axis_within_5deg": 1.0,
+      "all_muons_within_0p01deg": 1.0,
+      "max_individual_muon_to_primary_deg": 3.178515695259018e-05
+    }
+  }
+}

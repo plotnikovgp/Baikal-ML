@@ -2248,9 +2248,32 @@ full MC cohort; only their occasional **single-track wording** was wrong.
 The isolated one-track sample is too small and has poor covariate support
 for a reliable experimental comparison. These distributions are consistent
 with the importance of non-single muatm topologies, but experimental truth
-composition is unknown and W1 is not an angular-accuracy metric. A single
-direction label for multi-muon events remains ambiguous, so this audit does
-not justify putting them back into supervised angle training. The
+composition is unknown and W1 is not an angular-accuracy metric. The
 [machine-readable report](results/muatm_domain_composition_v3_p070.json)
 contains both matching schemes and all support diagnostics. No checkpoint
 or experimental prediction changed.
+
+### Raw muatm direction and track-point coherence (2026-10-14)
+
+[`audit_muatm_bundle_coherence.py`](audit_muatm_bundle_coherence.py) joins
+the p>=0.70 2s8h validation/test events to the original merged HDF5 by
+source part, event ID, and raw row index. It verifies primary angles and
+single-track flags, and reads each generated muon's individual direction,
+energy, and starting point. There are **112,157 unique muatm events** in
+26 source parts: 4,400 have one generated muon; 107,757 have two or more
+(17,518 with 2–4, 34,104 with 5–9, and 56,135 with at least 10).
+
+In this particular MC file, **every individual generated muon direction
+agrees with the event's primary direction to <0.01°**; the largest
+observed difference is 0.000032°. This is a property of the stored
+simulation labels, not proof that experimental bundles are exactly
+collinear or that the network reconstructs each physical muon. It does
+remove the feared *direction-label* conflict for training on this MC. The
+separate track points remain ambiguous: the median per-event q68 of
+transverse start-position spread is **19.05 m** across multi-muon events
+(q68 over events 24.35 m), increasing to 20.53 m for >=10 muons. Thus
+multi-muon events could be tested as **angle-only supervision**; they
+must stay masked out of the single-point/line and uncertainty losses.
+The [raw-data report](results/muatm_bundle_coherence_v2.json) records the
+full multiplicity and angular/spatial quantiles. This audit itself did
+not change any checkpoint or experimental prediction.
