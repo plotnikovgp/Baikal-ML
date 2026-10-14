@@ -307,6 +307,36 @@ def quantiles(values: np.ndarray) -> dict[str, float]:
     }
 
 
+def sparse_direction_only_keep(event_ids: np.ndarray, anchor_valid: np.ndarray) -> np.ndarray:
+    """Keep new 2s8h neutrino events without a point target, never multi-track muatm."""
+    if len(event_ids) != len(anchor_valid):
+        raise ValueError("Extra event IDs and anchor validity have different lengths")
+    prefix = np.asarray(event_ids).astype("S5")
+    neutrino = (prefix == b"nue2_") | (prefix == b"nuatm")
+    return neutrino & ~np.asarray(anchor_valid, dtype=bool)
+
+
+def exclude_evaluation_ids(
+    event_ids: np.ndarray, keep: np.ndarray, evaluation_ids: np.ndarray
+) -> tuple[np.ndarray, int]:
+    """Remove held-out events from an extra training stream without changing its order."""
+    if len(event_ids) != len(keep):
+        raise ValueError("Extra event IDs and selection have different lengths")
+    selected = np.flatnonzero(keep)
+    excluded = np.isin(np.asarray(event_ids)[selected], evaluation_ids)
+    result = np.asarray(keep, dtype=bool).copy()
+    result[selected[excluded]] = False
+    return result, int(excluded.sum())
+
+
+def primary_fingerprints(primaries: np.ndarray) -> np.ndarray:
+    """Identify generated primaries by the exact float32 theta/phi/energy triple."""
+    values = np.asarray(primaries)
+    if values.ndim != 2 or values.shape[1] < 3 or values.dtype != np.float32:
+        raise ValueError("Primary array must have at least three float32 columns")
+    return np.ascontiguousarray(values[:, :3]).view("V12").reshape(-1)
+
+
 def next_nonempty(source):
     while True:
         batch = next(source)
@@ -424,6 +454,7 @@ def main() -> None:
     parser.add_argument("--extra-pred-data", type=Path, default=None)
     parser.add_argument("--extra-pred-anchors", type=Path, default=None)
     parser.add_argument("--extra-pred-weight", type=float, default=0.0)
+    parser.add_argument("--extra-pred-sparse-direction-only", action="store_true")
     parser.add_argument("--gt-data", type=Path, required=True)
     parser.add_argument("--gt-anchors", type=Path, required=True)
     parser.add_argument("--clean-nuatm-data", type=Path, default=None)
@@ -504,6 +535,8 @@ def main() -> None:
         and (args.extra_pred_data is None or args.extra_pred_anchors is None)
     ):
         raise ValueError("Extra predicted-hit stream needs data, anchors, and weight in [0, 1]")
+    if args.extra_pred_sparse_direction_only and args.extra_pred_weight <= 0:
+        raise ValueError("Sparse direction-only selection needs a positive extra-pred weight")
     if args.clean_nuatm_weight < 0 or (
         args.clean_nuatm_weight > 0 and args.clean_nuatm_data is None
     ):
@@ -647,23 +680,69 @@ def main() -> None:
         ):
             extra_ids = np.asarray(extra_h5["train/ev_ids/data"])
             anchor_ids = np.asarray(extra_anchors["train/event_ids"])
-            extra_pred_keep = np.asarray(extra_anchors["train/valid"], dtype=bool)
-            if not np.array_equal(extra_ids, anchor_ids) or not extra_pred_keep.any():
-                raise ValueError("Extra predicted-hit anchor IDs or valid selection are invalid")
-            selected_ids = np.unique(extra_ids[extra_pred_keep])
-            train_ids = np.unique(np.asarray(primary_h5["train/ev_ids/data"]))
-            if not np.isin(selected_ids, train_ids).all():
-                raise ValueError(
-                    "Extra predicted-hit stream contains IDs absent from primary training"
-                )
+            anchor_valid = np.asarray(extra_anchors["train/valid"], dtype=bool)
+            if not np.array_equal(extra_ids, anchor_ids):
+                raise ValueError("Extra predicted-hit anchor IDs are invalid")
+            extra_pred_keep = (
+                sparse_direction_only_keep(extra_ids, anchor_valid)
+                if args.extra_pred_sparse_direction_only
+                else anchor_valid
+            )
+            evaluation_ids = []
+            evaluation_primaries = []
             for split in ("val", "test"):
                 gt_ids = np.asarray(gt_h5[f"{split}/ev_ids/data"])[gt_masks[f"gt_{split}"]]
                 pred_ids = np.asarray(primary_h5[f"{split}/ev_ids/data"])[pred_masks[split]]
-                if np.intersect1d(selected_ids, np.union1d(gt_ids, pred_ids)).size:
-                    raise ValueError(f"Extra predicted-hit stream overlaps {split} evaluation")
+                evaluation_ids.extend((gt_ids, pred_ids))
+                if args.extra_pred_sparse_direction_only:
+                    evaluation_primaries.extend(
+                        (
+                            primary_fingerprints(
+                                np.asarray(gt_h5[f"{split}/prime_prty/data"])[
+                                    gt_masks[f"gt_{split}"]
+                                ]
+                            ),
+                            primary_fingerprints(
+                                np.asarray(primary_h5[f"{split}/prime_prty/data"])[
+                                    pred_masks[split]
+                                ]
+                            ),
+                        )
+                    )
+            held_out_ids = np.unique(np.concatenate(evaluation_ids))
+            excluded_id_rows = 0
+            excluded_primary_rows = 0
+            if args.extra_pred_sparse_direction_only:
+                extra_pred_keep, excluded_id_rows = exclude_evaluation_ids(
+                    extra_ids, extra_pred_keep, held_out_ids
+                )
+                eligible = np.flatnonzero(extra_pred_keep)
+                extra_primaries = primary_fingerprints(
+                    np.asarray(extra_h5["train/prime_prty/data"])[eligible]
+                )
+                held_out_primaries = np.unique(np.concatenate(evaluation_primaries))
+                duplicated_primary = np.isin(extra_primaries, held_out_primaries)
+                excluded_primary_rows = int(duplicated_primary.sum())
+                extra_pred_keep[eligible[duplicated_primary]] = False
+            if not extra_pred_keep.any():
+                raise ValueError("Extra predicted-hit selection is empty")
+            selected_ids = np.unique(extra_ids[extra_pred_keep])
+            train_ids = np.unique(np.asarray(primary_h5["train/ev_ids/data"]))
+            if args.extra_pred_sparse_direction_only:
+                if np.intersect1d(selected_ids, train_ids).size:
+                    raise ValueError("Sparse direction-only stream overlaps primary p>=0.70 train")
+            elif not np.isin(selected_ids, train_ids).all():
+                raise ValueError(
+                    "Extra predicted-hit stream contains IDs absent from primary training"
+                )
+            if np.intersect1d(selected_ids, held_out_ids).size:
+                raise ValueError("Extra predicted-hit stream overlaps evaluation")
             print(
                 f"extra_pred eligible_rows={int(extra_pred_keep.sum())} "
-                f"unique_ids={len(selected_ids)}",
+                f"unique_ids={len(selected_ids)} "
+                f"excluded_eval_id_rows={excluded_id_rows} "
+                f"excluded_eval_primary_rows={excluded_primary_rows} "
+                f"direction_only={args.extra_pred_sparse_direction_only}",
                 flush=True,
             )
     # Spread validation over the entire nue2 GT file, rather than taking the
