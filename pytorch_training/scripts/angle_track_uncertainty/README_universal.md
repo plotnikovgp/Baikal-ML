@@ -1852,5 +1852,45 @@ frozen uncertainty heads still output raw `sigma_angle_deg` and
 `sigma_anchor_m`, but the **p>=0.70-calibrated radii are intentionally
 blank**: coverage for this changed input distribution has not been
 validated. This mode should not replace the default v3 bundle until its
-uncertainty calibration and CPU latency have been checked. It needs no
-second network, but may invoke the same network twice on a subset.
+uncertainty calibration is resolved. It needs no second network, but may
+invoke the same network twice on a subset; CPU latency is measured below.
+
+### Gated-input uncertainty and CPU audit (2026-10-14)
+
+`audit_gate_uncertainty.py` fits prospective gate-specific angle and
+true-line radius factors **only on the 11,131 changed 2019-A nue2 events**.
+It verifies no shared event IDs or exact generated primaries with 2019-B,
+then reports untouched 2019-B and ID-masked 2020 test coverage. It does
+not overwrite the v3 bundle or promote a new calibration. The A-fitted
+68%/95% factors are 2.300/5.503 for angle and 1.692/3.982 for line,
+smaller than existing v3 p>=0.70 factors 2.602/6.457 and 1.853/4.227.
+
+| Gated events | Angle coverage with existing v3 factors, 68% / 95% | Line coverage, 68% / 95% |
+| --- | ---: | ---: |
+| Independent 2019-B nue2 (10,816) | 72.6% / 96.4% | 71.3% / 95.5% |
+| 2020 masked nue2 (2,223) | 79.1% / 96.7% | 75.8% / 94.6% |
+| 2020 masked nuatm (4,053) | 83.8% / 98.9% | 77.5% / 97.6% |
+| 2020 masked muatm (55; only 10 valid truth lines) | **12.7% / 54.5%** | 30.0% / 90.0% |
+
+The overall single-track coverage is somewhat conservative, but not
+uniformly so. In the 2020 gated nue2 hardest predicted point-sigma decile,
+nominal 95% line coverage is only **88.3%** (222 events); in 2019-B's
+hardest angle-sigma decile it is 93.6% (1,081 events). The small 2020
+primary-disjoint gated nue2 subset (121 events) also under-covers, though
+it is too small for a reliable standalone correction. On the rare
+upward-predicted muatm events, even angle coverage fails badly; their
+single-track point target is usually not well-defined. See the full
+[`photon_gate_uncertainty_audit_v2.json`](results/photon_uncertainty_crossseason_v3/photon_gate_uncertainty_audit_v2.json),
+including uncertainty-decile rows. Thus the **gate's blank calibrated
+radii remain intentional**; an A-only scalar factor is not a universal
+fix. Raw predicted sigmas remain available as ranking scores. Experimental
+events have no GT coverage measurement.
+
+CPU timing on cluster63, 2,048 consecutive 2019-B p>=0.50 source events
+(1,904 satisfy the high-threshold 2s8h cut), eight PyTorch threads,
+batch 256: two p>=0.70 passes took 15.60 and 15.65 seconds; the gate run
+with 388 reruns took 18.09 seconds. That is roughly **16% more wall time**
+or 8.2 -> 9.5 ms per accepted event, with peak RSS about 1.03-1.08 GB.
+This times network inference on already hit-classified HDF5 files, not the
+upstream signal/noise network or I/O from raw detector events. The gate
+is a CPU-feasible single-network quality option, not a free inference step.
