@@ -1498,3 +1498,65 @@ false-positive-hit composition of the difficult 2020 subset. The next
 experiment should use the classifier's lower-probability hits or a
 score-aware robustness objective, with independent-sample and
 experiment-versus-muatm distribution checks before any promotion.
+
+## Lower classifier-threshold training ablation (2026-10-14)
+
+`build_p050_anchor_from_p070.py` transfers audited single-track truth lines
+from the p>=0.70 **training** split to a 250,000-row p>=0.50 training set,
+then rebases each line's point target to the new hit centroid. It rejects
+all evaluation IDs. There are 96,591 eligible rows (91,177 unique IDs),
+including 69,203 `nue2`, 23,250 `nuatm`, and 4,138 `muatm` rows; the stream
+is therefore strongly `nue2`-weighted. No eligible row overlaps evaluation.
+`test_build_p050_anchor_from_p070.py` checks the line-rebasing invariant.
+
+`train_mixed_universal.py` now accepts an optional weighted lower-threshold
+predicted-hit stream; without the new arguments its old behavior is unchanged.
+`run_p050_mix_v4.sh` continued the same v4 checkpoint for 1,500 steps with
+stream weights 0.10 and 0.20 (seed 211). The common step-0 predicted-hit
+q68 was 4.4695 degrees and validation score 9.1731. At the
+0.20 run's best step 1,250, q50/q68 was 2.6142/4.4667 degrees, 8-12-hit
+q68 4.6600 versus 4.6682 initially, and score 9.1629. The 0.10 run's
+best step had q50/q68 2.6203/4.4819 degrees and score 9.1726. These
+changes are too small to promote without independent and experimental-domain
+checks; neither candidate replaces v4. The checkpoints remain in
+`/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/`.
+
+## Paired reco median-gap audit (2026-10-14)
+
+`analyze_reco_central_gap.py` joins eventwise v4, v4+photon, the standard
+reconstruction, selected classifier hits, and a **separate** fair-input
+GT-signal dataset. Its machine-readable output is in
+[`results/reco_central_gap_v3/`](results/reco_central_gap_v3/). The cut is
+the 10 preliminary conditions available in ROOT out of the requested 13:
+three BRecoMuonBDTEval-derived quantities require a newer BARS installation.
+It is a superset of the full 13/13 selection, not a substitute for it.
+
+On the same 44,189 `nue2` events, standard reco has direction q50/q68
+2.031/5.730 degrees; v4 on p>=0.70 classifier hits has 2.518/4.611,
+and v4+photon has 2.342/4.468. The paired-bootstrap 95% interval for
+v4+photon minus standard reco q50 is +0.276 to +0.346 degrees. Thus its
+tail is better but its central resolution is worse. At the standard-reco
+median error, 5,694 events have a good reco and worse NN result, versus
+3,758 in the reverse direction. The net 1,936-event shortfall is mostly
+events with at least four selected strings: 4 strings contribute 931,
+5-6 strings 833, and 7-9 strings 102; two-string events favor NN by 441.
+For 17-24 selected hits, NN/reco q50 is 1.585/1.216 degrees. Even among
+36,577 events with *zero* selected label-zero hits, it is 2.080/1.730.
+This is a central, clean-event deficit, not just a few outliers.
+
+There is also an important input asymmetry. The reco source file for the
+classifier was already filtered with `take_reco_hits=True`,
+`take_signal_hits=False` in `filter_data_reco.py`: its input hit count equals
+reco `fNHits` for 99.985% of test events. The frozen classifier cannot
+recover raw pulses omitted before inference. On a distinct fair dataset
+retaining all GT-signal hits (an oracle unavailable on experiment), the
+*same* v4 weights reach q50/q68 1.968/3.309 degrees on the paired 44,189
+events, versus standard reco 2.031/5.730. The q50 difference is -0.064
+degrees (paired-bootstrap 95% interval -0.104 to -0.023). Full GT input
+shrinks or reverses the median gap, but does not prove a deployable gain;
+the clean zero-noise subset still has GT-input NN/reco q50 1.874/1.730.
+
+The next **diagnostic**, before further training or architecture search, is
+to start from the unfiltered 2020 raw `baikal_reco.h5`, apply the same frozen
+signal/noise classifier and 2-string/8-hit cut, and compare on exact matched
+IDs. That tests whether the missing raw pulses are the main bottleneck.

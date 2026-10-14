@@ -43,7 +43,19 @@ def read_batch(h5: h5py.File, split: str, begin: int, end: int, prep: dict):
     group = h5[split]
     starts = np.asarray(group["ev_starts/data"][begin : end + 1], dtype=np.int64)
     lengths = np.diff(starts)
-    strings = np.asarray(group["num_un_strings/data"][begin:end], dtype=np.int32)
+    if "num_un_strings" in group:
+        strings = np.asarray(group["num_un_strings/data"][begin:end], dtype=np.int32)
+    else:
+        # Some GT-signal comparison files retain channels but omit the cached
+        # per-event string count.  Reconstruct the same 36-channel grouping.
+        channels = np.asarray(group["channels/data"][starts[0] : starts[-1]], dtype=np.int32)
+        strings = np.asarray(
+            [
+                len(np.unique(channels[starts[i] - starts[0] : starts[i + 1] - starts[0]] // 36))
+                for i in range(len(lengths))
+            ],
+            dtype=np.int32,
+        )
     if np.any(lengths < 8) or np.any(strings < 2):
         raise ValueError("Input has events outside the required 2-string/8-hit selection")
     features = np.asarray(group["data/data"][starts[0] : starts[-1]], dtype=np.float32)

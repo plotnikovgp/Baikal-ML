@@ -421,6 +421,9 @@ def main() -> None:
     parser.add_argument("--pred-data", type=Path, required=True)
     parser.add_argument("--norm-data", type=Path, default=None)
     parser.add_argument("--pred-anchors", type=Path, required=True)
+    parser.add_argument("--extra-pred-data", type=Path, default=None)
+    parser.add_argument("--extra-pred-anchors", type=Path, default=None)
+    parser.add_argument("--extra-pred-weight", type=float, default=0.0)
     parser.add_argument("--gt-data", type=Path, required=True)
     parser.add_argument("--gt-anchors", type=Path, required=True)
     parser.add_argument("--clean-nuatm-data", type=Path, default=None)
@@ -496,6 +499,11 @@ def main() -> None:
     args = parser.parse_args()
     if not 0 <= args.gt_weight <= 1:
         raise ValueError("gt-weight must be between 0 and 1")
+    if not 0 <= args.extra_pred_weight <= 1 or (
+        args.extra_pred_weight > 0
+        and (args.extra_pred_data is None or args.extra_pred_anchors is None)
+    ):
+        raise ValueError("Extra predicted-hit stream needs data, anchors, and weight in [0, 1]")
     if args.clean_nuatm_weight < 0 or (
         args.clean_nuatm_weight > 0 and args.clean_nuatm_data is None
     ):
@@ -629,6 +637,35 @@ def main() -> None:
             split: mask_file[f"pred_{split}"].copy() if f"pred_{split}" in mask_file else None
             for split in ("val", "test")
         }
+    extra_pred_keep = None
+    if args.extra_pred_weight > 0:
+        with (
+            h5py.File(args.extra_pred_data, "r") as extra_h5,
+            h5py.File(args.extra_pred_anchors, "r") as extra_anchors,
+            h5py.File(args.pred_data, "r") as primary_h5,
+            h5py.File(args.gt_data, "r") as gt_h5,
+        ):
+            extra_ids = np.asarray(extra_h5["train/ev_ids/data"])
+            anchor_ids = np.asarray(extra_anchors["train/event_ids"])
+            extra_pred_keep = np.asarray(extra_anchors["train/valid"], dtype=bool)
+            if not np.array_equal(extra_ids, anchor_ids) or not extra_pred_keep.any():
+                raise ValueError("Extra predicted-hit anchor IDs or valid selection are invalid")
+            selected_ids = np.unique(extra_ids[extra_pred_keep])
+            train_ids = np.unique(np.asarray(primary_h5["train/ev_ids/data"]))
+            if not np.isin(selected_ids, train_ids).all():
+                raise ValueError(
+                    "Extra predicted-hit stream contains IDs absent from primary training"
+                )
+            for split in ("val", "test"):
+                gt_ids = np.asarray(gt_h5[f"{split}/ev_ids/data"])[gt_masks[f"gt_{split}"]]
+                pred_ids = np.asarray(primary_h5[f"{split}/ev_ids/data"])[pred_masks[split]]
+                if np.intersect1d(selected_ids, np.union1d(gt_ids, pred_ids)).size:
+                    raise ValueError(f"Extra predicted-hit stream overlaps {split} evaluation")
+            print(
+                f"extra_pred eligible_rows={int(extra_pred_keep.sum())} "
+                f"unique_ids={len(selected_ids)}",
+                flush=True,
+            )
     # Spread validation over the entire nue2 GT file, rather than taking the
     # first contiguous block of its event ordering.
     gt_val_small = gt_masks["gt_val"] & (np.arange(len(gt_masks["gt_val"])) % 6 == 0)
@@ -796,6 +833,25 @@ def main() -> None:
             args.seed,
         )
     )
+    extra_pred_train = (
+        infinite_batches(
+            make_loader(
+                dataset(
+                    args.extra_pred_data,
+                    args.extra_pred_anchors,
+                    "train",
+                    keep=extra_pred_keep,
+                    single_muatm_only=args.single_muatm_only,
+                    train_aug=True,
+                ),
+                args.workers,
+                True,
+                args.seed + 4,
+            )
+        )
+        if args.extra_pred_weight > 0
+        else None
+    )
     gt_train = infinite_batches(
         make_loader(
             dataset(args.gt_data, args.gt_anchors, "train", gt_masks["gt_train"]),
@@ -927,10 +983,16 @@ def main() -> None:
             model.backbone.encoder.eval()
         optimizer.zero_grad(set_to_none=True)
         losses = {}
-        for name, source, weight in (
-            ("pred", pred_train, 1 - args.gt_weight),
+        sources = [
+            ("pred", pred_train, (1 - args.gt_weight) * (1 - args.extra_pred_weight)),
             ("gt", gt_train, args.gt_weight),
-        ):
+        ]
+        if extra_pred_train is not None:
+            sources.append(
+                ("extra_pred", extra_pred_train, (1 - args.gt_weight) * args.extra_pred_weight)
+            )
+        for name, source, weight in sources:
+            pred_like = name != "gt"
             x, target_dir, mask, particle, target_point, valid = next_nonempty(source)
             x = x.to(device, non_blocking=True)
             target_dir = target_dir.to(device, non_blocking=True)
@@ -942,12 +1004,12 @@ def main() -> None:
                 angular = loss_function(
                     direction,
                     target_dir,
-                    args.pred_direction_loss if name == "pred" else "trimmed_angular",
-                    args.pred_direction_power if name == "pred" else 1.0,
+                    args.pred_direction_loss if pred_like else "trimmed_angular",
+                    args.pred_direction_power if pred_like else 1.0,
                     None,
-                    args.pred_direction_cap_deg if name == "pred" else 8.0,
+                    args.pred_direction_cap_deg if pred_like else 8.0,
                 )
-                if name == "pred":
+                if pred_like:
                     angular = angular * args.pred_direction_scale
                 transverse = point_loss(
                     point,
@@ -958,7 +1020,7 @@ def main() -> None:
                     "line_huber",
                 )
                 loss = weight * (angular + args.point_weight * transverse)
-                if name == "pred" and teacher is not None:
+                if pred_like and teacher is not None:
                     with torch.no_grad():
                         teacher_dir, teacher_point = teacher(x, mask)
                         if muatm_teacher is not None and torch.any(particle == 0):
