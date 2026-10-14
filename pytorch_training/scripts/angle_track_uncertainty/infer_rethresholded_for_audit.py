@@ -60,6 +60,7 @@ def selected_batch(
     event_stride: int,
     score_feature: bool = False,
     center_time_alpha: float = 0.0,
+    extra_hit_masks: dict[int, np.ndarray] | None = None,
 ):
     starts = np.asarray(group["ev_starts/data"][begin : end + 1], dtype=np.int64)
     first, last = int(starts[0]), int(starts[-1])
@@ -77,6 +78,12 @@ def selected_batch(
             continue
         lo, hi = int(starts[i] - first), int(starts[i + 1] - first)
         choose = probabilities[lo:hi] >= threshold
+        source_index = begin + i
+        if extra_hit_masks is not None and source_index in extra_hit_masks:
+            extra = np.asarray(extra_hit_masks[source_index], dtype=bool)
+            if extra.shape != choose.shape or np.any(extra & choose):
+                raise ValueError("Extra hit mask must select only omitted hits in this event")
+            choose = choose | extra
         hit_count = int(choose.sum())
         if hit_count < 8:
             continue
@@ -155,6 +162,46 @@ def added_hits_pass_photon_gate(
     return passed
 
 
+def compatible_added_hit_masks(
+    group: h5py.Group,
+    begin: int,
+    end: int,
+    source_indices: np.ndarray,
+    directions: np.ndarray,
+    anchors: np.ndarray,
+    high_threshold: float,
+    low_threshold: float,
+    maximum_residual_ns: float,
+    stored_mean: np.ndarray,
+    stored_std: np.ndarray,
+) -> dict[int, np.ndarray]:
+    """Select individual lower-score hits consistent with the high-hit photon clock."""
+    starts = np.asarray(group["ev_starts/data"][begin : end + 1], dtype=np.int64)
+    first, last = int(starts[0]), int(starts[-1])
+    features = np.asarray(group["data/data"][first:last], dtype=np.float64)
+    features = features * stored_std.astype(np.float64) + stored_mean.astype(np.float64)
+    probabilities = np.asarray(group["signal_probability/data"][first:last])
+    selected = {}
+    photon_factor = np.sqrt(1.36**2 - 1.0)
+    for j, source_index in enumerate(source_indices):
+        event = int(source_index) - begin
+        lo, hi = int(starts[event] - first), int(starts[event + 1] - first)
+        probability = probabilities[lo:hi]
+        high = probability >= high_threshold
+        added = (probability >= low_threshold) & ~high
+        if not high.any() or not added.any():
+            continue
+        direction = directions[j] / np.linalg.norm(directions[j])
+        delta = features[lo:hi, 2:5] - anchors[j]
+        along = delta @ direction
+        transverse = np.linalg.norm(delta - along[:, None] * direction, axis=1)
+        expected_ns = (along + photon_factor * transverse) / 0.299792458
+        residual_ns = features[lo:hi, 1] - expected_ns
+        clock_ns = np.median(residual_ns[high])
+        selected[int(source_index)] = added & (np.abs(residual_ns - clock_ns) < maximum_residual_ns)
+    return selected
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bundle", type=Path, required=True)
@@ -172,6 +219,11 @@ def main() -> None:
         "--max-added-photon-residual-ns",
         type=float,
         help="Require every newly selected hit to agree with the first-pass photon clock",
+    )
+    parser.add_argument(
+        "--per-hit-photon-gate",
+        action="store_true",
+        help="Experimental: admit each compatible added hit separately instead of rejecting the whole event",
     )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--batch-size", type=int, default=256)
@@ -202,6 +254,8 @@ def main() -> None:
         args.max_added_photon_residual_ns <= 0 or args.conditional_low_threshold is None
     ):
         raise ValueError("Positive photon gate requires a conditional low threshold")
+    if args.per_hit_photon_gate and args.max_added_photon_residual_ns is None:
+        raise ValueError("Per-hit photon gate requires --max-added-photon-residual-ns")
     if args.batch_size < 1 or args.threads < 1 or args.channels_per_string < 1:
         raise ValueError("Batch size, threads, and channels per string must be positive")
     if args.start_event < 0 or (args.max_events is not None and args.max_events < 1):
@@ -320,11 +374,31 @@ def main() -> None:
                 gate_indices = np.flatnonzero(first_theta < args.gate_theta_max_deg)
                 conditional_gate_total += len(gate_indices)
                 if len(gate_indices):
+                    extra_hit_masks = None
+                    if args.per_hit_photon_gate:
+                        first_pass_anchors = np.stack(
+                            [kept[index][4] + offset[index] for index in gate_indices]
+                        )
+                        extra_hit_masks = compatible_added_hit_masks(
+                            group,
+                            begin,
+                            end,
+                            np.asarray([kept[index][1] for index in gate_indices]),
+                            direction[gate_indices],
+                            first_pass_anchors,
+                            args.threshold,
+                            args.conditional_low_threshold,
+                            args.max_added_photon_residual_ns,
+                            stored_mean,
+                            stored_std,
+                        )
                     low_kept, low_x, low_mask = selected_batch(
                         group,
                         begin,
                         end,
-                        args.conditional_low_threshold,
+                        args.threshold
+                        if args.per_hit_photon_gate
+                        else args.conditional_low_threshold,
                         prep,
                         stored_mean,
                         stored_std,
@@ -332,6 +406,7 @@ def main() -> None:
                         args.start_event,
                         args.event_stride,
                         center_time_alpha=args.center_time_alpha,
+                        extra_hit_masks=extra_hit_masks,
                     )
                     low_lookup = {row[1]: index for index, row in enumerate(low_kept)}
                     rerun_indices = np.asarray(
@@ -342,7 +417,11 @@ def main() -> None:
                         ],
                         dtype=np.int64,
                     )
-                    if len(rerun_indices) and args.max_added_photon_residual_ns is not None:
+                    if (
+                        len(rerun_indices)
+                        and args.max_added_photon_residual_ns is not None
+                        and not args.per_hit_photon_gate
+                    ):
                         first_pass_anchors = np.stack(
                             [kept[index][4] + offset[index] for index in rerun_indices]
                         )
@@ -445,6 +524,8 @@ def main() -> None:
                                 if calibrated
                                 else (
                                     "p050_gate_unvalidated"
+                                    if used_low_threshold[i] and not args.per_hit_photon_gate
+                                    else "p050_per_hit_gate_unvalidated"
                                     if used_low_threshold[i]
                                     else "changed_threshold_or_transform_unvalidated"
                                 )
@@ -461,6 +542,7 @@ def main() -> None:
                 "conditional_low_threshold": args.conditional_low_threshold,
                 "gate_theta_max_deg": args.gate_theta_max_deg,
                 "max_added_photon_residual_ns": args.max_added_photon_residual_ns,
+                "per_hit_photon_gate": args.per_hit_photon_gate,
                 "conditional_gate_events": conditional_gate_total,
                 "conditional_reruns": conditional_total,
                 "photon_residual_checkpoint": str(args.photon_residual_checkpoint)

@@ -1,0 +1,43 @@
+{
+  "cohorts": {
+    "muatm": {
+      "input": "/home/plotnikovgp/tmp/angle_reconstruction/data/2020_muatm_scores_allhits_spaced20k.h5",
+      "sample_events": 20000,
+      "source": "/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/data/baikal_2020_sig-noise_mid-eq_normed.h5",
+      "sample_stride": 28,
+      "sample_offset": 0,
+      "classifier_checkpoint": "/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/checkpoints/noise_sig_experiments/noise_sig_tres_abs_merged/best.ckpt"
+    },
+    "nuatm": {
+      "input": "/home/plotnikovgp/tmp/angle_reconstruction/data/2020_nuatm_scores_allhits_spaced20k.h5",
+      "sample_events": 20000,
+      "source": "/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/data/baikal_2020_sig-noise_mid-eq_normed.h5",
+      "sample_stride": 16,
+      "sample_offset": 0,
+      "classifier_checkpoint": "/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/checkpoints/noise_sig_experiments/noise_sig_tres_abs_merged/best.ckpt"
+    },
+    "nue2": {
+      "input": "/home/plotnikovgp/tmp/angle_reconstruction/data/2020_nue2_scores_allhits_spaced20k.h5",
+      "sample_events": 20000,
+      "source": "/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/data/baikal_2020_sig-noise_mid-eq_normed.h5",
+      "sample_stride": 9,
+      "sample_offset": 0,
+      "classifier_checkpoint": "/home/plotnikovgp/baikal/Baikal-ML/pytorch_training/checkpoints/noise_sig_experiments/noise_sig_tres_abs_merged/best.ckpt"
+    }
+  },
+  "truth_signal": "MC hit label != 0 (track or cascade)",
+  "truth_noise": "MC hit label == 0",
+  "selection": "At each threshold: >=8 selected hits on >=2 unique strings",
+  "precision_denominator": "all threshold-selected hits in retained events",
+  "recall_denominator": "all truth-signal hits in retained events, including rejected hits",
+  "threshold_range": [
+    0.02,
+    0.98
+  ],
+  "figure_y_axis": [
+    0.85,
+    1.005
+  ],
+  "figure_y_axis_cropped": true,
+  "full_values_in_csv": true
+}

@@ -193,6 +193,9 @@ def process_split(
         rel = starts - hit_start
         ids = np.asarray(src[ids_path][event_start:event_end])
         wanted = particle_mask(ids, args.particle)
+        if args.sample_stride > 1:
+            source_indices = np.arange(event_start, event_end)
+            wanted &= source_indices % args.sample_stride == args.sample_offset
         scanned += event_end - event_start
         eligible += int(wanted.sum())
         if not wanted.any():
@@ -328,6 +331,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-kept-train", type=int, default=0)
     parser.add_argument("--max-kept-val", type=int, default=0)
     parser.add_argument("--max-kept-test", type=int, default=0)
+    parser.add_argument(
+        "--sample-stride",
+        type=int,
+        default=1,
+        help="Retain every Nth source event before inference; useful for spaced audit samples.",
+    )
+    parser.add_argument("--sample-offset", type=int, default=0)
     parser.add_argument("--compression", choices=("lzf", "gzip"), default="lzf")
     parser.add_argument("--device", default="cuda")
     return parser.parse_args()
@@ -335,6 +345,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    if args.sample_stride < 1 or not 0 <= args.sample_offset < args.sample_stride:
+        raise ValueError("Require sample_stride >= 1 and 0 <= sample_offset < sample_stride")
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if output_path.exists():

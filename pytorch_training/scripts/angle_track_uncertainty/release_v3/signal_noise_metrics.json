@@ -1,0 +1,52 @@
+{
+  "classifier_checkpoint_sha256": "be9cc39b93dd6a57a69233faf6755278e3f202c56de3de7d1cc8d2d4a8b1e93d",
+  "truth_signal_hit": "MC labels != 0, including track-positive and cascade-negative labels",
+  "truth_noise_hit": "MC label == 0",
+  "event_acceptance": ">=8 selected hits on >=2 unique strings after the listed probability threshold",
+  "selected_hit_precision": "truth_signal_selected / selected_hits, within retained events",
+  "signal_recall_within_kept_events": "truth_signal_selected / all truth-signal hits in retained raw events; excludes events failing acceptance",
+  "experimental_truth_available": false,
+  "cohorts": {
+    "2019_f_nue2_p050": {
+      "threshold": 0.5,
+      "retained_events": 56274,
+      "selected_hits": 1337679,
+      "truth_signal_selected": 1322718,
+      "truth_noise_selected": 14961,
+      "selected_hit_precision": 0.9888157024218814,
+      "signal_recall_within_kept_events": 0.9902006875239555,
+      "source_summary": "/home/plotnikovgp/tmp/angle_reconstruction/data/2019_nue2_predsignal_p050_holdout_f.json"
+    },
+    "2019_f_nue2_p070": {
+      "threshold": 0.7,
+      "retained_events": 51580,
+      "selected_hits": 1260159,
+      "truth_signal_selected": 1254020,
+      "truth_noise_selected": 6139,
+      "truth_signal_hits_in_retained_events": 1291633,
+      "selected_hit_precision": 0.9951283925282445,
+      "signal_recall_within_kept_events": 0.9708794990527495,
+      "source": "Recomputed by event ID from 2019_nue2_raw_holdout_f_100k.h5 and 2019_nue2_predsignal_p050_holdout_f.h5"
+    },
+    "2020_mixed_test_p050": {
+      "threshold": 0.5,
+      "retained_events": 235497,
+      "selected_hits": 3678549,
+      "truth_signal_selected": 3529123,
+      "truth_noise_selected": 149426,
+      "selected_hit_precision": 0.9593790921366006,
+      "signal_recall_within_kept_events": 0.9739974647693743,
+      "source_summary": "/home/plotnikovgp/tmp/angle_reconstruction/data/baikal_2020_all_predsignal_p050_test.json"
+    },
+    "2020_mixed_test_p070": {
+      "threshold": 0.7,
+      "retained_events": 192458,
+      "selected_hits": 3052529,
+      "truth_signal_selected": 2999940,
+      "truth_noise_selected": 52589,
+      "selected_hit_precision": 0.9827719900449758,
+      "signal_recall_within_kept_events": 0.923631397199001,
+      "source_summary": "/home/plotnikovgp/tmp/angle_reconstruction/data/baikal_2020_all_predsignal_p070_2s8h.json"
+    }
+  }
+}

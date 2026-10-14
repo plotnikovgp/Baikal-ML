@@ -17,6 +17,10 @@ small frozen photon-time-residual correction. It is not an ensemble.
 | `run_release_v3.sh` | Raw HDF5 to both prediction CSVs on CPU |
 | `independent_2019_f_metrics.json` | Independent nue2 holdout metrics, slices and uncertainty deciles |
 | `reco_2020_comparison.json` | ID-paired comparison with standard ROOT reconstruction |
+| `signal_noise_metrics.json` | Hit-classifier precision/recall at both tested thresholds |
+| `signal_noise_pr_rec/precision_recall_three_particles.png` | Precision/recall curves by MC particle type |
+| `signal_noise_pr_rec/precision_recall_three_particles.csv` | Values and retained-event counts at every threshold |
+| `plot_signal_noise_pr_rec_three.py` | Rebuild the three-panel plot from all-hit scores |
 
 The SHA256 of `angle_track_uncertainty.pt` is
 `7cb8f77cfdb2a7cf021d090be5246b83f8a94c7513cc24c793ab019c67686f41`.
@@ -75,6 +79,58 @@ The model saw `nuatm`, `nue2`, and only **single-track** `muatm` simulations in
 its direction/point training. Multi-track `muatm` truth does not define this
 single-line target and was excluded. No experimental ground-truth line exists;
 do not interpret experimental uncertainty outputs as validated coverage.
+
+## Upstream signal/noise quality
+
+The same frozen classifier checkpoint was used for every row below. Both
+positive and negative nonzero MC hit labels count as signal (track and
+cascade); label zero is noise. Each row first applies the stated probability
+threshold and **then** requires at least eight selected hits on two strings.
+Precision is the fraction of *selected hits* with a nonzero label. Recall is
+the fraction of *true signal hits inside retained events* that were selected:
+it is **not** event recall over the full raw file.
+
+| MC source | Threshold | Retained events | Hit precision | Within-retained-event hit recall |
+| --- | ---: | ---: | ---: | ---: |
+| Independent `nue2` 2019-F | p>=0.50 | 56,274 | 98.88% | 99.02% |
+| Independent `nue2` 2019-F | p>=0.70 | 51,580 | 99.51% | 97.09% |
+| Mixed 2020 test | p>=0.50 | 235,497 | 95.94% | 97.40% |
+| Mixed 2020 test | p>=0.70 | 192,458 | 98.28% | 92.36% |
+
+Exact counts, denominator definitions and source manifests are in
+[`signal_noise_metrics.json`](signal_noise_metrics.json). 2019-F p>=0.70
+was recomputed from its raw HDF5 and the saved p>=0.50 probabilities,
+matching all event IDs; the other rows are the frozen classifier's saved
+build summaries. Experimental events have no truth hit labels, so neither
+precision nor recall can be measured there.
+
+### Precision/recall curves by particle type
+
+The [three-panel plot](signal_noise_pr_rec/precision_recall_three_particles.png)
+shows precision (solid orange) and recall (dashed green) against classifier
+probability threshold for `muatm`, `nuatm` and `nue2`, in the style of
+Figure 8 of [arXiv:2605.11176](https://arxiv.org/html/2605.11176v1).
+These are **our** classifier measurements, not numbers taken from the paper.
+Each panel uses 20,000 systematically spaced events from the 2020 MC `test`
+split. The classifier was run with threshold zero to keep **all raw hit
+scores**; the 8-hit/2-string event cut is then reapplied at every plotted
+threshold. Recall includes rejected true-signal hits in the denominator, but
+only within events still satisfying that threshold's event cut. Positive and
+negative nonzero labels both count as signal. The figure's y-axis is cropped
+to 0.85–1.005 for readability; the [CSV](signal_noise_pr_rec/precision_recall_three_particles.csv)
+contains the full values and retained-event counts, including thresholds
+where recall falls below 0.85.
+
+| Particle | p>=0.50 precision / recall | p>=0.70 precision / recall |
+| --- | ---: | ---: |
+| `muatm` | 94.55% / 96.53% | 97.75% / 90.25% |
+| `nuatm` | 94.95% / 98.16% | 98.17% / 95.06% |
+| `nue2` | 96.90% / 98.38% | 98.58% / 94.79% |
+
+The sample-specific values above are not the full 2020 mixed-test aggregates
+in the preceding table. The exact all-hit score sources, systematic strides
+and denominator definitions are recorded in the
+[plot manifest](signal_noise_pr_rec/precision_recall_three_particles.json).
 
 ### Already selected hits
 
