@@ -26,6 +26,15 @@ def quantiles(values: np.ndarray) -> list[float]:
     return [float(np.quantile(values, q)) for q in (0.5, 0.68, 0.95)]
 
 
+def validate_photon_thresholds(values: list[float] | tuple[float, ...]) -> np.ndarray:
+    thresholds = np.asarray(values, dtype=float)
+    if not len(thresholds) or not np.isfinite(thresholds).all() or np.any(thresholds <= 0):
+        raise ValueError("Photon thresholds must be finite and positive")
+    if np.any(np.diff(thresholds) <= 0):
+        raise ValueError("Photon thresholds must be strictly increasing")
+    return thresholds
+
+
 def paired_intervals(current: np.ndarray, baseline: np.ndarray, parts: np.ndarray) -> dict:
     rng = np.random.default_rng(20261013)
     groups = [np.flatnonzero(parts == part) for part in np.unique(parts)]
@@ -53,9 +62,17 @@ def main() -> None:
     parser.add_argument("--low", type=Path, required=True)
     parser.add_argument("--candidate", type=Path)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--photon-thresholds-ns",
+        nargs="+",
+        type=float,
+        default=(5, 10, 20, 30, 50, 100, 200),
+        help="Increasing positive thresholds; defaults to the original sweep",
+    )
     args = parser.parse_args()
     if args.output.exists():
         raise FileExistsError(args.output)
+    thresholds = validate_photon_thresholds(args.photon_thresholds_ns)
     high = pd.read_csv(args.high).set_index("event_id", verify_integrity=True)
     low = pd.read_csv(args.low).set_index("event_id", verify_integrity=True)
     if not high.index.isin(low.index).all():
@@ -102,6 +119,12 @@ def main() -> None:
         "added_gt_10": int((added > 10).sum()),
         "added_hit_bins": [],
         "photon_residual_gates": [],
+        "inputs": {
+            "data": str(args.data),
+            "high": str(args.high),
+            "low": str(args.low),
+            "thresholds_ns": thresholds.tolist(),
+        },
     }
     photon_max_abs_ns = np.full(len(high), np.inf)
     candidate_indices = np.flatnonzero(upward & (added > 0))
@@ -120,12 +143,12 @@ def main() -> None:
         expected = (along + np.sqrt(1.36**2 - 1) * rho) / 0.299792458
         residual = times - expected
         photon_max_abs_ns[event] = np.max(np.abs(residual[extra] - np.median(residual[selected])))
-    for threshold_ns in (5, 10, 20, 30, 50, 100, 200):
+    for threshold_ns in thresholds:
         gate = upward & (added > 0) & (photon_max_abs_ns < threshold_ns)
         candidate = np.where(gate, error_low, error_high)
         result["photon_residual_gates"].append(
             {
-                "max_abs_ns": threshold_ns,
+                "max_abs_ns": float(threshold_ns),
                 "reruns": int(gate.sum()),
                 "q50_q68_q95_deg": quantiles(candidate),
                 "mean_error_delta_gate_deg": float(np.mean((error_low - error_high)[gate]))

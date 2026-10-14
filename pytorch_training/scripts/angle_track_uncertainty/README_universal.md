@@ -2388,3 +2388,21 @@ distribution comparison was used to select it. The selected checkpoint,
 hit threshold, uncertainty calibration, and experimental predictions
 remain unchanged. This external 2020 reco cohort still may overlap
 angle-model training primaries.
+
+### Extended photon-residual gate: no production change (2026-10-14)
+
+The earlier 200 ns gate was the upper edge of the first sweep. To check
+whether it was artificially capped, the same frozen p>=0.70/p>=0.50
+predictions were rescored on **2019-A only** at 200, 250, 300, 400, 500,
+750, and 1000 ns. Before reading the result, we required at least a
+0.05° q68 improvement relative to 200 ns, no q50 regression, and at
+least 75% truth-signal fraction among reintroduced hits.
+
+On 51,473 accepted events, 200 ns gave q50/q68 **3.764°/7.019°**;
+750–1000 ns gave **3.754°/6.984°**. The 0.035° q68 gain misses the
+predeclared minimum. The extra admitted hits remain mostly true signal
+(79.6%), but the gain saturates by 750 ns. We therefore did **not**
+select a new threshold, look at 2019-B for this choice, or alter the
+checkpoint and MC/experimental predictions. The [full A sweep](results/photon_uncertainty_crossseason_v3/photon_gate_extended_2019_a.json)
+is reproducible with [`sweep_added_hit_photon_gate.py`](sweep_added_hit_photon_gate.py)
+and its `--photon-thresholds-ns` option.

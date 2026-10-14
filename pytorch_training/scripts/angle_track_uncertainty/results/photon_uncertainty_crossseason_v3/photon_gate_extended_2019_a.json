@@ -1,0 +1,256 @@
+{
+  "n": 51473,
+  "upward": 50639,
+  "with_added": 21930,
+  "baseline": [
+    4.178243849793088,
+    7.843657529406279,
+    40.58405324847489
+  ],
+  "global_low": [
+    3.746303742479243,
+    6.958512670210502,
+    37.57431688116849
+  ],
+  "gates": [
+    {
+      "minimum_added": 1,
+      "reruns": 21604,
+      "q50_q68_q95_deg": [
+        3.7555456805710516,
+        6.985908569436469,
+        37.87710021179696
+      ],
+      "mean_error_delta_gate_deg": -1.6746010219345369
+    },
+    {
+      "minimum_added": 2,
+      "reruns": 7131,
+      "q50_q68_q95_deg": [
+        3.979020907429572,
+        7.452611555179474,
+        39.249096494698904
+      ],
+      "mean_error_delta_gate_deg": -2.58257024280441
+    },
+    {
+      "minimum_added": 3,
+      "reruns": 2198,
+      "q50_q68_q95_deg": [
+        4.107767849411242,
+        7.7282935809897895,
+        40.192636712274705
+      ],
+      "mean_error_delta_gate_deg": -2.3949019531363946
+    },
+    {
+      "minimum_added": 4,
+      "reruns": 724,
+      "q50_q68_q95_deg": [
+        4.156704639717018,
+        7.802105897926442,
+        40.54556203633728
+      ],
+      "mean_error_delta_gate_deg": -1.919996994787309
+    },
+    {
+      "minimum_added": 5,
+      "reruns": 254,
+      "q50_q68_q95_deg": [
+        4.170046696289543,
+        7.83060754484199,
+        40.572053102380444
+      ],
+      "mean_error_delta_gate_deg": -2.0424613443286646
+    },
+    {
+      "minimum_added": 6,
+      "reruns": 103,
+      "q50_q68_q95_deg": [
+        4.177663320853178,
+        7.842566065712008,
+        40.57665974469143
+      ],
+      "mean_error_delta_gate_deg": -1.5322865296188435
+    },
+    {
+      "minimum_added": 7,
+      "reruns": 50,
+      "q50_q68_q95_deg": [
+        4.178243849793088,
+        7.841453721578211,
+        40.57665974469143
+      ],
+      "mean_error_delta_gate_deg": -2.261518321052324
+    },
+    {
+      "minimum_added": 8,
+      "reruns": 26,
+      "q50_q68_q95_deg": [
+        4.178396909342808,
+        7.842566065712008,
+        40.57665974469143
+      ],
+      "mean_error_delta_gate_deg": -2.1064842911352475
+    }
+  ],
+  "added_histogram": {
+    "0": 29543,
+    "1": 14695,
+    "2": 5012,
+    "3": 1495,
+    "4": 472,
+    "5": 152,
+    "6": 53,
+    "7": 25,
+    "8": 9,
+    "9": 8,
+    "10": 1
+  },
+  "added_gt_10": 8,
+  "added_hit_bins": [
+    {
+      "high_hits_range": [
+        8,
+        12
+      ],
+      "n": 6198,
+      "mean_error_delta_deg": -3.0804856502932547,
+      "marginal_truth_signal_fraction": 0.7921985815602837,
+      "mean_marginal_probability": 0.6153971354166666
+    },
+    {
+      "high_hits_range": [
+        12,
+        16
+      ],
+      "n": 4003,
+      "mean_error_delta_deg": -2.4060264246888745,
+      "marginal_truth_signal_fraction": 0.7957124842370744,
+      "mean_marginal_probability": 0.6143114697802198
+    },
+    {
+      "high_hits_range": [
+        16,
+        24
+      ],
+      "n": 4401,
+      "mean_error_delta_deg": -1.2965065237413076,
+      "marginal_truth_signal_fraction": 0.7934833936722808,
+      "mean_marginal_probability": 0.6165572613332284
+    },
+    {
+      "high_hits_range": [
+        24,
+        40
+      ],
+      "n": 3335,
+      "mean_error_delta_deg": -0.4230617722341,
+      "marginal_truth_signal_fraction": 0.7938510051241624,
+      "mean_marginal_probability": 0.6172820960718861
+    },
+    {
+      "high_hits_range": [
+        40,
+        1000
+      ],
+      "n": 3665,
+      "mean_error_delta_deg": -0.09157477276790757,
+      "marginal_truth_signal_fraction": 0.8045874292523086,
+      "mean_marginal_probability": 0.6177341800947647
+    }
+  ],
+  "photon_residual_gates": [
+    {
+      "max_abs_ns": 200.0,
+      "reruns": 19861,
+      "q50_q68_q95_deg": [
+        3.764103436170561,
+        7.018963889297118,
+        38.23111030688022
+      ],
+      "mean_error_delta_gate_deg": -1.72378630275123,
+      "marginal_truth_signal_fraction": 0.807565904482204
+    },
+    {
+      "max_abs_ns": 250.0,
+      "reruns": 20581,
+      "q50_q68_q95_deg": [
+        3.7590167151819793,
+        6.999724318052797,
+        38.20875172479973
+      ],
+      "mean_error_delta_gate_deg": -1.6770019877315099,
+      "marginal_truth_signal_fraction": 0.8026425544693203
+    },
+    {
+      "max_abs_ns": 300.0,
+      "reruns": 20992,
+      "q50_q68_q95_deg": [
+        3.7567562786830577,
+        6.992340516433968,
+        37.96832536881287
+      ],
+      "mean_error_delta_gate_deg": -1.6879987137098862,
+      "marginal_truth_signal_fraction": 0.7997854495806515
+    },
+    {
+      "max_abs_ns": 400.0,
+      "reruns": 21385,
+      "q50_q68_q95_deg": [
+        3.7556912856838918,
+        6.986879105155558,
+        37.92501360624098
+      ],
+      "mean_error_delta_gate_deg": -1.6874802591637716,
+      "marginal_truth_signal_fraction": 0.7973819009675583
+    },
+    {
+      "max_abs_ns": 500.0,
+      "reruns": 21513,
+      "q50_q68_q95_deg": [
+        3.7554488043564507,
+        6.985908569436469,
+        37.87710021179696
+      ],
+      "mean_error_delta_gate_deg": -1.6922775229061306,
+      "marginal_truth_signal_fraction": 0.7960693351722409
+    },
+    {
+      "max_abs_ns": 750.0,
+      "reruns": 21586,
+      "q50_q68_q95_deg": [
+        3.7539677520943857,
+        6.9838693623675345,
+        37.76114610603693
+      ],
+      "mean_error_delta_gate_deg": -1.7011106480984914,
+      "marginal_truth_signal_fraction": 0.7960163336554347
+    },
+    {
+      "max_abs_ns": 1000.0,
+      "reruns": 21590,
+      "q50_q68_q95_deg": [
+        3.7539677520943857,
+        6.9838693623675345,
+        37.76114610603693
+      ],
+      "mean_error_delta_gate_deg": -1.6981054299402945,
+      "marginal_truth_signal_fraction": 0.7960181954137587
+    }
+  ],
+  "inputs": {
+    "data": "/home/plotnikovgp/tmp/angle_reconstruction/data/2019_nue2_predsignal_p050_test.h5",
+    "high": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/photon_uncertainty_recalibration_v1/2019_a_crossseason_v3_p070_full_gpu1.csv",
+    "low": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/photon_uncertainty_recalibration_v1/2019_a_v3_low_all.csv",
+    "thresholds_ns": [
+      200.0,
+      250.0,
+      300.0,
+      400.0,
+      500.0,
+      750.0,
+      1000.0
+    ]
+  }
+}
