@@ -17,6 +17,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
 
 RETENTION = np.linspace(0.1, 1.0, 19)
 DECILES = 10
@@ -69,9 +70,9 @@ def build_task(error: np.ndarray, sigma: np.ndarray, factors: dict) -> dict:
     }
 
 
-def draw(tasks: dict, output: Path) -> None:
+def draw(tasks: dict, output: Path, title: str) -> None:
     fig, axes = plt.subplots(2, 2, figsize=(12.6, 9.2), layout="constrained")
-    fig.suptitle("Uncertainty usefulness and calibration · independent nue2 test", fontsize=15)
+    fig.suptitle(title, fontsize=15)
     for col, (title, task) in enumerate(tasks.items()):
         error = task["error"]
         q = task["quality"]
@@ -177,12 +178,25 @@ def summarized(task: dict) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--predictions", type=Path, required=True)
-    parser.add_argument("--metrics", type=Path, required=True)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--metrics", type=Path)
+    source.add_argument("--bundle", type=Path)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument(
+        "--title",
+        default="Uncertainty usefulness and calibration · independent nue2 test",
+    )
+    parser.add_argument(
+        "--split-description",
+        default="independent nue2 test; calibration factors fit on validation",
+    )
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    with np.load(args.predictions) as pred:
+    if args.bundle is not None:
+        calibration = torch.load(args.bundle, map_location="cpu", weights_only=True)["calibration"]
+    else:
         calibration = json.loads(args.metrics.read_text())["calibration_from_val"]
+    with np.load(args.predictions) as pred:
         angle = build_task(pred["angle"], pred["sigma_angle"], calibration["angle"])
         valid = pred["valid"].astype(bool)
         track = build_task(pred["line"][valid], pred["sigma_line"][valid], calibration["line"])
@@ -207,10 +221,10 @@ def main() -> None:
             ),
         }
     tasks = {"Direction": angle, "Reference-point transverse distance": track}
-    draw(tasks, args.output_dir / "quality_calibration.png")
+    draw(tasks, args.output_dir / "quality_calibration.png", args.title)
     summary = {
         "definition": "angle=geodesic direction error in deg; line=predicted anchor transverse distance to true line in m",
-        "split": "independent nue2 test; calibration factors fit on validation",
+        "split": args.split_description,
         "angle_deg": summarized(angle),
         "anchor_transverse_m": summarized(track),
         "joint_coverage": joint,

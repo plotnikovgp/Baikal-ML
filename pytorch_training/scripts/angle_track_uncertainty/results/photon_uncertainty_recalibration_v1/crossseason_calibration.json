@@ -1,0 +1,52 @@
+{
+  "old_angle_factors": {
+    "68": 1.848903346061707,
+    "95": 4.183172273635861
+  },
+  "new_angle_factors": {
+    "68": 2.6017538254422115,
+    "95": 6.456679605404715
+  },
+  "2019_a_calibration": {
+    "events": 51473,
+    "angle_q50_deg": 4.17894084689448,
+    "angle_q68_deg": 7.844097080625319,
+    "angle_q95_deg": 40.58641213409214,
+    "coverage68": 0.6799875662968935,
+    "coverage95": 0.9499932003186137
+  },
+  "2019_b_holdout_old": {
+    "events": 51360,
+    "angle_q50_deg": 4.137854762442794,
+    "angle_q68_deg": 7.870888154352635,
+    "angle_q95_deg": 39.996584769553486,
+    "coverage68": 0.5176596573208723,
+    "coverage95": 0.8613901869158879
+  },
+  "2019_b_holdout_new": {
+    "events": 51360,
+    "angle_q50_deg": 4.137854762442794,
+    "angle_q68_deg": 7.870888154352635,
+    "angle_q95_deg": 39.996584769553486,
+    "coverage68": 0.6811526479750779,
+    "coverage95": 0.9484618380062305
+  },
+  "2020_test_old": {
+    "events": 27038,
+    "angle_q50_deg": 2.581686854362488,
+    "angle_q68_deg": 4.660854110717773,
+    "angle_q95_deg": 22.748504829406723,
+    "coverage68": 0.6694651971299652,
+    "coverage95": 0.9381241216066277
+  },
+  "2020_test_new": {
+    "events": 27038,
+    "angle_q50_deg": 2.581686854362488,
+    "angle_q68_deg": 4.660854110717773,
+    "angle_q95_deg": 22.748504829406723,
+    "coverage68": 0.8135217101856647,
+    "coverage95": 0.9789925290332125
+  },
+  "2019_calibration_and_holdout_primary_overlap": 0,
+  "point_uncertainty_caveat": "2020 MC calibration only; no 2019 matched anchor truth"
+}

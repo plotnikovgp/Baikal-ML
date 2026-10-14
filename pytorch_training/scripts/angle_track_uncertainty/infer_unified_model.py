@@ -16,6 +16,7 @@ import h5py
 import numpy as np
 import torch
 from bundle_universal_model import build_model
+from photon_uncertainty_bundle import build_model as build_photon_model
 
 FIELDS = (
     "event_id",
@@ -95,6 +96,7 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--max-events", type=int, default=None)
     parser.add_argument("--threads", type=int, default=4)
+    parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     args = parser.parse_args()
     if args.output.exists():
         raise FileExistsError(f"Refusing to overwrite {args.output}")
@@ -102,11 +104,18 @@ def main() -> None:
         raise ValueError("batch-size and threads must be positive")
     torch.set_num_threads(args.threads)
     bundle = torch.load(args.checkpoint, map_location="cpu", weights_only=True)
-    if bundle["format_version"] != 1:
+    if bundle["format_version"] == 1:
+        model = build_model(bundle["model_config"])
+    elif (
+        bundle["format_version"] == 2 and bundle.get("model_type") == "photon_corrected_uncertainty"
+    ):
+        model = build_photon_model(bundle["model_config"])
+    else:
         raise ValueError(f"Unsupported bundle format: {bundle['format_version']}")
-    model = build_model(bundle["model_config"])
     model.load_state_dict(bundle["state_dict"], strict=True)
-    model.eval()
+    if args.device == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA requested but no GPU is available")
+    model.to(args.device).eval()
     prep = bundle["preprocessing"]
     factors = bundle["calibration"]
 
@@ -125,12 +134,13 @@ def main() -> None:
             ids, lengths, strings, x, mask, centers = read_batch(h5, args.split, begin, end, prep)
             with torch.inference_mode():
                 direction, offset, log_angle, log_anchor = model(
-                    torch.from_numpy(x), torch.from_numpy(mask)
+                    torch.from_numpy(x).to(args.device),
+                    torch.from_numpy(mask).to(args.device),
                 )
-            direction = direction.numpy()
-            anchor = centers + offset.numpy()
-            sigma_angle = log_angle.exp().numpy()
-            sigma_anchor = log_anchor.exp().numpy()
+            direction = direction.cpu().numpy()
+            anchor = centers + offset.cpu().numpy()
+            sigma_angle = log_angle.exp().cpu().numpy()
+            sigma_anchor = log_anchor.exp().cpu().numpy()
             theta = np.rad2deg(np.arccos(np.clip(direction[:, 2], -1, 1)))
             phi = np.mod(np.rad2deg(np.arctan2(direction[:, 1], direction[:, 0])), 360)
             for index in range(end - begin):
@@ -153,8 +163,8 @@ def main() -> None:
                     "anchor_y_m": float(anchor[index, 1]),
                     "anchor_z_m": float(anchor[index, 2]),
                     "sigma_angle_deg": float(sigma_angle[index]),
-                    "angle_r68_deg": float(sigma_angle[index] * factors["angle"]["68"]),
-                    "angle_r95_deg": float(sigma_angle[index] * factors["angle"]["95"]),
+                    "angle_r68_deg": float(min(180.0, sigma_angle[index] * factors["angle"]["68"])),
+                    "angle_r95_deg": float(min(180.0, sigma_angle[index] * factors["angle"]["95"])),
                     "sigma_anchor_m": float(sigma_anchor[index]),
                     "anchor_r68_m": float(sigma_anchor[index] * factors["line"]["68"]),
                     "anchor_r95_m": float(sigma_anchor[index] * factors["line"]["95"]),

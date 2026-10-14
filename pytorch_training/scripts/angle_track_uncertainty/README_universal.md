@@ -1643,7 +1643,86 @@ in the old-input 5-6-string stratum, full-raw v4+photon/reco q50 is
 on the fixed p>=0.70 experimental-versus-single-track-`muatm` cohort:
 hit/string-matched predicted-theta W1 changed 2.975° -> 2.956° and
 z-spread-conditioned W1 0.368° -> 0.369°. This is a distributional
-check only; experiment has no true directions. The photon correction is
-not promoted into the unified production bundle yet because its angle
-and line uncertainty heads need recalibration, and full exact 13/13 reco
-cuts remain unavailable.
+check only; experiment has no true directions. At that stage the photon
+correction was not yet bundled because its uncertainty heads needed
+recalibration. The next section describes the subsequent bundle; full exact
+13/13 reco cuts remain unavailable.
+
+## Single-file photon-corrected direction/point/uncertainty bundle (2026-10-14)
+
+`photon_uncertainty_bundle.py` wraps the frozen v4 direction/point/uncertainty
+network and the previously trained frozen photon residual head in **one**
+backbone (no ensemble). It validates that the two source checkpoints have
+identical backbone tensors and preprocessing. `recalibrate_photon_uncertainty.py`
+then fits multiplicative uncertainty radii on the 2,747-row 2020 validation
+slice and evaluates them on the disjoint ID-masked 27,038-row 2020 test slice
+(26,229 unique IDs). This is **not generated-primary-disjoint** from 2020
+training, as the overlap audit above explains. No network weights are trained
+or selected on this test.
+
+On that 2020 mixed-particle test, the frozen corrected model gives direction
+q50/q68 **2.582°/4.661°** and reference-point transverse-distance q50/q68
+**3.077/5.045 m**. The 2020-only radii cover 66.9%/93.8% of true angles
+at nominal 68%/95%, and 66.9%/92.9% of true track lines. Ranking is useful:
+the half with smallest predicted angle uncertainty has q68 **1.999°**, and
+the analogous point half has q68 **2.795 m**. These marginal numbers hide
+conditional undercoverage: the hardest uncertainty decile has angle/point
+68%-coverage 58.2%/59.0%. See
+[`results/photon_uncertainty_recalibration_v1/quality_calibration.png`](results/photon_uncertainty_recalibration_v1/quality_calibration.png).
+
+The **2019 nue2 out-of-season check exposed a material calibration failure**:
+with the 2020-only angle factors, the 51,473-event 2019-A sample has
+68%/95% angle coverage just **51.4%/85.9%**, despite direction q50/q68
+4.179°/7.844° matching the prior independent angle audit. A second
+2019-B sample was rethresholded from the frozen-classifier p>=0.50 file to
+p>=0.70. The procedure was first verified on 2019-A: all twelve HDF5
+arrays, including hit features, scores, event IDs and normalization,
+matched the existing p>=0.70 file exactly. The 51,360 accepted 2019-B
+events and their generated primaries are disjoint from 2019-A.
+
+`calibrate_cross_season_angle.py` therefore takes, separately for 68% and
+95%, the larger of the **2020-validation** factor and the factor fitted on
+**2019-A only**. It does not use 2019-B or the 2020 test to set factors.
+
+| Angle-radius calibration | 2019-B coverage 68% / 95% | 2020 MC test coverage 68% / 95% |
+| --- | ---: | ---: |
+| 2020 only | 51.8% / 86.1% | 66.9% / 93.8% |
+| **Cross-season conservative** | **68.1% / 94.8%** | **81.4% / 97.9%** |
+
+This is a deliberate coverage/precision trade-off: the single-file
+cross-season bundle
+`/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/photon_uncertainty_recalibration_v1/universal_angle_track_uncertainty_photon_crossseason_v2.pt`
+is safer for an unknown season but overconservative on 2020 MC. Its 68%/95%
+angle multipliers are 2.60175/6.45668 times `sigma_angle_deg`; point
+multipliers remain 1.59626/3.45839 times `sigma_anchor_m`, **validated only
+on 2020 MC**. In CSV inference, angular radii are capped at the physical
+maximum of 180° (coverage is unchanged). The full audit is in
+[`results/photon_uncertainty_recalibration_v1/crossseason_calibration.json`](results/photon_uncertainty_recalibration_v1/crossseason_calibration.json),
+and the 2020 selective-quality/coverage plot for these final factors is in
+[`results/photon_uncertainty_crossseason_v2/quality_calibration.png`](results/photon_uncertainty_crossseason_v2/quality_calibration.png).
+
+The v1 and cross-season v2 bundle `state_dict` tensors are exactly equal.
+A 256-event CPU check produced identical direction and point values; only
+angle radii changed. On all 4,924 p>=0.70 experimental events, the v1 bundle
+matched the previously domain-checked standalone photon correction to a
+median direction difference of 0.0016° (CPU/GPU numerical variation).
+Thus the fixed-cohort experimental/`muatm` theta-distribution check above
+still applies to v2. Experimental events have no angle/point truth, so this
+is **not** an experimental coverage claim. Multi-particle `muatm` scenes
+still do not have a uniquely validated single reference point.
+
+CPU inference on an HDF5 whose hits have already passed the frozen
+signal/noise classifier at p>=0.70 and the 2-string/8-hit cut:
+
+```bash
+cd pytorch_training/scripts/angle_track_uncertainty
+python infer_unified_model.py \
+  --checkpoint /home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/photon_uncertainty_recalibration_v1/universal_angle_track_uncertainty_photon_crossseason_v2.pt \
+  --data /path/to/p070_selected_hits.h5 --split test \
+  --output /path/to/predictions.csv --threads 8
+```
+
+The bundle does **not** contain the hit signal/noise classifier. The CSV
+contains direction, point, uncalibrated `sigma_*`, and the calibrated 68%/95%
+radii. `--device cuda` is optional; CPU is the default. Do not interpret
+the point head or its radii as a unique track estimate on multi-track events.
