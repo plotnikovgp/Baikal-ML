@@ -1,0 +1,136 @@
+{
+  "selection_note": "ROOT-available preliminary 10/13 superset, not exact full 13/13",
+  "input_note": "same 57,316 reco event IDs and exact raw clusters; p>=0.70, 2 strings/8 hits; frozen classifier and v4 bundle",
+  "sources": {
+    "paired": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/reco_eval/paired_exact_photon_pair_fixed/reco_paired_events.npz",
+    "root_fields": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/reco_eval/paired_exact_photon_pair_fixed/reco_paired_root_fields.csv",
+    "fair_source": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/baikal_reco_signal_h8s2_trainnorm_faircompare_with_tres.h5",
+    "old_predictions": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/reco_eval/exact_v4_p070.csv",
+    "raw_selected": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/reco_eval/reco2020_raw_unmasked_predsignal_p070.h5",
+    "raw_predictions": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/reco_eval/reco2020_raw_unmasked_v4_p070.csv"
+  },
+  "results": {
+    "root_10_of_13": {
+      "root_cut_events": 44189,
+      "raw_classifier_accepted": 42003,
+      "raw_classifier_rejected": 2186,
+      "raw_classifier_acceptance": 0.9505306750548779,
+      "raw_rejected_standard_reco": {
+        "q50": 3.194755434989929,
+        "q68": 8.368346977233887,
+        "q95": 42.31914234161377
+      },
+      "raw_rejected_old_v4": {
+        "q50": 3.5765663239249026,
+        "q68": 6.495674797550628,
+        "q95": 33.481180941038616
+      },
+      "on_common_events": {
+        "standard_reco": {
+          "q50": 1.9830751419067383,
+          "q68": 5.575640106201172,
+          "q95": 61.31537780761721
+        },
+        "old_v4_reco_masked": {
+          "q50": 2.4718156586006135,
+          "q68": 4.517337909702342,
+          "q95": 32.97232124971847
+        },
+        "old_v4_photon_reco_masked": {
+          "q50": 2.2974676402412038,
+          "q68": 4.372656135549356,
+          "q95": 33.05386146823161
+        },
+        "raw_unmasked_v4": {
+          "q50": 2.1212052509388304,
+          "q68": 3.52978155086713,
+          "q95": 13.227865474639604
+        },
+        "median_old_selected_hits": 13.0,
+        "median_raw_selected_hits": 16.0,
+        "raw_zero_selected_noise_fraction": 0.77223055496036,
+        "raw_v4_better_than_reco_eventwise": 0.526248125133919,
+        "raw_v4_better_than_old_v4_eventwise": 0.5843154060424255,
+        "raw_minus_reco_q50_ci95": [
+          0.09663758586758828,
+          0.17180756297631994
+        ],
+        "raw_minus_reco_q68_ci95": [
+          -2.2297407358493264,
+          -1.8864092954857876
+        ],
+        "raw_minus_old_q50_ci95": [
+          -0.3793301061095723,
+          -0.3211575247714295
+        ],
+        "raw_minus_old_q68_ci95": [
+          -1.0600196049326214,
+          -0.9227493391818169
+        ],
+        "old_v4_pivot_shortfall": 3154,
+        "raw_v4_pivot_shortfall": 1085
+      }
+    },
+    "root_10_of_13_and_official": {
+      "root_cut_events": 43736,
+      "raw_classifier_accepted": 41566,
+      "raw_classifier_rejected": 2170,
+      "raw_classifier_acceptance": 0.9503841229193342,
+      "raw_rejected_standard_reco": {
+        "q50": 3.141739249229431,
+        "q68": 8.191151657104493,
+        "q95": 41.35026569366455
+      },
+      "raw_rejected_old_v4": {
+        "q50": 3.570252902515153,
+        "q68": 6.417679277740764,
+        "q95": 33.163418840305454
+      },
+      "on_common_events": {
+        "standard_reco": {
+          "q50": 1.9455636739730835,
+          "q68": 5.380335807800294,
+          "q95": 59.848846435546875
+        },
+        "old_v4_reco_masked": {
+          "q50": 2.4435056839521043,
+          "q68": 4.443703512216318,
+          "q95": 32.582272706933466
+        },
+        "old_v4_photon_reco_masked": {
+          "q50": 2.2724994965363026,
+          "q68": 4.298928437600667,
+          "q95": 32.60862183436213
+        },
+        "raw_unmasked_v4": {
+          "q50": 2.1042999851921165,
+          "q68": 3.5008657234846168,
+          "q95": 13.183273290795247
+        },
+        "median_old_selected_hits": 13.0,
+        "median_raw_selected_hits": 16.0,
+        "raw_zero_selected_noise_fraction": 0.7725304335274022,
+        "raw_v4_better_than_reco_eventwise": 0.52283116008276,
+        "raw_v4_better_than_old_v4_eventwise": 0.5827840061588798,
+        "raw_minus_reco_q50_ci95": [
+          0.12219955998656096,
+          0.20127019167600657
+        ],
+        "raw_minus_reco_q68_ci95": [
+          -2.0319789254190437,
+          -1.7180468305094152
+        ],
+        "raw_minus_old_q50_ci95": [
+          -0.3674142712792156,
+          -0.3120521661656077
+        ],
+        "raw_minus_old_q68_ci95": [
+          -1.000916678804507,
+          -0.8775953826723075
+        ],
+        "old_v4_pivot_shortfall": 3259,
+        "raw_v4_pivot_shortfall": 1256
+      }
+    }
+  }
+}

@@ -1560,3 +1560,48 @@ The next **diagnostic**, before further training or architecture search, is
 to start from the unfiltered 2020 raw `baikal_reco.h5`, apply the same frozen
 signal/noise classifier and 2-string/8-hit cut, and compare on exact matched
 IDs. That tests whether the missing raw pulses are the main bottleneck.
+
+## Exact-cluster full-raw reco input check (2026-10-14)
+
+That diagnostic is now complete. `extract_reco_unmasked_exact.py` matched
+all 57,316 paired IDs to the *specific* source cluster by exact equality
+between its reco-masked raw hits and the filtered reco event. Matching only
+the event ID would be wrong: raw files contain multiple clusters for some
+IDs. The extracted file retains **all 5,170,357 raw hits** from those
+clusters; `reco_mask` is used to establish identity, not to select input
+hits. The frozen signal/noise checkpoint, p>=0.70 threshold, and 2-string/
+8-hit cut retained 54,492 events, with median 16 selected hits versus 12
+in the old reco-masked branch. The same v4 angle bundle then ran on CPU.
+
+`analyze_reco_unmasked_raw.py` joins exact IDs and computes the paired
+results in [`results/reco_unmasked_raw_v1/`](results/reco_unmasked_raw_v1/).
+Within the ROOT-observable preliminary 10/13 cut, 42,003/44,189 events
+pass the raw-input classifier selection. On **these same 42,003 events**:
+
+| Input/method | Direction q50 | Direction q68 |
+| --- | ---: | ---: |
+| Standard reco | 1.983° | 5.576° |
+| v4 on old reco-masked classifier input | 2.472° | 4.517° |
+| v4+photon on old reco-masked input | 2.297° | 4.373° |
+| **Same v4 on full-raw classifier input** | **2.121°** | **3.530°** |
+
+Full-raw v4 improves q50 by 0.351° over the *same* v4 weights on the old
+masked input (paired-bootstrap 95% interval: 0.321-0.379° improvement).
+It still trails standard reco q50 by 0.138° (95% interval 0.097-0.172°),
+while improving q68 by 2.046°. Its q95 is 13.23° versus 32.97° for old
+v4 and 61.32° for standard reco on the same events. The raw-input selection
+rejects 2,186 of the 44,189 cut events; their standard-reco q50 is 3.195°,
+so all-method comparisons must remain paired rather than comparing each
+branch on a different event set.
+
+The residual median deficit is again in well-constrained events. In the
+old-input four-string stratum, raw v4/reco q50 is 2.290/1.915°; with five
+to six strings it is 1.372/0.946°. Among raw-selected events with 17-24
+hits, the gap is almost closed (2.051/2.031°), but for >=40 hits it is
+1.031/0.739°. The full raw input explains much of the prior q50 mismatch
+and improves the tail substantially; further broad hyperparameter sweeps
+are not justified by the latest ablations. A remaining targeted option is
+to study timing/geometry residuals or a physics-guided refit on the
+clean, high-multiplicity events, then verify on a separate holdout and
+experimental data. This is still not the full 13/13 selection because the
+three unavailable BRecoMuonBDTEval-derived cuts were not applied.
