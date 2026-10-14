@@ -1605,3 +1605,45 @@ to study timing/geometry residuals or a physics-guided refit on the
 clean, high-multiplicity events, then verify on a separate holdout and
 experimental data. This is still not the full 13/13 selection because the
 three unavailable BRecoMuonBDTEval-derived cuts were not applied.
+
+## Frozen photon correction on full-raw reco input (2026-10-14)
+
+Without fitting or reselecting on the external reco sample, the already
+trained `photon_head_pair_fixed_3k/best.pt` direction/point correction was
+run on the full-raw p>=0.70 selected-hit file above. A 256-event smoke
+found at most 0.033° direction difference between the CPU bundle inference
+and the uncorrected GPU audit path before applying the correction.
+`analyze_reco_unmasked_raw.py --raw-photon-predictions` checks exact ID and
+hit-count alignment and saves paired bootstrap intervals and strata in
+[`results/reco_unmasked_raw_photon_v2/`](results/reco_unmasked_raw_photon_v2/).
+
+On the same 42,003 events passing the ROOT-available preliminary 10/13
+selection and both classifier branches:
+
+| Method | Direction q50 | Direction q68 | Direction q95 |
+| --- | ---: | ---: | ---: |
+| Standard reco | 1.983° | 5.576° | 61.315° |
+| v4+photon, old reco-masked input | 2.297° | 4.373° | 33.054° |
+| v4, full-raw input | 2.121° | 3.530° | 13.228° |
+| **v4+photon, full-raw input** | **1.954°** | **3.360°** | **13.334°** |
+
+The full-raw photon correction improves q50 by 0.168° and q68 by 0.170°
+relative to full-raw v4; paired-bootstrap 95% intervals for its change are
+[-0.179°, -0.152°] and [-0.193°, -0.151°]. Against standard reco, its
+q50 difference is -0.029° with interval **[-0.070°, +0.011°]**, so a
+median advantage is *not* established; its q68 difference is -2.215°
+with interval [-2.400°, -2.067°]. With the older official reco cut as
+well (41,566 common events), q50/q68 is 1.939°/3.330° for full-raw
+v4+photon versus 1.946°/5.380° for standard reco. The slight q95 increase
+from full-raw v4 to v4+photon should not be hidden.
+
+The old clean/high-string precision limit is reduced but not eliminated:
+in the old-input 5-6-string stratum, full-raw v4+photon/reco q50 is
+1.225°/0.946°. The same frozen photon checkpoint was previously checked
+on the fixed p>=0.70 experimental-versus-single-track-`muatm` cohort:
+hit/string-matched predicted-theta W1 changed 2.975° -> 2.956° and
+z-spread-conditioned W1 0.368° -> 0.369°. This is a distributional
+check only; experiment has no true directions. The photon correction is
+not promoted into the unified production bundle yet because its angle
+and line uncertainty heads need recalibration, and full exact 13/13 reco
+cuts remain unavailable.

@@ -27,6 +27,7 @@ def main() -> None:
     parser.add_argument("--old-predictions", type=Path, required=True)
     parser.add_argument("--raw-selected", type=Path, required=True)
     parser.add_argument("--raw-predictions", type=Path, required=True)
+    parser.add_argument("--raw-photon-predictions", type=Path)
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
     if args.output_dir.exists():
@@ -85,6 +86,34 @@ def main() -> None:
     raw[available] = np.rad2deg(
         np.arccos(np.clip((inferred[available] * truth[available]).sum(axis=1), -1, 1))
     )
+    raw_photon = None
+    if args.raw_photon_predictions is not None:
+        photon_rows = pd.read_csv(args.raw_photon_predictions).set_index(
+            "event_id", verify_integrity=True
+        )
+        if set(photon_rows.index) != set(raw_predictions.index[available]):
+            raise ValueError("Raw photon inference ID coverage differs from raw v4")
+        photon_rows = photon_rows.reindex(ids)
+        for column in ("n_hits", "n_strings"):
+            if not np.array_equal(
+                photon_rows[column].to_numpy()[available],
+                raw_predictions[column].to_numpy()[available],
+            ):
+                raise ValueError(f"Raw photon and v4 {column} differ")
+        photon_directions = photon_rows[["direction_x", "direction_y", "direction_z"]].to_numpy()
+        photon_lengths = np.linalg.norm(photon_directions[available], axis=1)
+        if not np.allclose(photon_lengths, 1.0, atol=1e-4):
+            raise ValueError("Raw photon directions are not unit length")
+        raw_photon = np.full(len(ids), np.nan, dtype=np.float64)
+        raw_photon[available] = np.rad2deg(
+            np.arccos(
+                np.clip(
+                    (photon_directions[available] * truth[available]).sum(axis=1),
+                    -1,
+                    1,
+                )
+            )
+        )
     raw_noise_series = pd.Series(raw_noise / selected_lengths, index=selected_ids)
     noise_fraction = raw_noise_series.reindex(ids).to_numpy()
     raw_hits = raw_predictions["n_hits"].to_numpy(dtype=np.float64)
@@ -141,6 +170,24 @@ def main() -> None:
             ((reco[common] <= pivot) & (raw[common] > pivot)).sum()
             - ((reco[common] > pivot) & (raw[common] <= pivot)).sum()
         )
+        if raw_photon is not None:
+            branch["on_common_events"]["raw_unmasked_v4_photon"] = quantiles(raw_photon[common])
+            branch["on_common_events"]["raw_photon_minus_reco_q50_ci95"] = paired_quantile_delta_ci(
+                raw_photon[common], reco[common], 0.5, seed=20261019
+            )
+            branch["on_common_events"]["raw_photon_minus_reco_q68_ci95"] = paired_quantile_delta_ci(
+                raw_photon[common], reco[common], 0.68, seed=20261020
+            )
+            branch["on_common_events"]["raw_photon_minus_raw_q50_ci95"] = paired_quantile_delta_ci(
+                raw_photon[common], raw[common], 0.5, seed=20261021
+            )
+            branch["on_common_events"]["raw_photon_minus_raw_q68_ci95"] = paired_quantile_delta_ci(
+                raw_photon[common], raw[common], 0.68, seed=20261022
+            )
+            branch["on_common_events"]["raw_photon_pivot_shortfall"] = int(
+                ((reco[common] <= pivot) & (raw_photon[common] > pivot)).sum()
+                - ((reco[common] > pivot) & (raw_photon[common] <= pivot)).sum()
+            )
         for feature_name, feature, bounds in (
             ("old_strings", old_predictions["n_strings"].to_numpy(), [2, 3, 4, 5, 7, 10]),
             ("raw_strings", raw_predictions["n_strings"].to_numpy(), [2, 3, 4, 5, 7, 10]),
@@ -150,21 +197,23 @@ def main() -> None:
                 use = common & (feature >= low) & (feature < high)
                 if use.sum() < 30:
                     continue
-                strata_rows.append(
-                    {
-                        "stage": stage_name,
-                        "feature": feature_name,
-                        "low_inclusive": low,
-                        "high_exclusive": high,
-                        "count": int(use.sum()),
-                        "standard_reco_q50": float(np.median(reco[use])),
-                        "old_v4_q50": float(np.median(old[use])),
-                        "raw_v4_q50": float(np.median(raw[use])),
-                        "standard_reco_q68": float(np.quantile(reco[use], 0.68)),
-                        "old_v4_q68": float(np.quantile(old[use], 0.68)),
-                        "raw_v4_q68": float(np.quantile(raw[use], 0.68)),
-                    }
-                )
+                strata_row = {
+                    "stage": stage_name,
+                    "feature": feature_name,
+                    "low_inclusive": low,
+                    "high_exclusive": high,
+                    "count": int(use.sum()),
+                    "standard_reco_q50": float(np.median(reco[use])),
+                    "old_v4_q50": float(np.median(old[use])),
+                    "raw_v4_q50": float(np.median(raw[use])),
+                    "standard_reco_q68": float(np.quantile(reco[use], 0.68)),
+                    "old_v4_q68": float(np.quantile(old[use], 0.68)),
+                    "raw_v4_q68": float(np.quantile(raw[use], 0.68)),
+                }
+                if raw_photon is not None:
+                    strata_row["raw_photon_q50"] = float(np.median(raw_photon[use]))
+                    strata_row["raw_photon_q68"] = float(np.quantile(raw_photon[use], 0.68))
+                strata_rows.append(strata_row)
         results[stage_name] = branch
     summary = {
         "selection_note": "ROOT-available preliminary 10/13 superset, not exact full 13/13",
