@@ -1779,3 +1779,78 @@ was not promoted. Experimental data still have no true
 line, and multi-track `muatm` remains outside the validated single-point
 scope. The checkpoint does not include signal/noise hit classification;
 the CPU command above works unchanged with the v3 filename.
+
+## Conditional photon-time hit recovery, q50 diagnosis (2026-10-14)
+
+The strongest remaining *input* hypothesis was tested without retraining or
+ensembling. `infer_rethresholded_for_audit.py` first runs the frozen v3 model
+on classifier-selected p>=0.70 hits. Only for predicted upward directions
+(`theta < 90°`), it may rerun **the same model** with p>=0.50 hits, provided
+every newly added hit is within 50 ns of the first-pass photon propagation
+time. The accepted event cohort always satisfies the original p>=0.70,
+2-string/8-hit cut. This is an optional inference mode, not a new model.
+
+The p>=0.50 full-raw 2020 reco file reproduces the previous p>=0.70 file
+**exactly in all ten HDF5 datasets** after rethresholding (54,492 events,
+1,148,062 hits); thus input preparation is not confounded. The external
+reco-MC file contains **nue2 only**. On the 42,003 common events passing the
+ROOT-observable preliminary 10/13 reco cuts:
+
+| Direction error | q50 | q68 | q95 |
+| --- | ---: | ---: | ---: |
+| Standard reco | 1.983° | 5.576° | 61.315° |
+| Frozen v3, p>=0.70 | 1.954° | 3.360° | 13.334° |
+| Same v3, conditional photon gate | **1.845°** | **3.147°** | **13.146°** |
+
+The gate reruns 11,778/42,003 events. Paired event bootstrap gives a
+gate-minus-standard-reco q50 difference of -0.138° (95% interval
+**[-0.178°, -0.103°]**), whereas the nominal p>=0.70 q50 is statistically
+tied with reco (interval [-0.070°, +0.012°]). Gate-minus-nominal q50 is
+-0.108° ([-0.123°, -0.097°]); q68 is -0.214° ([-0.237°, -0.188°]).
+The available older official reco cut in addition to 10/13 leaves 41,566
+events and likewise gives q50 1.832° gate versus 1.946° standard reco.
+**This is still descriptive**: the unavailable 3/13 original cuts cannot
+be reproduced with installed BARS, and some 2020 generated primaries
+overlap training. See
+[`photon_gate_reco/summary.json`](results/photon_uncertainty_crossseason_v3/photon_gate_reco/summary.json)
+and its [`strata.csv`](results/photon_uncertainty_crossseason_v3/photon_gate_reco/strata.csv).
+
+The nominal model's central weakness is not simply very long tracks. For
+8-11 selected hits (10,565 events), q50 is 3.151° nominal versus 2.860°
+standard reco; the gate lowers it to 2.806°. In the 3-string stratum
+(9,974 events), q50 is 2.441° versus 2.283° reco, falling to 2.237° with
+the gate. Very long 300-450 m GT spans remain a difficult subpopulation
+(nominal/gate/reco q50 1.015°/0.959°/0.644°, 3,563 events), but they do
+not explain the aggregate median. With reco's 1.983° error as a fixed
+pivot, nominal NN loses 6,456 reco-good events but rescues 6,661 reco-bad
+ones; the gate increases the net rescued count from 205 to 1,103. Those
+counts, unlike separate subgroup medians, decompose the global median
+comparison.
+
+On independent out-of-season **2019-B nue2** (51,360 events), direction
+q50/q68 improves from 4.138°/7.871° to 3.921°/7.498°; point-to-true-line
+q50/q68 improves from 3.885/6.206 m to 3.765/6.075 m. The source-part
+bootstrap q68 difference is [-0.403°, -0.315°] for direction and
+[-0.158, -0.101] m for the line. See
+[`2019_b_photongate_audit.json`](results/photon_uncertainty_crossseason_v3/2019_b_photongate_audit.json).
+The 2020 ID-masked MC test shows analogous direction improvements for
+nue2 (3.177°/5.984° -> 2.970°/5.628°) and nuatm
+(1.994°/3.419° -> 1.900°/3.284°), but negligible effect on multi-particle
+muatm (only 55/87,103 reruns). The small primary-disjoint nue2 subset in
+that 2020 test (841 events) is inconclusive; 2019-B is the stronger
+independent nue2 evidence. Full MC details are in
+[`photon_gate_mc2020.json`](results/photon_uncertainty_crossseason_v3/photon_gate_mc2020.json).
+
+The fixed-cohort experimental check has 4,924 accepted events and only
+**two** gated reruns; the corresponding muatm MC has 55/87,103. Matched
+theta-distribution Wasserstein-1 distance, conditioning on hit/string count
+and z-spread, changes only 0.375° -> 0.376° (no meaningful domain
+adaptation gain or distribution shift). See
+[`photon_gate_domain/`](results/photon_uncertainty_crossseason_v3/photon_gate_domain/).
+Experimental events have no angular truth. For gated p>=0.50 events the
+frozen uncertainty heads still output raw `sigma_angle_deg` and
+`sigma_anchor_m`, but the **p>=0.70-calibrated radii are intentionally
+blank**: coverage for this changed input distribution has not been
+validated. This mode should not replace the default v3 bundle until its
+uncertainty calibration and CPU latency have been checked. It needs no
+second network, but may invoke the same network twice on a subset.

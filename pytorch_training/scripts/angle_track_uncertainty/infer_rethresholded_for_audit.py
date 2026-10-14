@@ -2,8 +2,9 @@
 """Audit a bundled direction/point model after rethresholding prepared hits.
 
 The HDF5 must contain per-hit signal probabilities and channel IDs. Events
-that fail the post-threshold two-string/eight-hit cut are omitted. Uncertainty
-columns are intentionally absent because calibration is threshold-specific.
+that fail the post-threshold two-string/eight-hit cut are omitted. Format-2
+bundles output calibrated radii only for unchanged p>=0.70 events; low-threshold
+reruns expose raw uncertainty scales but leave nominal radii blank.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ import numpy as np
 import torch
 from bundle_universal_model import build_model
 from photon_residual_upgrade import PhotonResidualUpgrade
+from photon_uncertainty_bundle import build_model as build_photon_uncertainty_model
 
 FIELDS = (
     "event_id",
@@ -32,6 +34,16 @@ FIELDS = (
     "anchor_x_m",
     "anchor_y_m",
     "anchor_z_m",
+)
+UNCERTAINTY_FIELDS = (
+    "track_point_scope",
+    "sigma_angle_deg",
+    "angle_r68_deg",
+    "angle_r95_deg",
+    "sigma_anchor_m",
+    "anchor_r68_m",
+    "anchor_r95_m",
+    "uncertainty_calibration_scope",
 )
 
 
@@ -203,9 +215,22 @@ def main() -> None:
         raise RuntimeError("CUDA requested but unavailable")
     device = torch.device(args.device)
     bundle = torch.load(args.bundle, map_location="cpu", weights_only=True)
-    full_model = build_model(bundle["model_config"])
-    full_model.load_state_dict(bundle["state_dict"], strict=True)
-    model = full_model.base.eval()
+    with_uncertainty = (
+        bundle.get("format_version") == 2
+        and bundle.get("model_type") == "photon_corrected_uncertainty"
+    )
+    if with_uncertainty:
+        if args.photon_residual_checkpoint is not None:
+            raise ValueError("The format-2 bundle already contains the photon correction")
+        model = build_photon_uncertainty_model(bundle["model_config"])
+        model.load_state_dict(bundle["state_dict"], strict=True)
+        model.eval()
+    elif bundle.get("format_version") == 1:
+        full_model = build_model(bundle["model_config"])
+        full_model.load_state_dict(bundle["state_dict"], strict=True)
+        model = full_model.base.eval()
+    else:
+        raise ValueError(f"Unsupported bundle format: {bundle.get('format_version')}")
     if args.photon_residual_checkpoint is not None:
         # This trusted local training checkpoint contains argparse Path values.
         saved = torch.load(args.photon_residual_checkpoint, map_location="cpu", weights_only=False)
@@ -258,6 +283,8 @@ def main() -> None:
             total if args.max_events is None else min(total, args.start_event + args.max_events)
         )
         fields = FIELDS + (("selected_threshold",) if args.conditional_low_threshold else ())
+        if with_uncertainty:
+            fields += UNCERTAINTY_FIELDS
         writer = csv.DictWriter(stream, fieldnames=fields)
         writer.writeheader()
         for begin in range(args.start_event, end_event, args.batch_size):
@@ -278,11 +305,15 @@ def main() -> None:
             if not kept:
                 continue
             with torch.inference_mode():
-                direction, offset = model(
+                prediction = model(
                     torch.from_numpy(x).to(device), torch.from_numpy(mask).to(device)
                 )
+            direction, offset = prediction[:2]
             direction = direction.cpu().numpy()
             offset = offset.cpu().numpy()
+            if with_uncertainty:
+                sigma_angle = prediction[2].exp().cpu().numpy()
+                sigma_anchor = prediction[3].exp().cpu().numpy()
             used_low_threshold = np.zeros(len(kept), dtype=bool)
             if args.conditional_low_threshold is not None:
                 first_theta = np.rad2deg(np.arccos(np.clip(direction[:, 2], -1, 1)))
@@ -332,12 +363,16 @@ def main() -> None:
                     if len(rerun_indices):
                         low_indices = [low_lookup[kept[index][1]] for index in rerun_indices]
                         with torch.inference_mode():
-                            low_direction, low_offset = model(
+                            low_prediction = model(
                                 torch.from_numpy(low_x[low_indices]).to(device),
                                 torch.from_numpy(low_mask[low_indices]).to(device),
                             )
+                        low_direction, low_offset = low_prediction[:2]
                         direction[rerun_indices] = low_direction.cpu().numpy()
                         offset[rerun_indices] = low_offset.cpu().numpy()
+                        if with_uncertainty:
+                            sigma_angle[rerun_indices] = low_prediction[2].exp().cpu().numpy()
+                            sigma_anchor[rerun_indices] = low_prediction[3].exp().cpu().numpy()
                         for high_index, low_index in zip(rerun_indices, low_indices):
                             kept[high_index] = low_kept[low_index]
                         used_low_threshold[rerun_indices] = True
@@ -363,6 +398,58 @@ def main() -> None:
                 if args.conditional_low_threshold is not None:
                     record["selected_threshold"] = (
                         args.conditional_low_threshold if used_low_threshold[i] else args.threshold
+                    )
+                if with_uncertainty:
+                    event_id = row[0]
+                    scope = (
+                        "validated_single_track_MC"
+                        if event_id.startswith(("nuatm_", "nue2_"))
+                        else "not_validated_for_possible_multi_track_or_experiment"
+                    )
+                    # Low-threshold reruns have not been calibrated. Emit raw
+                    # scales but no nominal coverage radii for those rows.
+                    calibrated = (
+                        not used_low_threshold[i]
+                        and np.isclose(args.threshold, 0.70)
+                        and np.isclose(args.center_time_alpha, 0.0)
+                        and args.channels_per_string == 36
+                    )
+                    factors = bundle["calibration"]
+                    record.update(
+                        {
+                            "track_point_scope": scope,
+                            "sigma_angle_deg": float(sigma_angle[i]),
+                            "angle_r68_deg": (
+                                float(min(180.0, sigma_angle[i] * factors["angle"]["68"]))
+                                if calibrated
+                                else None
+                            ),
+                            "angle_r95_deg": (
+                                float(min(180.0, sigma_angle[i] * factors["angle"]["95"]))
+                                if calibrated
+                                else None
+                            ),
+                            "sigma_anchor_m": float(sigma_anchor[i]),
+                            "anchor_r68_m": (
+                                float(sigma_anchor[i] * factors["line"]["68"])
+                                if calibrated
+                                else None
+                            ),
+                            "anchor_r95_m": (
+                                float(sigma_anchor[i] * factors["line"]["95"])
+                                if calibrated
+                                else None
+                            ),
+                            "uncertainty_calibration_scope": (
+                                "p070_crossseason"
+                                if calibrated
+                                else (
+                                    "p050_gate_unvalidated"
+                                    if used_low_threshold[i]
+                                    else "changed_threshold_or_transform_unvalidated"
+                                )
+                            ),
+                        }
                     )
                 writer.writerow(record)
             kept_total += len(kept)

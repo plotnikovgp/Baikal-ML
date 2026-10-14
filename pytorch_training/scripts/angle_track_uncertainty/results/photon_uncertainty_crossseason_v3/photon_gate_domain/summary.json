@@ -1,0 +1,91 @@
+{
+  "experiment_events": 4924,
+  "unique_muatm_mc_events": 87103,
+  "matching_covariates": "fixed baseline p>=0.70 selected-hit counts and z spread",
+  "candidate_reruns_experiment": 2,
+  "candidate_reruns_muatm": 55,
+  "methods": {
+    "p>=0.70": {
+      "experiment_theta_q10_q50_q90_deg": [
+        116.84015121459962,
+        140.8782196044922,
+        162.56394805908204
+      ],
+      "matching": {
+        "hit_string": {
+          "columns": [
+            "n_hits",
+            "n_strings"
+          ],
+          "cells": 30,
+          "exp_unsupported_events": 0,
+          "exp_unsupported_fraction": 0.0,
+          "mc_effective_sample_size": 82126.64148608586,
+          "theta_w1_full_exp_deg": 3.0616752167163024,
+          "theta_w1_supported_exp_deg": 3.0616752167163024,
+          "bin_edges": {}
+        },
+        "hit_string_z_spread": {
+          "columns": [
+            "n_hits",
+            "n_strings",
+            "z_std_m"
+          ],
+          "cells": 90,
+          "exp_unsupported_events": 0,
+          "exp_unsupported_fraction": 0.0,
+          "mc_effective_sample_size": 73429.58718263397,
+          "theta_w1_full_exp_deg": 0.3751959677400247,
+          "theta_w1_supported_exp_deg": 0.3751959677400247,
+          "bin_edges": {
+            "z_std_m": [
+              33.076436901418425,
+              51.15929368454145
+            ]
+          }
+        }
+      }
+    },
+    "photon gate 50 ns": {
+      "experiment_theta_q10_q50_q90_deg": [
+        116.84015121459962,
+        140.8782196044922,
+        162.56394805908204
+      ],
+      "matching": {
+        "hit_string": {
+          "columns": [
+            "n_hits",
+            "n_strings"
+          ],
+          "cells": 30,
+          "exp_unsupported_events": 0,
+          "exp_unsupported_fraction": 0.0,
+          "mc_effective_sample_size": 82126.64148608586,
+          "theta_w1_full_exp_deg": 3.0644248768514877,
+          "theta_w1_supported_exp_deg": 3.0644248768514877,
+          "bin_edges": {}
+        },
+        "hit_string_z_spread": {
+          "columns": [
+            "n_hits",
+            "n_strings",
+            "z_std_m"
+          ],
+          "cells": 90,
+          "exp_unsupported_events": 0,
+          "exp_unsupported_fraction": 0.0,
+          "mc_effective_sample_size": 73429.58718263397,
+          "theta_w1_full_exp_deg": 0.37605323091470955,
+          "theta_w1_supported_exp_deg": 0.37605323091470955,
+          "bin_edges": {
+            "z_std_m": [
+              33.076436901418425,
+              51.15929368454145
+            ]
+          }
+        }
+      }
+    }
+  }
+}
