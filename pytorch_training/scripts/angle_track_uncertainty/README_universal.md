@@ -1717,7 +1717,7 @@ signal/noise classifier at p>=0.70 and the 2-string/8-hit cut:
 ```bash
 cd pytorch_training/scripts/angle_track_uncertainty
 python infer_unified_model.py \
-  --checkpoint /home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/photon_uncertainty_recalibration_v1/universal_angle_track_uncertainty_photon_crossseason_v2.pt \
+  --checkpoint /home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/photon_uncertainty_recalibration_v1/universal_angle_track_uncertainty_photon_crossseason_v3.pt \
   --data /path/to/p070_selected_hits.h5 --split test \
   --output /path/to/predictions.csv --threads 8
 ```
@@ -1726,3 +1726,56 @@ The bundle does **not** contain the hit signal/noise classifier. The CSV
 contains direction, point, uncalibrated `sigma_*`, and the calibrated 68%/95%
 radii. `--device cuda` is optional; CPU is the default. Do not interpret
 the point head or its radii as a unique track estimate on multi-track events.
+
+## Out-of-season truth-line check and cross-season point radii (2026-10-14)
+
+The source 2019 MC on cluster62 supplies a unique cluster-local truth line
+for every raw event in independent nue2 holdouts A and B. The existing
+`extract_2019_truth_points.py` recovered 100,000 valid points per sample;
+`audit_2019_point_uncertainty.py` joined them to the same p>=0.70 selected
+events used above. The point error is the transverse distance from the
+predicted reference point to the **true infinite track line**, not a distance
+at an arbitrary +200 m lever arm. There is no event-ID or generated-primary
+overlap between A and B, or generated-primary overlap with 2020 training.
+
+The frozen v2 network yields point-to-line q50/q68 **3.900/6.265 m** on
+51,473 A events and **3.885/6.206 m** on 51,360 B events. Its 2020-only
+point radii under-cover B: nominal 68%/95% intervals contain only
+**60.8%/91.0%** of true lines. `calibrate_cross_season_track.py` fits only
+on A, taking the maximum of its factor and the pre-existing 2020-validation
+factor. B and the 2020 test influence neither the model nor these factors.
+
+| Point-radius calibration | 2019-B coverage 68% / 95% | 2020 MC test coverage 68% / 95% |
+| --- | ---: | ---: |
+| 2020 only | 60.8% / 91.0% | 66.9% / 92.9% |
+| **Cross-season conservative** | **68.2% / 95.0%** | **73.9% / 95.3%** |
+
+The resulting single-file
+`/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/photon_uncertainty_recalibration_v1/universal_angle_track_uncertainty_photon_crossseason_v3.pt`
+is the current recommended bundle. Relative to v2, **every network tensor,
+direction, and reference point is bitwise unchanged**; only the point
+radius factors change to 1.85289/4.22721 times `sigma_anchor_m`. The
+cross-season angle factors from v2 remain 2.60175/6.45668. The 2019-B
+output CSV was rerun with v3 and matched v2's direction and point exactly.
+The v3 checkpoint SHA256 is
+`7cb8f77cfdb2a7cf021d090be5246b83f8a94c7513cc24c793ab019c67686f41`.
+On B, retaining the half of events with smallest predicted uncertainty
+reduces direction q68 7.871° -> 3.138° and point-distance q68
+6.206 -> 3.582 m. See the independent
+[`2019-B quality and calibration plot`](results/photon_uncertainty_crossseason_v3/2019_b/quality_calibration.png)
+and the corresponding
+[`2020 MC test plot`](results/photon_uncertainty_crossseason_v3/quality_calibration.png).
+
+The v3 point intervals are marginally calibrated on B, not perfectly
+conditional: the easiest predicted-sigma deciles cover roughly 65-68% at
+nominal 68%, while the hardest decile covers 82%. On 2020 MC, both angle
+and point intervals are conservative **marginally**, but 2020 nue2 point
+95%-coverage is only 90.6%, versus 95.3% for the particle mixture. This
+species/topology dependence prevents claiming universal conditional
+calibration. A one-slope monotone power-law recalibration fitted on A did
+not resolve it: the 2019-B hardest point decile still over-covered (~80%
+at nominal 68%), while the 2020 hardest decile under-covered (~62%). It
+was not promoted. Experimental data still have no true
+line, and multi-track `muatm` remains outside the validated single-point
+scope. The checkpoint does not include signal/noise hit classification;
+the CPU command above works unchanged with the v3 filename.

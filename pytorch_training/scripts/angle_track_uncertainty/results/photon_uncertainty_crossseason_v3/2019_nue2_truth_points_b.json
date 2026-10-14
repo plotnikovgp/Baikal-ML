@@ -1,0 +1,11 @@
+{
+  "source": "/home3/ivkhar/Baikal/data/h5s/baikal_mc_merged.h5",
+  "raw": "/home/plotnikovgp/tmp/2019_nue2_raw_holdout_b_100k.h5",
+  "output": "/home/plotnikovgp/tmp/2019_nue2_truth_points_b.npz",
+  "particle": "nue2",
+  "events": 100000,
+  "parsed": 100000,
+  "single": 100000,
+  "valid": 100000,
+  "duplicate_id_rows_excluded": 0
+}
