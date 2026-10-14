@@ -2140,3 +2140,28 @@ cohort, both quantiles worsened. Therefore p090 is **not** promoted as a
 global preprocessing change; no model parameters or production bundle were
 changed. The [full reproducible report](results/reco_novel_primary_v3_p070_p090_audit_v1.json)
 contains split-wise metrics, selection sizes, and coverage.
+
+### Global zenith-bias correction: rejected cross-season control (2026-10-14)
+
+[`audit_theta_bias_crossseason.py`](audit_theta_bias_crossseason.py) tested
+whether a cheap post-hoc correction of predicted zenith could explain the
+high-quality q50 gap. It fitted a regularized quadratic in
+`cos(predicted theta)` on **2019-A only**, clipped shifts to +/-2°, asserted
+that A and B have no exact shared generated `(theta, phi, energy)` primaries,
+then evaluated untouched 2019-B. Both files use the frozen v3 gate200
+directions; no network retraining or experimental-data tuning was involved.
+
+| 2019-B selection | N | Frozen q50 / q68 | Zenith-corrected q50 / q68 |
+| --- | ---: | ---: | ---: |
+| All | 51,360 | **3.740° / 7.041°** | 3.918° / 7.143° |
+| >=20 selected hits | 18,645 | **2.498° / 4.242°** | 2.780° / 4.492° |
+| >=35 selected hits | 7,973 | **1.979° / 3.262°** | 2.342° / 3.500° |
+
+The same correction also worsens A. Typical signed theta residual is close
+to zero (B median +0.059° overall, -0.007° with >=20 hits), while the
+conditional *mean* is pulled by large mistakes near the horizon and beyond.
+This particular global bias correction is therefore **rejected**; it is not
+evidence that all conditional geometry corrections are impossible. The
+[machine-readable result](results/theta_bias_crossseason_v3_gate200_negative.json)
+records the fitted coefficients and theta-bin diagnostics. The production
+checkpoint, preprocessing, and experimental theta distribution are unchanged.

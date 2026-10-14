@@ -1,0 +1,226 @@
+{
+  "method": "A-only ridge quadratic in cos(predicted theta), clipped to +/-2 degrees",
+  "coef": [
+    -2.3938170454953935,
+    6.4867875637799175,
+    -2.504637270198451
+  ],
+  "inputs": {
+    "a_csv": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/photon_uncertainty_recalibration_v1/2019_a_v3_photongate200_full.csv",
+    "a_h5": "/home/plotnikovgp/tmp/angle_reconstruction/data/2019_nue2_predsignal_p050_test.h5",
+    "b_csv": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/photon_uncertainty_recalibration_v1/2019_b_v3_photongate200_full.csv",
+    "b_h5": "/home/plotnikovgp/tmp/angle_reconstruction/data/2019_nue2_predsignal_p050_holdout_b.h5"
+  },
+  "2019-A": {
+    "all": {
+      "n": 51473,
+      "before_q50_q68": [
+        3.7640849801326053,
+        7.018968829072744
+      ],
+      "after_q50_q68": [
+        3.94463684228834,
+        7.11277563321026
+      ],
+      "median_theta_residual_deg": 0.05200004577636719
+    },
+    "hits>=20": {
+      "n": 18714,
+      "before_q50_q68": [
+        2.439535817564571,
+        4.257634912992806
+      ],
+      "after_q50_q68": [
+        2.741956563594613,
+        4.471064376033213
+      ],
+      "median_theta_residual_deg": -0.01951742172241211
+    },
+    "hits>=35": {
+      "n": 7975,
+      "before_q50_q68": [
+        1.913186392143143,
+        3.1472981293994464
+      ],
+      "after_q50_q68": [
+        2.334938584612829,
+        3.4443298820872474
+      ],
+      "median_theta_residual_deg": -0.058013916015625
+    },
+    "unchanged_p070": {
+      "n": 31612,
+      "before_q50_q68": [
+        4.343015699909246,
+        8.21655882037904
+      ],
+      "after_q50_q68": [
+        4.511075341996036,
+        8.290642391249012
+      ],
+      "median_theta_residual_deg": 0.06028461456298917
+    },
+    "changed_gate": {
+      "n": 19861,
+      "before_q50_q68": [
+        3.021496319741127,
+        5.436068959455922
+      ],
+      "after_q50_q68": [
+        3.26148333965708,
+        5.6421311687102085
+      ],
+      "median_theta_residual_deg": 0.040401458740234375
+    },
+    "theta_bins": [
+      {
+        "min_pred_theta_deg": 0,
+        "max_pred_theta_deg": 20,
+        "n": 4157,
+        "mean_residual_deg": 1.9068268957349122,
+        "median_residual_deg": 0.21563720703125
+      },
+      {
+        "min_pred_theta_deg": 20,
+        "max_pred_theta_deg": 40,
+        "n": 12781,
+        "mean_residual_deg": 1.013803576371002,
+        "median_residual_deg": 0.055938720703125
+      },
+      {
+        "min_pred_theta_deg": 40,
+        "max_pred_theta_deg": 60,
+        "n": 14440,
+        "mean_residual_deg": 0.7962760138049346,
+        "median_residual_deg": 0.09399986267089488
+      },
+      {
+        "min_pred_theta_deg": 60,
+        "max_pred_theta_deg": 80,
+        "n": 13956,
+        "mean_residual_deg": 0.15918599038795123,
+        "median_residual_deg": 0.14246749877929688
+      },
+      {
+        "min_pred_theta_deg": 80,
+        "max_pred_theta_deg": 100,
+        "n": 5921,
+        "mean_residual_deg": -1.9731408705322389,
+        "median_residual_deg": -0.49509429931640625
+      },
+      {
+        "min_pred_theta_deg": 100,
+        "max_pred_theta_deg": 120,
+        "n": 157,
+        "mean_residual_deg": -28.707192001828723,
+        "median_residual_deg": -23.836387634277344
+      }
+    ]
+  },
+  "2019-B": {
+    "all": {
+      "n": 51360,
+      "before_q50_q68": [
+        3.740292621469317,
+        7.041444208108021
+      ],
+      "after_q50_q68": [
+        3.917616381558995,
+        7.14293955088414
+      ],
+      "median_theta_residual_deg": 0.058899879455566406
+    },
+    "hits>=20": {
+      "n": 18645,
+      "before_q50_q68": [
+        2.497751491603502,
+        4.242279016759954
+      ],
+      "after_q50_q68": [
+        2.7800338557637376,
+        4.492269333024356
+      ],
+      "median_theta_residual_deg": -0.006917953491209161
+    },
+    "hits>=35": {
+      "n": 7973,
+      "before_q50_q68": [
+        1.979373115382536,
+        3.262134492046509
+      ],
+      "after_q50_q68": [
+        2.342141209079775,
+        3.5003508654054567
+      ],
+      "median_theta_residual_deg": -0.054168701171875
+    },
+    "unchanged_p070": {
+      "n": 31775,
+      "before_q50_q68": [
+        4.280962619247157,
+        8.230594218962368
+      ],
+      "after_q50_q68": [
+        4.452521089267458,
+        8.274344004446217
+      ],
+      "median_theta_residual_deg": 0.0784912109375
+    },
+    "changed_gate": {
+      "n": 19585,
+      "before_q50_q68": [
+        3.0698637679092142,
+        5.450790657203699
+      ],
+      "after_q50_q68": [
+        3.2897863090548847,
+        5.640769242602156
+      ],
+      "median_theta_residual_deg": 0.028491973876953125
+    },
+    "theta_bins": [
+      {
+        "min_pred_theta_deg": 0,
+        "max_pred_theta_deg": 20,
+        "n": 4102,
+        "mean_residual_deg": 1.9178095181676482,
+        "median_residual_deg": 0.1955704689025879
+      },
+      {
+        "min_pred_theta_deg": 20,
+        "max_pred_theta_deg": 40,
+        "n": 12590,
+        "mean_residual_deg": 1.1749966225233979,
+        "median_residual_deg": 0.09168052673339844
+      },
+      {
+        "min_pred_theta_deg": 40,
+        "max_pred_theta_deg": 60,
+        "n": 14832,
+        "mean_residual_deg": 0.7291759899390421,
+        "median_residual_deg": 0.07501792907715199
+      },
+      {
+        "min_pred_theta_deg": 60,
+        "max_pred_theta_deg": 80,
+        "n": 13764,
+        "mean_residual_deg": 0.12214461234862352,
+        "median_residual_deg": 0.12888717651367188
+      },
+      {
+        "min_pred_theta_deg": 80,
+        "max_pred_theta_deg": 100,
+        "n": 5867,
+        "mean_residual_deg": -1.8900061360774179,
+        "median_residual_deg": -0.44406890869140625
+      },
+      {
+        "min_pred_theta_deg": 100,
+        "max_pred_theta_deg": 120,
+        "n": 151,
+        "mean_residual_deg": -26.74855854969151,
+        "median_residual_deg": -22.982315063476562
+      }
+    ]
+  }
+}
