@@ -21,6 +21,7 @@ from physics_feature_upgrade import upgrade_track_model_physics_features
 from physics_graph_upgrade import upgrade_track_model_graph
 from softscore_model import upgrade_track_model
 from span_crop_augmentation import crop_vertical_span
+from sparse_hit_augmentation import crop_random_hits
 from torch import nn
 from track_augmentation import augment_track_batch
 from train_angle_signal import (
@@ -89,6 +90,8 @@ class AdaptedTrackDataset(BatchedTrackDataset):
         pred_threshold_max: float = 0.90,
         return_unthinned: bool = False,
         span_crop_prob: float = 0.0,
+        random_hit_crop_prob: float = 0.0,
+        random_hit_crop_max_keep: int = 12,
         span_crop_min_keep: float = 0.75,
         span_crop_max_keep: float = 0.90,
         score_feature: bool = False,
@@ -108,6 +111,8 @@ class AdaptedTrackDataset(BatchedTrackDataset):
         self.pred_threshold_max = pred_threshold_max
         self.return_unthinned = return_unthinned
         self.span_crop_prob = span_crop_prob
+        self.random_hit_crop_prob = random_hit_crop_prob
+        self.random_hit_crop_max_keep = random_hit_crop_max_keep
         self.span_crop_min_keep = span_crop_min_keep
         self.span_crop_max_keep = span_crop_max_keep
         self.score_feature = score_feature
@@ -125,6 +130,7 @@ class AdaptedTrackDataset(BatchedTrackDataset):
             pred_thinning_prob <= 0
             or score_feature
             or span_crop_prob > 0
+            or random_hit_crop_prob > 0
             or rotate_z_prob > 0
             or time_jitter_ns > 0
             or event_time_jitter_ns > 0
@@ -212,6 +218,19 @@ class AdaptedTrackDataset(BatchedTrackDataset):
                 min_keep_fraction=self.span_crop_min_keep,
                 max_keep_fraction=self.span_crop_max_keep,
             )
+        if self.random_hit_crop_prob > 0 and len(x):
+            x, mask, point = crop_random_hits(
+                x,
+                mask,
+                direction,
+                point,
+                valid,
+                self.expected_mean,
+                self.expected_std,
+                probability=self.random_hit_crop_prob,
+                min_keep=8,
+                max_keep=self.random_hit_crop_max_keep,
+            )
         if self.score_feature:
             if len(x):
                 score = torch.from_numpy(prob)
@@ -295,7 +314,9 @@ def next_nonempty(source):
             return batch
 
 
-def validation_score(result: dict, pred_weight: float, muatm_weight: float) -> float:
+def validation_score(
+    result: dict, pred_weight: float, muatm_weight: float, short_weight: float = 0.0
+) -> float:
     pred = result["pred_val"]
     gt = result["gt_val_clean"]
     return (
@@ -303,13 +324,14 @@ def validation_score(result: dict, pred_weight: float, muatm_weight: float) -> f
         + 0.03 * gt["line_m"]["q68"]
         + pred_weight * pred["direction_deg"]["q68"]
         + muatm_weight * pred["muatm"]["direction_deg"]["q68"]
+        + (short_weight * pred["short_8to12"]["direction_deg"]["q68"] if short_weight > 0 else 0.0)
     )
 
 
 @torch.inference_mode()
 def evaluate(model: nn.Module, loader, device: torch.device, *, return_arrays: bool = False):
     model.eval()
-    chunks = {name: [] for name in ("angle", "line", "valid", "particle")}
+    chunks = {name: [] for name in ("angle", "line", "valid", "particle", "hits")}
     for x, target_dir, mask, particle, target_point, valid in loader:
         if not len(x):
             continue
@@ -324,6 +346,7 @@ def evaluate(model: nn.Module, loader, device: torch.device, *, return_arrays: b
         chunks["line"].append(line.cpu().numpy())
         chunks["valid"].append(valid.numpy())
         chunks["particle"].append(particle.numpy())
+        chunks["hits"].append(mask.sum(dim=1).cpu().numpy())
     pred = {key: np.concatenate(value) for key, value in chunks.items()}
     result = {
         "count": int(len(pred["angle"])),
@@ -342,6 +365,22 @@ def evaluate(model: nn.Module, loader, device: torch.device, *, return_arrays: b
             }
             if track.any():
                 result[name]["line_m"] = quantiles(pred["line"][track])
+    short = (pred["hits"] >= 8) & (pred["hits"] <= 12)
+    if short.any():
+        short_track = short & pred["valid"]
+        result["short_8to12"] = {
+            "count": int(short.sum()),
+            "direction_deg": quantiles(pred["angle"][short]),
+        }
+        if short_track.any():
+            result["short_8to12"]["line_m"] = quantiles(pred["line"][short_track])
+        for code, name in ((0, "muatm"), (1, "nuatm"), (2, "nue2")):
+            selected = short & (pred["particle"] == code)
+            if selected.any():
+                result["short_8to12"][name] = {
+                    "count": int(selected.sum()),
+                    "direction_deg": quantiles(pred["angle"][selected]),
+                }
     return (result, pred) if return_arrays else result
 
 
@@ -425,6 +464,10 @@ def main() -> None:
     parser.add_argument("--span-crop-prob", type=float, default=0.0)
     parser.add_argument("--span-crop-min-keep", type=float, default=0.75)
     parser.add_argument("--span-crop-max-keep", type=float, default=0.90)
+    parser.add_argument("--random-hit-crop-prob", type=float, default=0.0)
+    parser.add_argument("--random-hit-crop-max-keep", type=int, default=12)
+    parser.add_argument("--short-score-weight", type=float, default=0.0)
+    parser.add_argument("--max-short-q68", type=float, default=None)
     parser.add_argument("--score-feature", action="store_true")
     parser.add_argument("--score-jitter", type=float, default=0.0)
     parser.add_argument("--rotate-z-prob", type=float, default=0.0)
@@ -474,6 +517,10 @@ def main() -> None:
         raise ValueError("span-crop-prob must be in [0, 1]")
     if not 0 < args.span_crop_min_keep <= args.span_crop_max_keep <= 1:
         raise ValueError("Invalid span-crop kept-hit fraction interval")
+    if not 0 <= args.random_hit_crop_prob <= 1 or args.random_hit_crop_max_keep < 8:
+        raise ValueError("Invalid random-hit crop settings")
+    if args.short_score_weight < 0 or (args.max_short_q68 is not None and args.max_short_q68 <= 0):
+        raise ValueError("Short-topology score settings must be nonnegative")
     if args.score_jitter < 0:
         raise ValueError("Score jitter must be nonnegative")
     if not 0 <= args.rotate_z_prob <= 1:
@@ -614,6 +661,8 @@ def main() -> None:
             span_crop_prob=args.span_crop_prob if train_aug else 0.0,
             span_crop_min_keep=args.span_crop_min_keep,
             span_crop_max_keep=args.span_crop_max_keep,
+            random_hit_crop_prob=args.random_hit_crop_prob if train_aug else 0.0,
+            random_hit_crop_max_keep=args.random_hit_crop_max_keep,
             score_feature=args.score_feature,
             score_jitter=args.score_jitter if split == "train" else 0.0,
             rotate_z_prob=args.rotate_z_prob if train_aug else 0.0,
@@ -851,14 +900,19 @@ def main() -> None:
     if clean_paired_val is not None:
         initial["clean_paired_val"] = evaluate(model, clean_paired_val, device)
     initial["step"] = 0
-    initial["score"] = validation_score(initial, args.pred_score_weight, args.muatm_score_weight)
+    initial["score"] = validation_score(
+        initial, args.pred_score_weight, args.muatm_score_weight, args.short_score_weight
+    )
     (args.output_dir / "val_step_0.json").write_text(json.dumps(initial, indent=2) + "\n")
     print("validation " + json.dumps(initial, sort_keys=True), flush=True)
     baseline = initial["pred_val"]["direction_deg"]["q68"]
     limit = args.max_pred_q68 if args.max_pred_q68 is not None else 1.05 * baseline
     initial_gt_q68 = initial["gt_val_clean"]["direction_deg"]["q68"]
-    initial_admissible = baseline <= limit and (
-        args.max_gt_q68 is None or initial_gt_q68 <= args.max_gt_q68
+    initial_short_q68 = initial["pred_val"]["short_8to12"]["direction_deg"]["q68"]
+    initial_admissible = (
+        baseline <= limit
+        and (args.max_gt_q68 is None or initial_gt_q68 <= args.max_gt_q68)
+        and (args.max_short_q68 is None or initial_short_q68 <= args.max_short_q68)
     )
     best_score = initial["score"] if initial_admissible else float("inf")
     for step in range(1, args.steps + 1):
@@ -982,12 +1036,17 @@ def main() -> None:
                 result["clean_paired_val"] = evaluate(model, clean_paired_val, device)
             pred_q68 = result["pred_val"]["direction_deg"]["q68"]
             gt_q68 = result["gt_val_clean"]["direction_deg"]["q68"]
+            short_q68 = result["pred_val"]["short_8to12"]["direction_deg"]["q68"]
             # Primary: clean nue2 direction. Reject candidates that damage
             # all-particle direction by more than 5% on its own validation set.
-            admissible = pred_q68 <= limit and (
-                args.max_gt_q68 is None or gt_q68 <= args.max_gt_q68
+            admissible = (
+                pred_q68 <= limit
+                and (args.max_gt_q68 is None or gt_q68 <= args.max_gt_q68)
+                and (args.max_short_q68 is None or short_q68 <= args.max_short_q68)
             )
-            score = validation_score(result, args.pred_score_weight, args.muatm_score_weight)
+            score = validation_score(
+                result, args.pred_score_weight, args.muatm_score_weight, args.short_score_weight
+            )
             result["step"] = step
             result["score"] = score
             result["admissible"] = admissible

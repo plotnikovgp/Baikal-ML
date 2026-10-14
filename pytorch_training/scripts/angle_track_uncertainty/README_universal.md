@@ -1470,3 +1470,31 @@ The point-only candidate remains experimental for universal deployment:
 the reco gain is unresolved, the exact 13-condition reco cut needs a newer
 BARS evaluator, and uncertainty heads are calibrated for the older input
 rule.
+
+## Random sparse-hit training augmentation (2026-10-14)
+
+`sparse_hit_augmentation.py` adds a training-only eventwise crop to 8-12
+random hits with at least two strings. It rebases the point target after
+the hit centroid changes and keeps the physical truth line unchanged.
+`test_sparse_hit_augmentation.py` checks this invariant; on a real
+128-event training batch at crop probability 0.5, 56 events changed and
+the maximum valid-line transverse discrepancy was about 1e-5 m.
+
+`run_sparse_crop_v4.sh` compared 2,000-step continuations from the same
+v4 checkpoint, seed 211 and losses: control versus crop probability 0.5.
+Only the predicted-hit training stream was cropped; GT-hit batches and
+validation were unchanged. Both used stochastic p=0.70-0.90 threshold
+thinning, the single-track-muatm filter, and a validation score that also
+weighs 8-12-hit predicted events. The common step-0 score was **9.1731**;
+no later checkpoint in either run improved it. At step 2,000 the control
+score/predicted-hit q68/8-12-hit q68 were 9.1777/4.4829°/4.6887°,
+and the crop run's were 9.1920/4.5029°/4.6872°, versus
+9.1731/4.4695°/4.6682° initially. The 8-12-hit `nue2` validation q68
+was 17.298° initially and 17.972° at the crop run's final step, albeit
+on only 242 events. Neither run produced a selected `best.pt`; there is
+no independent-test or experimental-domain result for this augmentation.
+Random removal from otherwise accepted events did not replicate the
+false-positive-hit composition of the difficult 2020 subset. The next
+experiment should use the classifier's lower-probability hits or a
+score-aware robustness objective, with independent-sample and
+experiment-versus-muatm distribution checks before any promotion.
