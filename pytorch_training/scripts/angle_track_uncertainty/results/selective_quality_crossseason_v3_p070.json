@@ -1,0 +1,311 @@
+{
+  "method": "Unchanged frozen v3 p>=0.70 direction and raw angle sigma; A-set score quantiles only",
+  "inputs": {
+    "a_csv": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/photon_uncertainty_recalibration_v1/2019_a_crossseason_v3_p070_full_gpu1.csv",
+    "a_h5": "/home/plotnikovgp/tmp/angle_reconstruction/data/2019_nue2_predsignal_p070_test.h5",
+    "b_csv": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/photon_uncertainty_recalibration_v1/2019_b_crossseason_v3.csv",
+    "b_h5": "/home/plotnikovgp/tmp/angle_reconstruction/data/2019_nue2_predsignal_p050_holdout_b.h5",
+    "exp_features": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/domain_input_shift_v2/exp_features.csv",
+    "mc_features": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/domain_input_shift_v2/muatm_mc_features.csv",
+    "exp_predictions": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/domain_p070_v3/exp_test.csv",
+    "mc_predictions": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/domain_p070_v3/muatm_val.csv",
+    "novel_data": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/reco_eval/reco_exact_predsignal_p070_train_val.h5",
+    "reference_gt": "/home/plotnikovgp/tmp/angle_reconstruction/data/baikal_mc_merged2020_signal_8-2_angl_norm.h5",
+    "reference_pred": "/home/plotnikovgp/tmp/angle_reconstruction/data/baikal_2020_all_predsignal_p070_2s8h.h5",
+    "novel_train_predictions": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/reco_eval/reco_pred_p070_all_train_v3_bundle_v1.csv",
+    "novel_val_predictions": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/reco_eval/reco_pred_p070_all_val_v3_bundle_v1.csv"
+  },
+  "b_all": {
+    "n": 51360,
+    "fraction": 1.0,
+    "q50_deg": 4.13785771137094,
+    "q68_deg": 7.870887123366271
+  },
+  "exp_events": 4924,
+  "muatm_mc_events": 25054,
+  "full_exp_muatm_theta_match": {
+    "columns": [
+      "n_hits",
+      "n_strings",
+      "z_std_m"
+    ],
+    "cells": 90,
+    "exp_unsupported_events": 0,
+    "exp_unsupported_fraction": 0.0,
+    "mc_effective_sample_size": 21070.6564101088,
+    "theta_w1_full_exp_deg": 0.3776566486169349,
+    "theta_w1_supported_exp_deg": 0.3776566486169349,
+    "bin_edges": {
+      "z_std_m": [
+        33.07643508911133,
+        51.159297943115234
+      ]
+    }
+  },
+  "cutoffs": {
+    "0.5": {
+      "sigma_cut_deg": 2.323058843612671,
+      "a_acceptance": 0.5000097138305519,
+      "b_retained": {
+        "n": 25518,
+        "fraction": 0.49684579439252335,
+        "q50_deg": 2.0156044306061505,
+        "q68_deg": 3.123117170540245
+      },
+      "b_rejected": {
+        "n": 25842,
+        "fraction": 0.5031542056074766,
+        "q50_deg": 9.493979220436625,
+        "q68_deg": 15.482857946108302
+      },
+      "a_hit_count_cut": 15,
+      "b_hit_count_comparator": {
+        "n": 26473,
+        "fraction": 0.515440031152648,
+        "q50_deg": 3.0578313120705527,
+        "q68_deg": 5.443126955044964
+      },
+      "b_equal_retention_hit_count_comparator": {
+        "n": 25518,
+        "fraction": 0.49684579439252335,
+        "q50_deg": 3.01218158505434,
+        "q68_deg": 5.3374590830643065
+      },
+      "b_sigma_vs_equal_retention_hit_bootstrap": {
+        "delta_sigma_minus_hit_ci95_q50_deg": [
+          -1.0535577618203755,
+          -0.9470907808509171
+        ],
+        "delta_sigma_minus_hit_ci95_q68_deg": [
+          -2.314148365939326,
+          -2.1127367719011767
+        ]
+      },
+      "b_within_hit_bins": {
+        "8-11": {
+          "bin_n": 16513,
+          "retained_fraction_within_bin": 0.3115727002967359,
+          "retained": {
+            "n": 5145,
+            "fraction": 0.1001752336448598,
+            "q50_deg": 2.276515342558789,
+            "q68_deg": 3.4894604963171694
+          },
+          "rejected": {
+            "n": 11368,
+            "fraction": 0.22133956386292836,
+            "q50_deg": 10.555978263259329,
+            "q68_deg": 18.102604343838642
+          }
+        },
+        "12-19": {
+          "bin_n": 16924,
+          "retained_fraction_within_bin": 0.44581659182226424,
+          "retained": {
+            "n": 7545,
+            "fraction": 0.14690420560747663,
+            "q50_deg": 2.1814737830574615,
+            "q68_deg": 3.3720448226767754
+          },
+          "rejected": {
+            "n": 9379,
+            "fraction": 0.18261292834890966,
+            "q50_deg": 9.699097789563284,
+            "q68_deg": 15.557529735081264
+          }
+        },
+        "20+": {
+          "bin_n": 17923,
+          "retained_fraction_within_bin": 0.715728393684093,
+          "retained": {
+            "n": 12828,
+            "fraction": 0.2497663551401869,
+            "q50_deg": 1.8234153262478014,
+            "q68_deg": 2.8499104012037426
+          },
+          "rejected": {
+            "n": 5095,
+            "fraction": 0.09920171339563863,
+            "q50_deg": 7.575714880520242,
+            "q68_deg": 11.340496281958663
+          }
+        }
+      },
+      "exp_acceptance": 0.2780259951259139,
+      "muatm_mc_acceptance_unweighted": 0.34369761315558395,
+      "muatm_mc_acceptance_matched": 0.2959514472971455,
+      "selected_exp_muatm_theta_match": {
+        "columns": [
+          "n_hits",
+          "n_strings",
+          "z_std_m"
+        ],
+        "cells": 90,
+        "exp_unsupported_events": 1,
+        "exp_unsupported_fraction": 0.0007304601899196494,
+        "mc_effective_sample_size": 6041.0362124736685,
+        "theta_w1_full_exp_deg": 0.9486248423572521,
+        "theta_w1_supported_exp_deg": 0.9488546304514085,
+        "bin_edges": {
+          "z_std_m": [
+            61.3773307800293,
+            84.59947967529297
+          ]
+        }
+      },
+      "angle_model_primary_disjoint_2020_reco": {
+        "cohort": "Angle-model-primary-disjoint, but signal/noise training overlap unaudited",
+        "all": {
+          "n": 7994,
+          "fraction": 1.0,
+          "q50_deg": 13.059826755909349,
+          "q68_deg": 23.837867091391466
+        },
+        "retained": {
+          "n": 3507,
+          "fraction": 0.43870402802101577,
+          "q50_deg": 6.124417632033493,
+          "q68_deg": 15.825920452402876
+        },
+        "rejected": {
+          "n": 4487,
+          "fraction": 0.5612959719789843,
+          "q50_deg": 18.338040208302097,
+          "q68_deg": 28.692169128504844
+        }
+      }
+    },
+    "0.75": {
+      "sigma_cut_deg": 5.057502269744873,
+      "a_acceptance": 0.750004856915276,
+      "b_retained": {
+        "n": 38548,
+        "fraction": 0.7505451713395639,
+        "q50_deg": 2.832282521707618,
+        "q68_deg": 4.642041703697995
+      },
+      "b_rejected": {
+        "n": 12812,
+        "fraction": 0.24945482866043614,
+        "q50_deg": 16.793725706319904,
+        "q68_deg": 26.010986418888038
+      },
+      "a_hit_count_cut": 10,
+      "b_hit_count_comparator": {
+        "n": 42239,
+        "fraction": 0.8224104361370717,
+        "q50_deg": 3.7809365467088853,
+        "q68_deg": 7.045215377966612
+      },
+      "b_equal_retention_hit_count_comparator": {
+        "n": 38548,
+        "fraction": 0.7505451713395639,
+        "q50_deg": 3.610627569487294,
+        "q68_deg": 6.672851427962686
+      },
+      "b_sigma_vs_equal_retention_hit_bootstrap": {
+        "delta_sigma_minus_hit_ci95_q50_deg": [
+          -0.8307192416164156,
+          -0.7378805298481126
+        ],
+        "delta_sigma_minus_hit_ci95_q68_deg": [
+          -2.1386343826183625,
+          -1.9313641014556255
+        ]
+      },
+      "b_within_hit_bins": {
+        "8-11": {
+          "bin_n": 16513,
+          "retained_fraction_within_bin": 0.6069157633379761,
+          "retained": {
+            "n": 10022,
+            "fraction": 0.19513239875389407,
+            "q50_deg": 3.379828276523839,
+            "q68_deg": 5.536327840143798
+          },
+          "rejected": {
+            "n": 6491,
+            "fraction": 0.1263823987538941,
+            "q50_deg": 18.08321582513163,
+            "q68_deg": 29.02128618598721
+          }
+        },
+        "12-19": {
+          "bin_n": 16924,
+          "retained_fraction_within_bin": 0.7024344126683999,
+          "retained": {
+            "n": 11888,
+            "fraction": 0.23146417445482867,
+            "q50_deg": 3.0945599712634904,
+            "q68_deg": 4.984583120729521
+          },
+          "rejected": {
+            "n": 5036,
+            "fraction": 0.09805295950155764,
+            "q50_deg": 15.737884682410531,
+            "q68_deg": 24.459421032021726
+          }
+        },
+        "20+": {
+          "bin_n": 17923,
+          "retained_fraction_within_bin": 0.9283044133236623,
+          "retained": {
+            "n": 16638,
+            "fraction": 0.32394859813084115,
+            "q50_deg": 2.37629176152954,
+            "q68_deg": 3.9042337652374814
+          },
+          "rejected": {
+            "n": 1285,
+            "fraction": 0.025019470404984423,
+            "q50_deg": 14.840686112930936,
+            "q68_deg": 21.04009364619046
+          }
+        }
+      },
+      "exp_acceptance": 0.8369212022745736,
+      "muatm_mc_acceptance_unweighted": 0.8702801947792768,
+      "muatm_mc_acceptance_matched": 0.844479660353733,
+      "selected_exp_muatm_theta_match": {
+        "columns": [
+          "n_hits",
+          "n_strings",
+          "z_std_m"
+        ],
+        "cells": 90,
+        "exp_unsupported_events": 2,
+        "exp_unsupported_fraction": 0.000485319097306479,
+        "mc_effective_sample_size": 18314.96054643492,
+        "theta_w1_full_exp_deg": 0.49480977248509034,
+        "theta_w1_supported_exp_deg": 0.4988865973454741,
+        "bin_edges": {
+          "z_std_m": [
+            37.48960494995117,
+            55.68872197469076
+          ]
+        }
+      },
+      "angle_model_primary_disjoint_2020_reco": {
+        "cohort": "Angle-model-primary-disjoint, but signal/noise training overlap unaudited",
+        "all": {
+          "n": 7994,
+          "fraction": 1.0,
+          "q50_deg": 13.059826755909349,
+          "q68_deg": 23.837867091391466
+        },
+        "retained": {
+          "n": 6737,
+          "fraction": 0.8427570678008507,
+          "q50_deg": 11.225068472387896,
+          "q68_deg": 21.636030728655317
+        },
+        "rejected": {
+          "n": 1257,
+          "fraction": 0.15724293219914937,
+          "q50_deg": 22.454988675014828,
+          "q68_deg": 33.9107504529542
+        }
+      }
+    }
+  }
+}

@@ -2181,3 +2181,43 @@ cluster62 directories and ROOT sample; it does not prove that no suitable
 reconstruction exists elsewhere. A reliable assessment of the subdegree
 high-quality reco gap still needs standard-reco outputs on enough new
 generated primaries, with the same cuts applied to both methods.
+
+### Frozen uncertainty as an optional quality flag (2026-10-14)
+
+[`audit_selective_quality_crossseason.py`](audit_selective_quality_crossseason.py)
+sets two `sigma_angle_deg` thresholds from the **frozen v3 p>=0.70 model's
+2019-A score distribution only**, at its 50th and 75th percentiles. The
+full 2019-A prediction was rerun with the same v3 bundle used for B; event
+IDs, hit counts, and disjoint generated primaries are checked. No B or
+experimental truth is used to choose a threshold. The audit applies the
+same fixed thresholds to untouched 2019-B and to the 7,994 2020 reco
+events primary-disjoint from the angle model. Signal/noise classifier
+training overlap on the latter remains unaudited.
+
+| A-defined sigma limit | B retention | B q50 / q68 | B hit-count-only q50 / q68 at equal retention | Novel-2020 retention and q50 / q68 |
+| --- | ---: | ---: | ---: | ---: |
+| 2.323° | 49.7% | **2.016° / 3.123°** | 3.012° / 5.337° | 43.9%; 6.124° / 15.826° |
+| 5.058° | 75.1% | **2.832° / 4.642°** | 3.611° / 6.673° | 84.3%; 11.225° / 21.636° |
+
+Without selection, B q50/q68 is 4.138°/7.871° and novel-2020 is
+13.060°/23.838°. At the 50% cut, a B bootstrap puts the sigma-minus-
+equal-retention-hit-count q68 difference in **[-2.314, -2.113]°**.
+The quality ranking persists *within* the 8–11, 12–19, and >=20-hit B
+bins, so it is not just a multiplicity proxy. Nevertheless, the novel
+2020 retained subset is still difficult and the previously observed
+coverage failure of calibrated radii remains; this score is not an
+absolute error guarantee.
+
+Using the same p>=0.70 experimental and single-track-muatm MC event IDs,
+the 2.323° score cut retains **27.8%** of experiment and **29.6%** of MC
+after matching by baseline selected hit/string counts and vertical spread.
+The matched predicted-theta W1 distance is **0.949°** after selection,
+versus **0.378°** before selection; at 5.058°, retention is 83.7% / 84.4%
+and W1 is 0.495°. These are distribution checks, not experimental-truth
+accuracy measurements. The 50% A cut markedly reduces experimental
+coverage and *worsens* the theta-domain match, so it is offered only as
+an **optional quality flag**, not a default event cut or a replacement
+checkpoint. The [full report](results/selective_quality_crossseason_v3_p070.json)
+contains thresholds, hit-bin results, bootstraps, and matched-domain
+support. The single-model direction output and full-cohort experimental
+theta distribution are unchanged.
