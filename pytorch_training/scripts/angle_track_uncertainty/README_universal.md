@@ -2093,3 +2093,50 @@ conditional map is **not promoted**: changed-input rows still have blank
 calibrated radii and only raw sigmas. The [full report](results/photon_uncertainty_crossseason_v3/photon_gate200_conditional5_audit.json)
 includes factors, Wilson intervals, and sigma-decile coverage. Direction
 predictions and the MC-versus-experiment theta comparison are unchanged.
+
+### Reco events with unseen angle-model primaries (2026-10-14)
+
+[`audit_reco_novel_primary.py`](audit_reco_novel_primary.py) checks the frozen
+v3 bundle on the 2020 reco **train and validation** portions that were not used
+in the earlier reco-test comparison. Inputs are the p>=0.70 signal/noise
+selected hits, followed by the same >=8 hits / >=2 strings cut. It excludes
+every exact float32 `(theta, phi, energy)` primary occurring in *any* split of
+either internal angle-training GT or predicted-hit HDF5. Event IDs, prediction
+order, and MC truth are matched against the standard-reco HDF5 before scoring.
+This is primary-disjoint from the **angle model**, not a proof that the
+signal/noise classifier never saw these events; its training overlap has not
+been audited. It is also a covariate-shifted subset, not a random new-primary
+version of the earlier high-quality reco cohort.
+
+| Selection | N | NN q50 / q68 | Standard reco q50 / q68 |
+| --- | ---: | ---: | ---: |
+| All angle-model-primary-disjoint train + validation | 7,994 | 13.06° / 23.84° | 15.81° / 26.31° |
+| Validation, three available official-quality sidecar cuts | 222 | 3.91° / 7.34° | 3.08° / 8.32° |
+
+The 7,994 events represent 6,320 unique primaries. Keeping one event per
+primary, a paired bootstrap gives 95% intervals of **[-3.42, -2.42]°** for
+NN-minus-reco q50 and **[-3.01, -2.01]°** for q68: NN wins on this broad,
+sparse subset. But only **70** of these events have reco `fNHits>=20`, and the
+222-event official-quality comparison is too small for a firm precision
+ranking (paired unique-primary intervals include zero for both quantiles).
+The sidecar provides only three available quality cuts; it is **not** the
+10/13 ROOT-cut selection used in the earlier reco-test audit, and cannot be
+treated as the full 13/13 official selection.
+
+The cohort is dominated by 8–11 selected-hit events and strongly differs
+from the reused 2020 and independent 2019-B samples in track-hit fraction,
+selected-hit purity, span, zenith, and energy. More importantly, the bundled
+angle radii nominally targeting 68% / 95% contain the true direction only
+**36.7% / 63.4%** of the time here. This is a real calibration warning;
+do not report those radii as calibrated for this domain.
+
+A frozen-model sensitivity check increased the signal/noise threshold from
+`p>=0.70` to `p>=0.90` before the 2s8h cut. It retained only 65.2% / 65.9%
+of novel train / validation events. On the **5,216 common novel events**,
+q50 / q68 improved from 9.41° / 19.32° to 9.21° / 18.82° (paired
+unique-primary bootstrap intervals for p090-minus-p070 are
+[-0.44, -0.03]° / [-0.85, -0.24]°). On the far larger reused-MC common
+cohort, both quantiles worsened. Therefore p090 is **not** promoted as a
+global preprocessing change; no model parameters or production bundle were
+changed. The [full reproducible report](results/reco_novel_primary_v3_p070_p090_audit_v1.json)
+contains split-wise metrics, selection sizes, and coverage.

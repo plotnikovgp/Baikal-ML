@@ -1,0 +1,275 @@
+{
+  "selection": "p>=0.70 predicted-signal hits; >=8 hits on >=2 strings",
+  "primary_disjoint_from": "all train/val/test primaries in both internal 2020 GT and predicted-hit HDF5s",
+  "official_quality_scope": "Three available official reco cuts from the sidecar only, not ROOT 10/13 or full 13/13",
+  "splits": {
+    "train": {
+      "source_events": 469625,
+      "novel_primaries": {
+        "count": 7118,
+        "unique_primaries": 5763,
+        "nn": {
+          "q50": 13.117606491885907,
+          "q68": 23.76727284995615
+        },
+        "standard_reco": {
+          "q50": 15.898125171661377,
+          "q68": 26.236595764160157
+        },
+        "fraction_first_better_eventwise": 0.5598482719865131,
+        "angle_coverage68": 0.3685023883113234,
+        "angle_coverage95": 0.6347288564203428
+      },
+      "novel_reco_nhits_ge20": {
+        "count": 63,
+        "unique_primaries": 52,
+        "nn": {
+          "q50": 4.281144334571284,
+          "q68": 6.648349238858371
+        },
+        "standard_reco": {
+          "q50": 6.648770809173584,
+          "q68": 8.474521789550781
+        },
+        "fraction_first_better_eventwise": 0.6190476190476191,
+        "angle_coverage68": 0.5555555555555556,
+        "angle_coverage95": 0.9365079365079365
+      },
+      "novel_selected_hits_8to11": {
+        "count": 6428,
+        "unique_primaries": 5307,
+        "nn": {
+          "q50": 14.798386950544604,
+          "q68": 25.89073797924901
+        },
+        "standard_reco": {
+          "q50": 17.69783878326416,
+          "q68": 28.328177795410163
+        },
+        "fraction_first_better_eventwise": 0.5631611698817672,
+        "angle_coverage68": 0.3525202240199129,
+        "angle_coverage95": 0.6118543870566272
+      },
+      "novel_quality_sidecar_available": {
+        "count": 0
+      },
+      "novel_official_quality_pass": {
+        "count": 0
+      },
+      "p090_novel_retention": 0.6517280134869345,
+      "p090_vs_p070_novel_common": {
+        "count": 4639,
+        "unique_primaries": 3917,
+        "p090": {
+          "q50": 9.204651800344624,
+          "q68": 18.676189610672022
+        },
+        "p070": {
+          "q50": 9.438413416979976,
+          "q68": 19.08896663492266
+        },
+        "fraction_first_better_eventwise": 0.2056477689157146
+      },
+      "p090_vs_p070_reused_common": {
+        "count": 449305,
+        "unique_primaries": 142241,
+        "p090": {
+          "q50": 2.8234139416223765,
+          "q68": 5.691683696464209
+        },
+        "p070": {
+          "q50": 2.750471484997491,
+          "q68": 5.598370798253466
+        },
+        "fraction_first_better_eventwise": 0.2124636939272877
+      }
+    },
+    "val": {
+      "source_events": 58663,
+      "novel_primaries": {
+        "count": 876,
+        "unique_primaries": 845,
+        "nn": {
+          "q50": 12.839224268240379,
+          "q68": 24.120823137042525
+        },
+        "standard_reco": {
+          "q50": 14.705314636230469,
+          "q68": 26.824119567871094
+        },
+        "fraction_first_better_eventwise": 0.5742009132420092,
+        "angle_coverage68": 0.3584474885844749,
+        "angle_coverage95": 0.6278538812785388
+      },
+      "novel_reco_nhits_ge20": {
+        "count": 7,
+        "unique_primaries": 7,
+        "nn": {
+          "q50": 7.992022092306295,
+          "q68": 8.356029386895115
+        },
+        "standard_reco": {
+          "q50": 6.996276378631592,
+          "q68": 7.175656013488769
+        },
+        "fraction_first_better_eventwise": 0.42857142857142855,
+        "angle_coverage68": 0.14285714285714285,
+        "angle_coverage95": 0.5714285714285714
+      },
+      "novel_selected_hits_8to11": {
+        "count": 798,
+        "unique_primaries": 774,
+        "nn": {
+          "q50": 15.001953050694674,
+          "q68": 25.414140463548875
+        },
+        "standard_reco": {
+          "q50": 16.519512176513672,
+          "q68": 28.4487174987793
+        },
+        "fraction_first_better_eventwise": 0.5726817042606517,
+        "angle_coverage68": 0.34210526315789475,
+        "angle_coverage95": 0.6015037593984962
+      },
+      "novel_quality_sidecar_available": {
+        "count": 248,
+        "unique_primaries": 235,
+        "nn": {
+          "q50": 4.05831349310286,
+          "q68": 7.842789991836885
+        },
+        "standard_reco": {
+          "q50": 3.661819338798523,
+          "q68": 9.261837959289556
+        },
+        "fraction_first_better_eventwise": 0.5282258064516129,
+        "angle_coverage68": 0.625,
+        "angle_coverage95": 0.8830645161290323
+      },
+      "novel_official_quality_pass": {
+        "count": 222,
+        "unique_primaries": 214,
+        "nn": {
+          "q50": 3.908403600258432,
+          "q68": 7.335749667388859
+        },
+        "standard_reco": {
+          "q50": 3.079901099205017,
+          "q68": 8.317008132934571
+        },
+        "fraction_first_better_eventwise": 0.536036036036036,
+        "angle_coverage68": 0.6306306306306306,
+        "angle_coverage95": 0.8828828828828829
+      },
+      "p090_novel_retention": 0.658675799086758,
+      "p090_vs_p070_novel_common": {
+        "count": 577,
+        "unique_primaries": 559,
+        "p090": {
+          "q50": 9.216371730971385,
+          "q68": 19.881080004232437
+        },
+        "p070": {
+          "q50": 9.394732696395739,
+          "q68": 20.913921612654054
+        },
+        "fraction_first_better_eventwise": 0.23743500866551126
+      },
+      "p090_vs_p070_reused_common": {
+        "count": 56058,
+        "unique_primaries": 47553,
+        "p090": {
+          "q50": 2.8353496157245184,
+          "q68": 5.728543490293828
+        },
+        "p070": {
+          "q50": 2.7551601853588084,
+          "q68": 5.619885701850402
+        },
+        "fraction_first_better_eventwise": 0.22125298797673837
+      }
+    }
+  },
+  "inputs": {
+    "pred_data": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/reco_eval/reco_exact_predsignal_p070_train_val.h5",
+    "reco_data": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/baikal_reco_h8s2_norm.h5",
+    "reference_gt": "/home/plotnikovgp/tmp/angle_reconstruction/data/baikal_mc_merged2020_signal_8-2_angl_norm.h5",
+    "reference_pred": "/home/plotnikovgp/tmp/angle_reconstruction/data/baikal_2020_all_predsignal_p070_2s8h.h5",
+    "prediction_train": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/reco_eval/reco_pred_p070_all_train_v3_bundle_v1.csv",
+    "prediction_val": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/reco_eval/reco_pred_p070_all_val_v3_bundle_v1.csv",
+    "quality_sidecar": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/reco_official_quality_val_test.h5",
+    "prediction_p090_train": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/reco_eval/reco_pred_p090_all_train_v3_bundle_v1.csv",
+    "prediction_p090_val": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/reco_eval/reco_pred_p090_all_val_v3_bundle_v1.csv",
+    "output": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/reco_eval/reco_novel_primary_v3_p070_p090_audit_v1.json"
+  },
+  "combined_novel": {
+    "count": 7994,
+    "unique_primaries": 6320,
+    "nn": {
+      "q50": 13.059828090754364,
+      "q68": 23.837866278603496
+    },
+    "standard_reco": {
+      "q50": 15.807825088500977,
+      "q68": 26.309724044799808
+    },
+    "fraction_first_better_eventwise": 0.5614210657993495,
+    "angle_coverage68": 0.3674005504128096,
+    "angle_coverage95": 0.6339754816112084
+  },
+  "combined_novel_unique_primary_bootstrap": {
+    "unique_primaries": 6320,
+    "first": {
+      "q50": 13.382156348524006,
+      "q68": 24.499552854377058
+    },
+    "second": {
+      "q50": 16.27027988433838,
+      "q68": 26.963592758178713
+    },
+    "delta_first_minus_second_ci95": {
+      "q50": [
+        -3.4168259398190473,
+        -2.4210532954381914
+      ],
+      "q68": [
+        -3.0070355494406753,
+        -2.0058300897566275
+      ]
+    }
+  },
+  "p090_vs_p070_combined_novel_common": {
+    "count": 5216,
+    "unique_primaries": 4306,
+    "p090": {
+      "q50": 9.210511765658005,
+      "q68": 18.815691020261685
+    },
+    "p070": {
+      "q50": 9.413483950082444,
+      "q68": 19.323971679368178
+    },
+    "fraction_first_better_eventwise": 0.20916411042944785
+  },
+  "p090_vs_p070_unique_primary_bootstrap": {
+    "unique_primaries": 4306,
+    "first": {
+      "q50": 9.638585704608007,
+      "q68": 19.276043915815443
+    },
+    "second": {
+      "q50": 9.769462336355144,
+      "q68": 19.841809060194784
+    },
+    "delta_first_minus_second_ci95": {
+      "q50": [
+        -0.4418356899967165,
+        -0.03198836002567225
+      ],
+      "q68": [
+        -0.8500814591135806,
+        -0.2383669375910876
+      ]
+    }
+  }
+}
