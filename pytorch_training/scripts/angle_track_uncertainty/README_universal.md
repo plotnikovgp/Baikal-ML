@@ -2313,3 +2313,32 @@ are unchanged. It does not establish whether multi-muatm accuracy itself
 improved, because no candidate passed validation for independent testing.
 The result narrows this particular low-weight joint-training idea, not all
 possible topology-conditioned designs.
+
+### High-quality reco central-gap bias audit (2026-10-14)
+
+[`audit_reco_precision_bias.py`](audit_reco_precision_bias.py) joins the
+existing 2020 standard-reco fields, frozen v3 gate200 directions, and MC
+truth by exact event ID, and checks the same ROOT-observable 10/13 cut.
+The high-quality subset again contains **5,679** events with reco
+`fNHits>=20` and `fNTriplets>=12`. Its direction q50/q68 is
+**0.832°/1.223° NN** versus **0.622°/0.989° standard reco**. The NN wins
+42.5% event-wise; reco has the sharper centre but much worse q90
+(5.27° versus 2.55° for NN).
+
+The NN's *signed* median residuals are only **+0.001° in theta** and
+**-0.048° in phi**. The central gap persists in each populated true-theta
+range (0–30°, 30–60°, 60–90°) and all eight 45° true-phi sectors; it is
+not explained by one directional region or a global offset. A constant
+theta/phi correction fitted on source parts A–C was just -0.0027°/-0.0420°.
+On the held-out D–E source parts (2,332 high-quality events), it changed
+NN q50/q68 from 0.85995°/1.30297° to 0.86145°/1.30635°; the paired
+bootstrap 95% interval for the q50 change is [-0.01097°, +0.00804°].
+Thus this *predeclared simple correction* is rejected. It reinforces a
+resolution/precision-floor hypothesis, not a proof of the physical cause.
+
+The [machine-readable report](results/reco_precision_bias_v2.json) includes
+signed residual widths, per-angle-bin counts, and the source-part test.
+These 2020 reco primaries may overlap angle-model training, and source-part
+separation is not a new independent season. This is a diagnostic, not a
+claim of independently validated subdegree superiority or a new model.
+No checkpoint, inference path, or experimental theta distribution changed.
