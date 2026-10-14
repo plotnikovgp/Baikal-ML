@@ -2277,3 +2277,39 @@ must stay masked out of the single-point/line and uncertainty losses.
 The [raw-data report](results/muatm_bundle_coherence_v2.json) records the
 full multiplicity and angular/spatial quantiles. This audit itself did
 not change any checkpoint or experimental prediction.
+
+### Conservative multi-muatm angle-only ablation (2026-10-14)
+
+`train_mixed_universal.py --extra-pred-multi-muatm-direction-only` can now
+add an extra predicted-hit stream selected by `muatm_` event ID and invalid
+single-track anchor. The primary training/validation streams still use
+`--single-muatm-only`. The extra stream retains the original event IDs,
+removes held-out IDs and exact primary-triple overlaps, and contributes
+**direction loss only** because `point_loss` masks its invalid point target.
+This experiment does not change inference architecture or require an
+ensemble. Tests cover the selection and zero point gradient.
+
+A controlled 3,000-step continuation of the v4 model used the same seed
+(106), learning rates (3e-6 backbone, 6e-6 point), GT weight (0.4),
+validation score, and single-track main stream as the existing
+`continue_v4_noaug_3k` control. The only new stream had
+`--extra-pred-weight 0.10`, giving it a 0.06 coefficient in the total
+loss. After leakage checks it contained 1,676,396 train rows / 1,608,833
+unique IDs; three exact primary overlaps were removed. The run is saved at
+`runs/mixed_universal/angle_only_multi_muatm_w010_3k_seed106/`.
+
+| Validation metric | Start (v4) | Control best, step 1,000 | Multi angle-only, step 1,000 |
+| --- | ---: | ---: | ---: |
+| Predeclared score, lower is better | 6.839 | **6.817** | 6.867 |
+| Predicted-hit single-track direction q50/q68 | 2.611° / **4.469°** | **2.571°** / 4.491° | 2.602° / 4.542° |
+| GT nue2 direction q68 | 4.088° | **4.055°** | 4.075° |
+| Single-muatm direction q68 | 10.588° | **10.582°** | 10.754° |
+
+All six multi-angle checkpoints at steps 500–3,000 scored worse than the
+start (best 6.867, final 6.878), whereas the control improved. The trainer
+therefore did **not** select or save a new best checkpoint. This ablation is
+rejected; the deployed/frozen bundle and experimental theta predictions
+are unchanged. It does not establish whether multi-muatm accuracy itself
+improved, because no candidate passed validation for independent testing.
+The result narrows this particular low-weight joint-training idea, not all
+possible topology-conditioned designs.

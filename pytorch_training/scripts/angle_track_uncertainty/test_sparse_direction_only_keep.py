@@ -5,6 +5,7 @@ import pytest
 import torch
 from train_mixed_universal import (
     exclude_evaluation_ids,
+    multi_muatm_direction_only_keep,
     primary_fingerprints,
     sparse_direction_only_keep,
 )
@@ -23,6 +24,16 @@ def test_only_invalid_neutrino_points_are_used() -> None:
 def test_mismatched_lengths_rejected() -> None:
     with pytest.raises(ValueError, match="different lengths"):
         sparse_direction_only_keep(np.asarray([b"nue2_0"]), np.asarray([]))
+
+
+def test_multi_muatm_keeps_only_events_without_a_unique_point() -> None:
+    ids = np.asarray([b"muatm_1_0", b"muatm_1_1", b"nuatm_2", b"nue2_3"])
+    valid = np.asarray([False, True, False, False])
+    np.testing.assert_array_equal(
+        multi_muatm_direction_only_keep(ids, valid), [True, False, False, False]
+    )
+    with pytest.raises(ValueError, match="different lengths"):
+        multi_muatm_direction_only_keep(ids, valid[:2])
 
 
 def test_held_out_ids_removed_from_sparse_stream() -> None:

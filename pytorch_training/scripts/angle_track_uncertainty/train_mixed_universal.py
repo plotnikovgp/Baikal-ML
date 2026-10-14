@@ -2,9 +2,11 @@
 """Fine-tune one angle/point model on predicted hits and nue2 GT hits.
 
 Optional single-muatm filtering removes events with multiple simulated muons
-from predicted-hit training and validation. The model is initialized from the
-nue2 angle/point specialist. Cross-dataset masks keep evaluation independent
-of both that specialist and the older all-particle predicted-hit model.
+from the main predicted-hit training and validation streams. An explicitly
+weighted extra stream can restore them for direction-only supervision while
+keeping their ambiguous point targets masked. The model is initialized from
+the nue2 angle/point specialist. Cross-dataset masks keep evaluation
+independent of both that specialist and the older all-particle model.
 """
 
 from __future__ import annotations
@@ -316,6 +318,14 @@ def sparse_direction_only_keep(event_ids: np.ndarray, anchor_valid: np.ndarray) 
     return neutrino & ~np.asarray(anchor_valid, dtype=bool)
 
 
+def multi_muatm_direction_only_keep(event_ids: np.ndarray, anchor_valid: np.ndarray) -> np.ndarray:
+    """Use multi-muon MC only for its common direction, never its point target."""
+    if len(event_ids) != len(anchor_valid):
+        raise ValueError("Extra event IDs and anchor validity have different lengths")
+    muatm = np.asarray(event_ids).astype("S6") == b"muatm_"
+    return muatm & ~np.asarray(anchor_valid, dtype=bool)
+
+
 def exclude_evaluation_ids(
     event_ids: np.ndarray, keep: np.ndarray, evaluation_ids: np.ndarray
 ) -> tuple[np.ndarray, int]:
@@ -455,6 +465,7 @@ def main() -> None:
     parser.add_argument("--extra-pred-anchors", type=Path, default=None)
     parser.add_argument("--extra-pred-weight", type=float, default=0.0)
     parser.add_argument("--extra-pred-sparse-direction-only", action="store_true")
+    parser.add_argument("--extra-pred-multi-muatm-direction-only", action="store_true")
     parser.add_argument("--gt-data", type=Path, required=True)
     parser.add_argument("--gt-anchors", type=Path, required=True)
     parser.add_argument("--clean-nuatm-data", type=Path, default=None)
@@ -537,6 +548,10 @@ def main() -> None:
         raise ValueError("Extra predicted-hit stream needs data, anchors, and weight in [0, 1]")
     if args.extra_pred_sparse_direction_only and args.extra_pred_weight <= 0:
         raise ValueError("Sparse direction-only selection needs a positive extra-pred weight")
+    if args.extra_pred_multi_muatm_direction_only and args.extra_pred_weight <= 0:
+        raise ValueError("Multi-muatm direction-only selection needs a positive extra-pred weight")
+    if args.extra_pred_sparse_direction_only and args.extra_pred_multi_muatm_direction_only:
+        raise ValueError("Choose one direction-only extra-pred selection")
     if args.clean_nuatm_weight < 0 or (
         args.clean_nuatm_weight > 0 and args.clean_nuatm_data is None
     ):
@@ -672,6 +687,9 @@ def main() -> None:
         }
     extra_pred_keep = None
     if args.extra_pred_weight > 0:
+        direction_only_extra = (
+            args.extra_pred_sparse_direction_only or args.extra_pred_multi_muatm_direction_only
+        )
         with (
             h5py.File(args.extra_pred_data, "r") as extra_h5,
             h5py.File(args.extra_pred_anchors, "r") as extra_anchors,
@@ -683,18 +701,19 @@ def main() -> None:
             anchor_valid = np.asarray(extra_anchors["train/valid"], dtype=bool)
             if not np.array_equal(extra_ids, anchor_ids):
                 raise ValueError("Extra predicted-hit anchor IDs are invalid")
-            extra_pred_keep = (
-                sparse_direction_only_keep(extra_ids, anchor_valid)
-                if args.extra_pred_sparse_direction_only
-                else anchor_valid
-            )
+            if args.extra_pred_sparse_direction_only:
+                extra_pred_keep = sparse_direction_only_keep(extra_ids, anchor_valid)
+            elif args.extra_pred_multi_muatm_direction_only:
+                extra_pred_keep = multi_muatm_direction_only_keep(extra_ids, anchor_valid)
+            else:
+                extra_pred_keep = anchor_valid
             evaluation_ids = []
             evaluation_primaries = []
             for split in ("val", "test"):
                 gt_ids = np.asarray(gt_h5[f"{split}/ev_ids/data"])[gt_masks[f"gt_{split}"]]
                 pred_ids = np.asarray(primary_h5[f"{split}/ev_ids/data"])[pred_masks[split]]
                 evaluation_ids.extend((gt_ids, pred_ids))
-                if args.extra_pred_sparse_direction_only:
+                if direction_only_extra:
                     evaluation_primaries.extend(
                         (
                             primary_fingerprints(
@@ -712,7 +731,7 @@ def main() -> None:
             held_out_ids = np.unique(np.concatenate(evaluation_ids))
             excluded_id_rows = 0
             excluded_primary_rows = 0
-            if args.extra_pred_sparse_direction_only:
+            if direction_only_extra:
                 extra_pred_keep, excluded_id_rows = exclude_evaluation_ids(
                     extra_ids, extra_pred_keep, held_out_ids
                 )
@@ -731,6 +750,9 @@ def main() -> None:
             if args.extra_pred_sparse_direction_only:
                 if np.intersect1d(selected_ids, train_ids).size:
                     raise ValueError("Sparse direction-only stream overlaps primary p>=0.70 train")
+            elif args.extra_pred_multi_muatm_direction_only:
+                if not np.isin(selected_ids, train_ids).all():
+                    raise ValueError("Multi-muatm direction-only stream is outside primary train")
             elif not np.isin(selected_ids, train_ids).all():
                 raise ValueError(
                     "Extra predicted-hit stream contains IDs absent from primary training"
@@ -742,7 +764,8 @@ def main() -> None:
                 f"unique_ids={len(selected_ids)} "
                 f"excluded_eval_id_rows={excluded_id_rows} "
                 f"excluded_eval_primary_rows={excluded_primary_rows} "
-                f"direction_only={args.extra_pred_sparse_direction_only}",
+                f"direction_only={direction_only_extra} "
+                f"multi_muatm={args.extra_pred_multi_muatm_direction_only}",
                 flush=True,
             )
     # Spread validation over the entire nue2 GT file, rather than taking the
@@ -920,7 +943,9 @@ def main() -> None:
                     args.extra_pred_anchors,
                     "train",
                     keep=extra_pred_keep,
-                    single_muatm_only=args.single_muatm_only,
+                    single_muatm_only=(
+                        args.single_muatm_only and not args.extra_pred_multi_muatm_direction_only
+                    ),
                     train_aug=True,
                 ),
                 args.workers,
