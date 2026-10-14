@@ -2165,3 +2165,19 @@ evidence that all conditional geometry corrections are impossible. The
 [machine-readable result](results/theta_bias_crossseason_v3_gate200_negative.json)
 records the fitted coefficients and theta-bin diagnostics. The production
 checkpoint, preprocessing, and experimental theta distribution are unchanged.
+
+### Independent standard-reco validation inventory (2026-10-14)
+
+A read-only inventory of the accessible cluster62 Baikal data tree found the
+ready standard-reco HDF5s under `data/h5s/`, `data/filtered/`, and
+`data/normed/`, plus the
+ROOT files under `data/initial_data/reco/nu2.100PeV/recMay23/all/`; these
+reco sources are the 2020 campaign. The sampled raw 2019 nue2 ROOT file
+`data/initial_data/MC_2019/nue2/1000.root` has MC truth and hit branches but
+no branch name containing `reco`, `recMuon`, `thetaFit`, `phiFit`, or `BDT`.
+Thus 2019-A/B provide an independent *NN* direction check, not an independent
+NN-versus-standard-reco comparison. This inventory is scoped to the inspected
+cluster62 directories and ROOT sample; it does not prove that no suitable
+reconstruction exists elsewhere. A reliable assessment of the subdegree
+high-quality reco gap still needs standard-reco outputs on enough new
+generated primaries, with the same cuts applied to both methods.
