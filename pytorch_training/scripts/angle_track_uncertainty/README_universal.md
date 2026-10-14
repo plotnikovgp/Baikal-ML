@@ -2342,3 +2342,49 @@ These 2020 reco primaries may overlap angle-model training, and source-part
 separation is not a new independent season. This is a diagnostic, not a
 claim of independently validated subdegree superiority or a new model.
 No checkpoint, inference path, or experimental theta distribution changed.
+
+### Frozen NN-seeded photon-time refit on the reco precision subset (2026-10-14)
+
+[`audit_frozen_photon_refit.py`](audit_frozen_photon_refit.py) applies the
+existing `fit_photon_track.fit_one` algorithm to the frozen v3 **p>=0.70
+input and prediction from the same event**. Its refractive index 1.36,
+10 ns residual scale, 1° direction prior, 10 m point prior, and 50-function
+evaluation cap were fixed from earlier MC-validation work, not selected on
+the reco cohort. The comparison again uses exactly the 5,679 ID-matched
+2020 events passing the observable 10/13 and high-reco-quality cuts. The
+script additionally verifies that every selected-input `(theta, phi,
+energy)` truth triple exactly equals its standard-reco source triple.
+
+| Direction resolution | Frozen NN | NN-seeded time refit | Standard reco |
+| --- | ---: | ---: | ---: |
+| q50 | 0.833° | 0.967° | **0.622°** |
+| q68 | 1.242° | 1.575° | **0.989°** |
+
+The refit reduces its own median absolute photon-time residual from
+6.40 to 5.30 ns, yet worsens the angle; its median direction shift is
+0.718° and median CPU fit time is 5.4 ms/event, excluding NN inference.
+Paired event bootstrap gives **[+0.111°, +0.161°]** for refit-minus-NN
+q50. Thus a better fit to this idealized direct-photon model is not a
+better direction estimator on the high-quality cohort.
+
+[`audit_refit_label_composition.py`](audit_refit_label_composition.py)
+shows that these inputs are already track-dominated: median **43**
+truth-labelled track hits, **97.0%** track-hit fraction, and 56.6% of
+events with no selected label-zero noise hit. The optional *oracle*,
+forbidden-at-inference `--fit-hit-label track-only` mode keeps 5,667 events
+with at least eight GT track hits. On those exact same events, direction
+q50 is **0.833° NN**, **0.967° all-hit refit**, and **0.969° oracle
+track-only refit**. Removing cascade/noise hits therefore does not rescue
+this physical refit. This does not prove the cause of the NN–reco precision
+gap; it rejects one concrete algorithmic remedy and suggests the timing
+model/objective or fitted-line geometry is insufficient.
+
+The [all-hit](results/refit_hq_prior1_all_v2.json),
+[oracle-track](results/refit_hq_prior1_track_oracle_v2.json), and
+[label-composition](results/refit_hq_prior1_label_composition_v1.json)
+reports retain counts and diagnostics. Because the predeclared refit
+worsened both q50 and q68 here, no independent 2019-B or experimental
+distribution comparison was used to select it. The selected checkpoint,
+hit threshold, uncertainty calibration, and experimental predictions
+remain unchanged. This external 2020 reco cohort still may overlap
+angle-model training primaries.

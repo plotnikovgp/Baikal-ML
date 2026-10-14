@@ -1,0 +1,50 @@
+{
+  "inputs": {
+    "data": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/reco_eval/reco2020_raw_unmasked_predsignal_p070.h5",
+    "predictions": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/reco_eval/reco2020_raw_unmasked_v3_high.csv",
+    "split": "test",
+    "paired": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/reco_eval/paired_exact_photon_pair_fixed/reco_paired_events.npz",
+    "root_fields": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/reco_eval/paired_exact_photon_pair_fixed/reco_paired_root_fields.csv",
+    "fair_source": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/baikal_reco_signal_h8s2_trainnorm_faircompare_with_tres.h5",
+    "min_selected_hits": 20,
+    "fit_hit_label": "track-only",
+    "max_events": null,
+    "output_dir": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/reco_eval/refit_hq_track_oracle_prior1_v2"
+  },
+  "selection": "ROOT-observable 10/13 plus fNHits>=20 and fNTriplets>=12",
+  "fit": "existing fit_one; n=1.36, time scale=10ns, angle prior=1deg, point prior=10m",
+  "fit_hit_label_mode": "track-only",
+  "skipped_fewer_than_eight_fit_hits": 12,
+  "all": {
+    "n": 5667,
+    "nn_before_deg": {
+      "q50": 0.8325668006380829,
+      "q68": 1.24103168601323,
+      "q90": 2.5340766627691487
+    },
+    "refit_deg": {
+      "q50": 0.9692022276011628,
+      "q68": 1.5791156215916529,
+      "q90": 4.407541133309015
+    },
+    "refit_better_fraction": 0.4224457384859714,
+    "direction_shift_deg": {
+      "q50": 0.7131512236620351,
+      "q68": 1.2101044902303681,
+      "q90": 4.040988028265148
+    },
+    "fit_success_fraction": 0.9985883183342157,
+    "median_fit_wall_ms": 5.316033959388733,
+    "median_initial_mad_ns": 6.402867628674144,
+    "median_final_mad_ns": 5.327062352078727,
+    "standard_reco_deg": {
+      "q50": 0.6224398612976074,
+      "q68": 0.9891292452812195,
+      "q90": 5.30230159759522
+    },
+    "refit_minus_nn_q50_bootstrap_95": [
+      0.10933836041719538,
+      0.1660532471226151
+    ]
+  }
+}
