@@ -1,0 +1,152 @@
+{
+  "selection": "p>=0.70 predicted-signal hits, 2s8h; fixed validation/test domain cohorts",
+  "definition": "valid anchor = exactly one generated muon with parsed source and finite point",
+  "exp_events": 4924,
+  "val_muatm_rows": 25972,
+  "val_single_track_muatm_rows": 965,
+  "val_duplicate_event_ids": 3065,
+  "domain_muatm_events": 25054,
+  "domain_single_track_events": 965,
+  "domain_other_muatm_events": 24089,
+  "domain_single_fraction": 0.03851680370399936,
+  "inputs": {
+    "exp_features": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/domain_input_shift_v2/exp_features.csv",
+    "mc_features": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/domain_input_shift_v2/muatm_mc_features.csv",
+    "exp_predictions": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/domain_p070_v3/exp_test.csv",
+    "mc_predictions": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/domain_p070_v3/muatm_val.csv",
+    "anchors": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/all_predsignal_p070_track_anchors_v1.h5",
+    "compact": "/home/plotnikovgp/tmp/angle_reconstruction/data/baikal_2020_all_predsignal_p070_2s8h.h5"
+  },
+  "all_muatm": {
+    "mc_events": 25054,
+    "mc_theta_q10_q50_q90_deg": [
+      121.3251106262207,
+      145.52667999267578,
+      165.85453338623046
+    ],
+    "mc_n_hits_median": 12.0,
+    "mc_z_std_median_m": 47.71488952636719,
+    "matching": {
+      "hit_string": {
+        "columns": [
+          "n_hits",
+          "n_strings"
+        ],
+        "cells": 30,
+        "exp_unsupported_events": 0,
+        "exp_unsupported_fraction": 0.0,
+        "mc_effective_sample_size": 23408.628579834665,
+        "theta_w1_full_exp_deg": 2.954134831760534,
+        "theta_w1_supported_exp_deg": 2.954134831760534,
+        "bin_edges": {}
+      },
+      "hit_string_z_spread": {
+        "columns": [
+          "n_hits",
+          "n_strings",
+          "z_std_m"
+        ],
+        "cells": 90,
+        "exp_unsupported_events": 0,
+        "exp_unsupported_fraction": 0.0,
+        "mc_effective_sample_size": 21070.6564101088,
+        "theta_w1_full_exp_deg": 0.3776566486169349,
+        "theta_w1_supported_exp_deg": 0.3776566486169349,
+        "bin_edges": {
+          "z_std_m": [
+            33.07643508911133,
+            51.159297943115234
+          ]
+        }
+      }
+    }
+  },
+  "single_track_muatm": {
+    "mc_events": 965,
+    "mc_theta_q10_q50_q90_deg": [
+      104.17822723388672,
+      132.221923828125,
+      169.8646728515625
+    ],
+    "mc_n_hits_median": 9.0,
+    "mc_z_std_median_m": 27.55270004272461,
+    "matching": {
+      "hit_string": {
+        "columns": [
+          "n_hits",
+          "n_strings"
+        ],
+        "cells": 30,
+        "exp_unsupported_events": 497,
+        "exp_unsupported_fraction": 0.10093419983753046,
+        "mc_effective_sample_size": 106.65655427375847,
+        "theta_w1_full_exp_deg": 8.171747826186227,
+        "theta_w1_supported_exp_deg": 7.791034506013252,
+        "bin_edges": {}
+      },
+      "hit_string_z_spread": {
+        "columns": [
+          "n_hits",
+          "n_strings",
+          "z_std_m"
+        ],
+        "cells": 90,
+        "exp_unsupported_events": 1086,
+        "exp_unsupported_fraction": 0.22055239642567018,
+        "mc_effective_sample_size": 143.8069273541932,
+        "theta_w1_full_exp_deg": 3.717741703858104,
+        "theta_w1_supported_exp_deg": 3.1218994126512847,
+        "bin_edges": {
+          "z_std_m": [
+            33.07643508911133,
+            51.159297943115234
+          ]
+        }
+      }
+    }
+  },
+  "other_muatm": {
+    "mc_events": 24089,
+    "mc_theta_q10_q50_q90_deg": [
+      122.49012145996093,
+      145.80288696289062,
+      165.6965087890625
+    ],
+    "mc_n_hits_median": 12.0,
+    "mc_z_std_median_m": 48.28860092163086,
+    "matching": {
+      "hit_string": {
+        "columns": [
+          "n_hits",
+          "n_strings"
+        ],
+        "cells": 30,
+        "exp_unsupported_events": 0,
+        "exp_unsupported_fraction": 0.0,
+        "mc_effective_sample_size": 22697.750255034352,
+        "theta_w1_full_exp_deg": 3.2157122298997955,
+        "theta_w1_supported_exp_deg": 3.2157122298997955,
+        "bin_edges": {}
+      },
+      "hit_string_z_spread": {
+        "columns": [
+          "n_hits",
+          "n_strings",
+          "z_std_m"
+        ],
+        "cells": 90,
+        "exp_unsupported_events": 0,
+        "exp_unsupported_fraction": 0.0,
+        "mc_effective_sample_size": 20204.442204238036,
+        "theta_w1_full_exp_deg": 0.3487305019504732,
+        "theta_w1_supported_exp_deg": 0.3487305019504732,
+        "bin_edges": {
+          "z_std_m": [
+            33.07643508911133,
+            51.159297943115234
+          ]
+        }
+      }
+    }
+  }
+}

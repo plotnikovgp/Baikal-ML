@@ -897,7 +897,7 @@ official cut, standard reco q50/q68 is 1.90°/6.97° versus v4+photon
 2.30°/4.92° (N=5,023). This is a *minimum hit-span* selection, not
 the reconstructed path length and not a disjoint length bin.
 
-The experimental-versus-single-track-`muatm` theta check does not establish
+The experimental-versus-all-`muatm` theta check does not establish
 a material domain improvement for short+photon over v4+photon:
 hit/string-matched W1 2.975° -> 2.951° (paired-bootstrap delta CI includes
 zero); also matching observed z-spread gives 0.368° -> 0.408° (CI includes
@@ -1640,7 +1640,7 @@ from full-raw v4 to v4+photon should not be hidden.
 The old clean/high-string precision limit is reduced but not eliminated:
 in the old-input 5-6-string stratum, full-raw v4+photon/reco q50 is
 1.225°/0.946°. The same frozen photon checkpoint was previously checked
-on the fixed p>=0.70 experimental-versus-single-track-`muatm` cohort:
+on the fixed p>=0.70 experimental-versus-all-`muatm` cohort:
 hit/string-matched predicted-theta W1 changed 2.975° -> 2.956° and
 z-spread-conditioned W1 0.368° -> 0.369°. This is a distributional
 check only; experiment has no true directions. At that stage the photon
@@ -2208,7 +2208,7 @@ bins, so it is not just a multiplicity proxy. Nevertheless, the novel
 coverage failure of calibrated radii remains; this score is not an
 absolute error guarantee.
 
-Using the same p>=0.70 experimental and single-track-muatm MC event IDs,
+Using the same p>=0.70 experimental and all-muatm MC event IDs,
 the 2.323° score cut retains **27.8%** of experiment and **29.6%** of MC
 after matching by baseline selected hit/string counts and vertical spread.
 The matched predicted-theta W1 distance is **0.949°** after selection,
@@ -2221,3 +2221,36 @@ checkpoint. The [full report](results/selective_quality_crossseason_v3_p070.json
 contains thresholds, hit-bin results, bootstraps, and matched-domain
 support. The single-model direction output and full-cohort experimental
 theta distribution are unchanged.
+
+### Muatm composition of the experimental domain comparator (2026-10-14)
+
+[`audit_muatm_domain_composition.py`](audit_muatm_domain_composition.py)
+joins the fixed 4,924-event experimental and 25,054-unique-event muatm-MC
+comparison to the existing track-anchor `valid` flag by event ID. It checks
+that the anchor and selected-hit validation rows align, repeated event IDs
+agree on source index and validity, and all source IDs were parsed. For muatm
+in this anchor file, `valid` agrees with the metadata count for **exactly
+one generated muon track**. Thus the previous description of this domain
+comparator as "single-track muatm" was wrong: only **965 / 25,054 (3.85%)**
+MC events satisfy that condition; the other **24,089** do not. The entire
+2020 predicted-hit test similarly has 3,437 one-track muatm rows out of
+90,526. Supervised *training* did filter to the unambiguous one-track
+subset, but the experimental domain audit included **all** muatm MC.
+
+| Muatm comparator | Unique MC events | Predicted-θ W1 vs experiment after hit/string/z-spread matching | Experimental cells without MC support | Effective MC N |
+| --- | ---: | ---: | ---: | ---: |
+| All | 25,054 | 0.378° | 0% | 21,071 |
+| Exactly one generated muon | 965 | 3.122° on supported experiment | 22.1% | 144 |
+| Not exactly one generated muon | 24,089 | 0.349° | 0% | 20,204 |
+
+The earlier full-muatm W1 comparisons remain measurements of the intended
+full MC cohort; only their occasional **single-track wording** was wrong.
+The isolated one-track sample is too small and has poor covariate support
+for a reliable experimental comparison. These distributions are consistent
+with the importance of non-single muatm topologies, but experimental truth
+composition is unknown and W1 is not an angular-accuracy metric. A single
+direction label for multi-muon events remains ambiguous, so this audit does
+not justify putting them back into supervised angle training. The
+[machine-readable report](results/muatm_domain_composition_v3_p070.json)
+contains both matching schemes and all support diagnostics. No checkpoint
+or experimental prediction changed.
