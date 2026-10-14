@@ -2062,3 +2062,34 @@ nearly identical. See the [A report](results/pca_axis_2019_a.json) and
 or be averaged with the NN. The earlier Cherenkov timing fit also worsened
 overall q68 (reported above); a more elaborate refit would require a
 new, predeclared independent test rather than tuning on the reco cohort.
+
+### Gate200 uncertainty: five-bin transfer check (2026-10-14)
+
+[`audit_gate_conditional_calibration.py`](audit_gate_conditional_calibration.py)
+fits exactly five equal-count bins of the predicted angle and line sigmas
+on the **19,861 gated 2019-A nue2 events only**, then evaluates untouched
+2019-B and ID-masked 2020 MC. It reads the actual GT training source
+`baikal_mc_merged2020_signal_8-2_angl_norm.h5` and asserts both the
+3,022,664-primary training union and the established 225 gated
+primary-disjoint 2020 nue2 events. An initially attempted different GT
+file changed that disjoint cohort drastically and was rejected before
+interpretation. Neither the fit nor its output modifies the bundle.
+
+| Holdout | N | Old angle coverage 68% / 95% | Five-bin coverage 68% / 95% | Old line coverage 68% / 95% | Five-bin line coverage 68% / 95% |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 2019-B gated nue2 | 19,585 | 68.5% / 94.3% | 67.2% / 95.0% | 69.5% / 94.2% | 67.6% / 94.6% |
+| 2020 gated nue2, primary-disjoint | 225 | 57.3% / 84.9% | **56.9% / 88.0%** | 56.4% / 84.9% | **52.4% / 84.9%** |
+| 2020 gated muatm | 285 | 18.2% / 62.1% | **18.6% / 67.4%** | 41.9% / 96.8% (31 valid lines) | 41.9% / 93.5% (31 valid lines) |
+
+On the hardest predicted-angle-sigma decile of independent B, 95%
+coverage rises from 92.8% to 94.7%, but 68% only from 64.9% to 65.5%.
+The primary-disjoint 2020 nue2 angle-68% Wilson interval after the fit
+is 50.4%-63.2%; this is not a harmless small-sample fluctuation around
+68%. The rare gated `muatm` events violate the single-track uncertainty
+assumption and experimental data have no truth with which to validate
+coverage. Even taking the larger of old and fitted radii leaves the
+2020 primary-disjoint angle coverage at 57.8% / 88.0%. Therefore this
+conditional map is **not promoted**: changed-input rows still have blank
+calibrated radii and only raw sigmas. The [full report](results/photon_uncertainty_crossseason_v3/photon_gate200_conditional5_audit.json)
+includes factors, Wilson intervals, and sigma-decile coverage. Direction
+predictions and the MC-versus-experiment theta comparison are unchanged.
