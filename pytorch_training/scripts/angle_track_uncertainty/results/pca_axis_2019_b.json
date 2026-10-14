@@ -1,0 +1,121 @@
+{
+  "data": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/photon_uncertainty_recalibration_v1/2019_b_p070.h5",
+  "predictions": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/photon_uncertainty_recalibration_v1/2019_b_v3_photongate200_full.csv",
+  "method": "top eigenvector of selected-hit XYZ covariance; sign from positive hit-time correlation",
+  "linearity_q50_q90": [
+    0.7945615952093581,
+    0.9698591636932418
+  ],
+  "cohorts": {
+    "all": {
+      "n": 51360,
+      "q50_q68_deg": {
+        "frozen_nn": [
+          3.7402992239932686,
+          7.041446276869733
+        ],
+        "pca_time_sign": [
+          12.828572580785977,
+          24.934199960240417
+        ],
+        "pca_nn_sign": [
+          12.829368094943662,
+          24.91862445702028
+        ],
+        "pca_oracle_sign": [
+          12.823780362398999,
+          24.87505684376698
+        ]
+      },
+      "time_sign_correct_fraction": 0.9637461059190031
+    },
+    "hits_ge_20": {
+      "n": 17923,
+      "q50_q68_deg": {
+        "frozen_nn": [
+          2.4820070125346287,
+          4.218412538835191
+        ],
+        "pca_time_sign": [
+          12.774077722442604,
+          24.57127814231567
+        ],
+        "pca_nn_sign": [
+          12.777843217400687,
+          24.608367349059193
+        ],
+        "pca_oracle_sign": [
+          12.774077722442604,
+          24.57127814231567
+        ]
+      },
+      "time_sign_correct_fraction": 0.9709869999442058
+    },
+    "hits_ge_35": {
+      "n": 7731,
+      "q50_q68_deg": {
+        "frozen_nn": [
+          1.9735691531195934,
+          3.2574186378005714
+        ],
+        "pca_time_sign": [
+          11.869417805200696,
+          20.911657505344284
+        ],
+        "pca_nn_sign": [
+          11.884829065254173,
+          20.96996784512808
+        ],
+        "pca_oracle_sign": [
+          11.869417805200696,
+          20.911657505344284
+        ]
+      },
+      "time_sign_correct_fraction": 0.9749062217048248
+    },
+    "linearity_ge_0p9": {
+      "n": 15318,
+      "q50_q68_deg": {
+        "frozen_nn": [
+          2.0866624608810707,
+          3.499801250852443
+        ],
+        "pca_time_sign": [
+          5.705120102982656,
+          7.95927622275984
+        ],
+        "pca_nn_sign": [
+          5.705120102982656,
+          7.95927622275984
+        ],
+        "pca_oracle_sign": [
+          5.705120102982656,
+          7.95927622275984
+        ]
+      },
+      "time_sign_correct_fraction": 0.9992166079122601
+    },
+    "hits_ge_20_linearity_ge_0p9": {
+      "n": 3363,
+      "q50_q68_deg": {
+        "frozen_nn": [
+          1.1248032081680195,
+          1.8092744657342854
+        ],
+        "pca_time_sign": [
+          4.828048962275858,
+          6.7646233480623
+        ],
+        "pca_nn_sign": [
+          4.828048962275858,
+          6.7646233480623
+        ],
+        "pca_oracle_sign": [
+          4.828048962275858,
+          6.7646233480623
+        ]
+      },
+      "time_sign_correct_fraction": 1.0
+    }
+  }
+}

@@ -2043,3 +2043,22 @@ independent-season validation and a repeated MC-vs-experiment theta check;
 another broad architecture sweep is not justified by these results.
 The executable audit is [`audit_reco_input_gap.py`](audit_reco_input_gap.py),
 with all strata in [`strata.csv`](results/reco_input_gap_gate200_v2/strata.csv).
+
+### A simple geometric axis is not the missing precision (2026-10-14)
+
+Before attempting another fit, [`audit_hit_pca_axis.py`](audit_hit_pca_axis.py)
+tested a parameter-free direction from the largest principal component of
+the p>=0.70 selected-hit XYZ cloud. The axis sign came from its correlation
+with hit time; the MC-truth best sign was also measured only as a diagnostic.
+No parameter was chosen on the holdout. On independent 2019-B nue2
+(51,360 events), direction q50/q68 was **12.829°/24.934°** for this axis
+versus **3.740°/7.041°** for frozen v3 gate200. The time sign was correct
+96.4% of the time, and even the truth-oracle sign gave 12.824°/24.875°:
+the main problem is geometric bias, not the orientation sign. With >=20
+hits and PCA linearity >=0.9 (3,363 events), the axis still gave
+4.828°/6.765° versus NN 1.125°/1.809°. The independent 2019-A result is
+nearly identical. See the [A report](results/pca_axis_2019_a.json) and
+[B report](results/pca_axis_2019_b.json). This axis should **not** replace
+or be averaged with the NN. The earlier Cherenkov timing fit also worsened
+overall q68 (reported above); a more elaborate refit would require a
+new, predeclared independent test rather than tuning on the reco cohort.
