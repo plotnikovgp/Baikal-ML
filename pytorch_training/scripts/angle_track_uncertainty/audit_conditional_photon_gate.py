@@ -61,6 +61,7 @@ def main() -> None:
     parser.add_argument("--mc-candidate", type=Path, required=True)
     parser.add_argument("--exp-data", type=Path, required=True)
     parser.add_argument("--mc-data", type=Path, required=True)
+    parser.add_argument("--candidate-label", default="photon gate 50 ns")
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
     if (args.output_dir / "summary.json").exists():
@@ -96,7 +97,7 @@ def main() -> None:
     curves = []
     for label, exp_pred, mc_pred in (
         ("p>=0.70", exp_base, mc_base),
-        ("photon gate 50 ns", exp_candidate, mc_candidate),
+        (args.candidate_label, exp_candidate, mc_candidate),
     ):
         exp = exp_cov.assign(theta_deg=exp_pred.theta_deg.to_numpy())
         mc = mc_cov.assign(theta_deg=mc_pred.theta_deg.to_numpy())

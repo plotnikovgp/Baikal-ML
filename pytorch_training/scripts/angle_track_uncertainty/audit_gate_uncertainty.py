@@ -174,6 +174,7 @@ def main() -> None:
     parser.add_argument("--mc-anchor-targets", type=Path, required=True)
     parser.add_argument("--train-predicted", type=Path, required=True)
     parser.add_argument("--train-gt", type=Path, required=True)
+    parser.add_argument("--photon-gate-ns", type=float, default=50.0)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.output.exists():
@@ -224,7 +225,7 @@ def main() -> None:
         )
     result = {
         "calibration_source": "2019-A gated events only; B and 2020 test are validation",
-        "selection": "frozen classifier high p>=0.70 2s8h, conditional low p>=0.50 only if theta<90 and all newly added photon residuals <=50ns",
+        "selection": f"frozen classifier high p>=0.70 2s8h, conditional low p>=0.50 only if theta<90 and all newly added photon residuals <{args.photon_gate_ns:g}ns",
         "old_p070_factors": old,
         "a_fitted_gated_factors": fitted,
         "conservative_gated_factors": conservative,

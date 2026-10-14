@@ -1894,3 +1894,95 @@ or 8.2 -> 9.5 ms per accepted event, with peak RSS about 1.03-1.08 GB.
 This times network inference on already hit-classified HDF5 files, not the
 upstream signal/noise network or I/O from raw detector events. The gate
 is a CPU-feasible single-network quality option, not a free inference step.
+
+## Wider photon-time gate selected on 2019-A, validated on B (2026-10-14)
+
+The 50 ns photon-residual requirement above was conservative. A **predefined**
+5, 10, 20, 30, 50, 100, 200 ns sweep was computed from frozen v3 high- and
+low-threshold predictions on 2019-A; the per-event photon selection was
+independently verified against the actual 50 ns inference on B (zero gate
+mismatches). A showed monotonic direction q50/q68 gains up to 200 ns, so
+**200 ns was selected before looking at B**. The added-hit GT-signal
+fraction fell from 93.7% at 5 ns to 80.8% at 200 ns; this purity trade-off
+is visible in the
+[`A/B threshold plot`](results/photon_uncertainty_crossseason_v3/photon_gate_threshold_sweep_ab.png).
+
+| Independent 2019-B nue2, 51,360 events | Direction q50 / q68 | Line distance q50 / q68 |
+| --- | ---: | ---: |
+| p>=0.70 only | 4.138° / 7.871° | 3.885 / 6.206 m |
+| conditional p>=0.50, 50 ns | 3.921° / 7.498° | 3.765 / 6.075 m |
+| conditional p>=0.50, **200 ns** | **3.740° / 7.041°** | **3.683 / 5.919 m** |
+
+At 200 ns, 19,585 B events rerun the **same** model. Source-part bootstrap
+95% intervals for 200 ns minus p>=0.70 are [-0.904°, -0.746°] at angle
+q68, [-0.325, -0.251] m at line q68, and [-0.333, -0.021] m at line q95.
+See the [`A sweep`](results/photon_uncertainty_crossseason_v3/photon_gate_threshold_sweep_2019_a.json),
+[`B sweep`](results/photon_uncertainty_crossseason_v3/photon_gate_threshold_sweep_2019_b.json),
+and [`B angle/line audit`](results/photon_uncertainty_crossseason_v3/2019_b_photongate200_audit.json).
+
+The exact full-raw reco 2020 cohort remains 42,003 nue2 events under the
+ROOT-observable 10/13 cut. Standard reco direction q50/q68 is
+1.983°/5.576°; frozen v3 p>=0.70 is 1.954°/3.360°; gate 50 ns is
+1.845°/3.147°; **gate 200 ns is 1.823°/3.072°** with q95 12.847°
+versus 61.315° standard reco. The 200 ns gate reruns 23,590 events.
+Its gate-minus-standard-reco q50 difference is -0.160° with paired event
+bootstrap interval [-0.201°, -0.124°]; gate-minus-p>=0.70 q68 is
+-0.288° with interval [-0.320°, -0.254°]. The older official cut together
+with 10/13 gives gate 200 ns q50/q68 1.809°/3.046° versus
+1.946°/5.380° standard reco. These reco results remain descriptive:
+the unavailable 3/13 cuts and generated-primary overlap prevent claiming
+a fully independent head-to-head test. See
+[`photon_gate200_reco/`](results/photon_uncertainty_crossseason_v3/photon_gate200_reco/).
+
+On the 2020 ID-masked MC test, nue2 direction q50/q68 improves
+3.177°/5.984° -> 2.893°/5.430° and true-line q50/q68
+3.659/6.317 -> 3.474/6.116 m. `nuatm` improves more modestly; the
+effect on dominant `muatm` is negligible (285 reruns among 87,103 unique
+events). The **841** primary-disjoint 2020 nue2 events are harder and do
+not establish a gain: their angle-q68 and line-q68 change intervals both
+span zero. This is a separate out-of-distribution warning, not grounds to
+tune the threshold on those same test events. See
+[`photon_gate200_mc2020.json`](results/photon_uncertainty_crossseason_v3/photon_gate200_mc2020.json).
+
+On the fixed experimental 2s8h cohort, 18/4,924 events rerun. With muatm
+MC matched using unchanged p>=0.70 hit/string counts and z spread, the
+predicted-theta Wasserstein-1 distance changes 0.375° -> 0.369°; without
+z-spread matching it changes 3.062° -> 3.064°. These are negligible
+distribution changes, not evidence of improved experimental truth accuracy.
+See [`photon_gate200_domain/`](results/photon_uncertainty_crossseason_v3/photon_gate200_domain/).
+
+The changed-input uncertainty is **still not reliably calibrated**. With
+the old conservative radii, independent 2019-B gated events cover
+68.5%/95.1% of true angles and 69.5%/94.5% of true lines, but the hardest
+angle-sigma decile covers only 64.9%/92.8%. The small primary-disjoint
+2020 nue2 gated subset under-covers much more (57.3%/87.1% angle and
+56.4%/85.8% line); rare muatm gated events also remain invalid for a
+single-track calibration. `audit_gate_uncertainty.py` now records the
+threshold used; its full [200 ns report](results/photon_uncertainty_crossseason_v3/photon_gate200_uncertainty_audit.json)
+does **not** promote new factors. The inference CSV therefore keeps the
+calibrated radius fields empty for reruns, retaining raw predicted sigmas.
+
+CPU timing on the same 2,048 2019-B source events as the 50 ns benchmark:
+722 gated reruns take 20.47 s versus 15.60/15.65 s for p>=0.70 only,
+about **31%** extra wall time or 10.8 instead of 8.2 ms per accepted
+event. The frozen hit classifier's runtime is excluded. The 200 ns gate
+is the better *quality* option among tested thresholds; the unchanged v3
+p>=0.70 bundle remains the calibrated default for downstream coverage.
+
+Optional CPU inference on an already classifier-prepared p>=0.50 HDF5
+(including per-hit probabilities and channel IDs) uses the **same** v3
+single-file network checkpoint; no ensemble or retraining is required:
+
+```bash
+cd pytorch_training/scripts/angle_track_uncertainty
+python infer_rethresholded_for_audit.py \
+  --bundle /home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/photon_uncertainty_recalibration_v1/universal_angle_track_uncertainty_photon_crossseason_v3.pt \
+  --data /path/to/p050_selected_hits.h5 --split test \
+  --threshold 0.70 --conditional-low-threshold 0.50 \
+  --gate-theta-max-deg 90 --max-added-photon-residual-ns 200 \
+  --output /path/to/predictions.csv --device cpu --threads 8
+```
+
+Rows with `selected_threshold=0.50` expose raw sigmas but deliberately
+have blank calibrated radius columns. The frozen signal/noise classifier
+that prepares the HDF5 is separate from this checkpoint and command.
