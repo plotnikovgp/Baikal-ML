@@ -39,17 +39,20 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--max-events", type=int, default=None)
     parser.add_argument("--threads", type=int, default=4)
+    parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     args = parser.parse_args()
     if args.output.exists():
         raise FileExistsError(f"Refusing to overwrite {args.output}")
     if args.batch_size < 1 or args.threads < 1:
         raise ValueError("batch-size and threads must be positive")
     torch.set_num_threads(args.threads)
+    if args.device == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA requested but no GPU is available")
     bundle = torch.load(args.bundle, map_location="cpu", weights_only=True)
     checkpoint = torch.load(args.track_checkpoint, map_location="cpu", weights_only=False)
     model = build_model(bundle["model_config"]).base
     model.load_state_dict(checkpoint["model"], strict=True)
-    model.eval()
+    model.to(args.device).eval()
     prep = bundle["preprocessing"]
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
@@ -65,9 +68,11 @@ def main() -> None:
             end = min(begin + args.batch_size, total)
             ids, lengths, strings, x, mask, centers = read_batch(h5, args.split, begin, end, prep)
             with torch.inference_mode():
-                direction, offset = model(torch.from_numpy(x), torch.from_numpy(mask))
-            direction = direction.numpy()
-            anchor = centers + offset.numpy()
+                direction, offset = model(
+                    torch.from_numpy(x).to(args.device), torch.from_numpy(mask).to(args.device)
+                )
+            direction = direction.cpu().numpy()
+            anchor = centers + offset.cpu().numpy()
             theta = np.rad2deg(np.arccos(np.clip(direction[:, 2], -1, 1)))
             phi = np.mod(np.rad2deg(np.arctan2(direction[:, 1], direction[:, 0])), 360)
             for i, event_id in enumerate(ids):

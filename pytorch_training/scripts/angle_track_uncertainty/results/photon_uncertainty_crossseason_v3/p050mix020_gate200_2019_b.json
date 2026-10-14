@@ -1,0 +1,184 @@
+{
+  "n": 51360,
+  "upward": 50561,
+  "with_added": 21671,
+  "baseline": [
+    4.231623587328226,
+    7.842028574305177,
+    40.24957230738823
+  ],
+  "global_low": [
+    3.8097854432601466,
+    6.981599943813965,
+    37.40861845382858
+  ],
+  "gates": [
+    {
+      "minimum_added": 1,
+      "reruns": 21318,
+      "q50_q68_q95_deg": [
+        3.8148915272043444,
+        6.997019693558653,
+        37.620045715710766
+      ],
+      "mean_error_delta_gate_deg": -1.6503647622413857
+    },
+    {
+      "minimum_added": 2,
+      "reruns": 7109,
+      "q50_q68_q95_deg": [
+        4.021820775664587,
+        7.445746484473604,
+        38.86078242213817
+      ],
+      "mean_error_delta_gate_deg": -2.418193768460986
+    },
+    {
+      "minimum_added": 3,
+      "reruns": 2202,
+      "q50_q68_q95_deg": [
+        4.170311176204671,
+        7.711570224388056,
+        39.981720422911
+      ],
+      "mean_error_delta_gate_deg": -2.4452923064597387
+    },
+    {
+      "minimum_added": 4,
+      "reruns": 730,
+      "q50_q68_q95_deg": [
+        4.210716605057785,
+        7.795544179402139,
+        40.235494896474044
+      ],
+      "mean_error_delta_gate_deg": -2.185153472883997
+    },
+    {
+      "minimum_added": 5,
+      "reruns": 251,
+      "q50_q68_q95_deg": [
+        4.22614053224056,
+        7.827170843689067,
+        40.235494896474044
+      ],
+      "mean_error_delta_gate_deg": -2.192272699636152
+    },
+    {
+      "minimum_added": 6,
+      "reruns": 100,
+      "q50_q68_q95_deg": [
+        4.230372102286874,
+        7.833973734712054,
+        40.24957230738823
+      ],
+      "mean_error_delta_gate_deg": -0.5721904869541671
+    },
+    {
+      "minimum_added": 7,
+      "reruns": 43,
+      "q50_q68_q95_deg": [
+        4.23077567506471,
+        7.837211889830041,
+        40.27774190162578
+      ],
+      "mean_error_delta_gate_deg": 0.36003699222474134
+    },
+    {
+      "minimum_added": 8,
+      "reruns": 25,
+      "q50_q68_q95_deg": [
+        4.230970605805295,
+        7.837768079856833,
+        40.27774190162578
+      ],
+      "mean_error_delta_gate_deg": -0.20486801999950754
+    }
+  ],
+  "added_histogram": {
+    "0": 29689,
+    "1": 14438,
+    "2": 4992,
+    "3": 1497,
+    "4": 485,
+    "5": 156,
+    "6": 59,
+    "7": 19,
+    "8": 7,
+    "9": 6,
+    "10": 3
+  },
+  "added_gt_10": 9,
+  "added_hit_bins": [
+    {
+      "high_hits_range": [
+        8,
+        12
+      ],
+      "n": 6025,
+      "mean_error_delta_deg": -2.996553995464253,
+      "marginal_truth_signal_fraction": 0.7905339805825242,
+      "mean_marginal_probability": 0.6146640222049454
+    },
+    {
+      "high_hits_range": [
+        12,
+        16
+      ],
+      "n": 4044,
+      "mean_error_delta_deg": -2.2775448517028543,
+      "marginal_truth_signal_fraction": 0.7848970251716247,
+      "mean_marginal_probability": 0.6159131211769495
+    },
+    {
+      "high_hits_range": [
+        16,
+        24
+      ],
+      "n": 4322,
+      "mean_error_delta_deg": -1.2601545065766475,
+      "marginal_truth_signal_fraction": 0.7912210694333599,
+      "mean_marginal_probability": 0.6153985902583798
+    },
+    {
+      "high_hits_range": [
+        24,
+        40
+      ],
+      "n": 3350,
+      "mean_error_delta_deg": -0.6246749726012818,
+      "marginal_truth_signal_fraction": 0.789308176100629,
+      "mean_marginal_probability": 0.6167711941701062
+    },
+    {
+      "high_hits_range": [
+        40,
+        1000
+      ],
+      "n": 3576,
+      "mean_error_delta_deg": -0.10592781400023239,
+      "marginal_truth_signal_fraction": 0.8122178754137828,
+      "mean_marginal_probability": 0.617784149417883
+    }
+  ],
+  "photon_residual_gates": [
+    {
+      "max_abs_ns": 200.0,
+      "reruns": 19586,
+      "q50_q68_q95_deg": [
+        3.824633781400198,
+        7.040166687636455,
+        37.988242127070436
+      ],
+      "mean_error_delta_gate_deg": -1.6740111794885857,
+      "marginal_truth_signal_fraction": 0.807141600703606
+    }
+  ],
+  "inputs": {
+    "data": "/home/plotnikovgp/tmp/angle_reconstruction/data/2019_nue2_predsignal_p050_holdout_b.h5",
+    "high": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/2019_holdout_b/p050mix020_p070_full_gpu.csv",
+    "low": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/2019_holdout_b/p050mix020_p050_all_gpu.csv",
+    "thresholds_ns": [
+      200.0
+    ]
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "inputs": {
+    "baseline": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/2019_holdout_b/v4_p070_full_gpu.csv",
+    "candidate": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/2019_holdout_b/p050mix020_p070_full_gpu.csv",
+    "reference": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/photon_uncertainty_recalibration_v1/2019_b_v3_photongate200_full.csv",
+    "data": "/home/plotnikovgp/tmp/angle_reconstruction/track_anchor/runs/mixed_universal/photon_uncertainty_recalibration_v1/2019_b_p070.h5"
+  },
+  "n": 51360,
+  "source_parts": 20,
+  "direction_error_deg": {
+    "baseline": {
+      "q50": 4.253846953534884,
+      "q68": 7.890374463485835,
+      "q95": 40.00242225621927
+    },
+    "candidate": {
+      "q50": 4.231623587328226,
+      "q68": 7.842028574305177,
+      "q95": 40.24957230738823
+    },
+    "reference": {
+      "q50": 3.7402847233032377,
+      "q68": 7.041454724989275,
+      "q95": 38.13385614732704
+    }
+  },
+  "candidate_minus_baseline_deg": {
+    "q50": -0.022223366206658213,
+    "q68": -0.0483458891806583,
+    "q95": 0.24715005116895838
+  },
+  "candidate_better_event_fraction": 0.5062305295950156,
+  "paired_bootstrap": {
+    "event": {
+      "q50_delta_ci95_deg": [
+        -0.039462290582260875,
+        0.005134693369113926
+      ],
+      "q68_delta_ci95_deg": [
+        -0.08665069152812328,
+        0.0012176064070499046
+      ]
+    },
+    "source_part": {
+      "q50_delta_ci95_deg": [
+        -0.04225439761941352,
+        0.00554499482327928
+      ],
+      "q68_delta_ci95_deg": [
+        -0.0794879006227884,
+        -0.0020475711434038437
+      ]
+    }
+  },
+  "note": "B is independent by generated primaries from 2020 training, but has been used for earlier model decisions"
+}

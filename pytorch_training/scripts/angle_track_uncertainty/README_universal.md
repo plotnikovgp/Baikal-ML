@@ -2436,3 +2436,36 @@ The accessible 2019-v2 ROOT sample was also checked and contains only MC
 event/geometry trees, not a standard-reco direction; the inspected 2020
 test ROOT sample likewise lacks reco fields. An independent standard-reco
 cohort is still needed before claiming or deploying a precision hybrid.
+
+### Lower-threshold mixed-training checkpoint: independent B transfer (2026-10-14)
+
+The earlier `p050_mix_w0.20_1500steps_seed211/best.pt` had only a small
+validation-score gain, so it was not promoted. We have now evaluated this
+**already trained** direction/point checkpoint on the ID-matched 51,360
+2019-B p>=0.70 events, against its own v4 starting checkpoint and the
+current selected photon-v3 gate200. The run used a GPU-enabled extension
+of [`infer_direction_point_for_audit.py`](infer_direction_point_for_audit.py),
+with the same v4 preprocessing and event order. A 32-event CPU/GPU smoke
+had a maximum direction-component difference below 0.00034 and angle
+difference below 0.036°. The report checks exact HDF5/CSV IDs, rejects
+duplicates, and bootstraps by event and source part.
+
+| Independent B direction | q50 | q68 | q95 |
+| --- | ---: | ---: | ---: |
+| Original v4, p>=0.70 | 4.254° | 7.890° | 40.002° |
+| p>=0.50-mixed checkpoint, p>=0.70 input | 4.232° | 7.842° | 40.250° |
+| Same mixed checkpoint with fixed 200 ns p>=0.50 photon gate | 3.825° | 7.040° | 37.988° |
+| **Selected photon-v3 with fixed 200 ns gate** | **3.740°** | 7.041° | 38.134° |
+
+The mixed checkpoint's single-pass q68 improves over v4 by 0.048°;
+the 95% source-part bootstrap interval is [-0.079°, -0.002°], while the
+event bootstrap interval includes zero. Before testing the gate we
+required >=0.1° q68 improvement over the selected model with no q50 or
+q95 regression. It misses by a wide margin on q50 and has essentially
+identical q68, so **the production checkpoint stays unchanged**. This B
+sample is primary-disjoint from the 2020 angle training set but has been
+used in earlier model comparisons; it is not a fresh blind benchmark.
+Because the candidate was rejected, no MC/experimental theta tuning or
+uncertainty recalibration was performed. The [paired single-pass audit](results/photon_uncertainty_crossseason_v3/p050mix020_transfer_2019_b.json)
+and [fixed-gate sweep](results/photon_uncertainty_crossseason_v3/p050mix020_gate200_2019_b.json)
+retain the exact counts and input paths.
