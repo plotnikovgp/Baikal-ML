@@ -49,6 +49,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base", required=True)
     parser.add_argument("--selected", required=True)
+    parser.add_argument("--base-proper-mask", action="store_true")
+    parser.add_argument("--base-masked-pool", action="store_true")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--mc", default=MC_DEFAULT)
     parser.add_argument("--exp", default=EXP_DEFAULT)
@@ -69,7 +71,7 @@ def main() -> None:
     print("events", {k: len(v) for k, v in events.items()}, flush=True)
     predictions = {}
     for name, checkpoint, proper, masked in (
-        ("base", args.base, False, False),
+        ("base", args.base, args.base_proper_mask, args.base_masked_pool),
         ("selected", args.selected, True, True),
     ):
         model = model_from_checkpoint(checkpoint, proper, masked).to(device)

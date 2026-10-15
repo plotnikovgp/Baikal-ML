@@ -239,9 +239,11 @@ def main() -> None:
     parser.add_argument("--domain-batch", type=int, default=12)
     parser.add_argument("--lambda-da", type=float, default=0.02)
     parser.add_argument("--output-swd-k", type=float, default=0.0)
+    parser.add_argument("--feature-mean-k", type=float, default=0.0)
     parser.add_argument("--lr-encoder", type=float, default=2e-5)
     parser.add_argument("--lr-domain", type=float, default=1e-3)
     parser.add_argument("--discriminator-steps", type=int, default=2)
+    parser.add_argument("--fresh-discriminator-batches", action="store_true")
     parser.add_argument("--proper-mask", action="store_true")
     parser.add_argument("--masked-pool", action="store_true")
     parser.add_argument("--signal-weighted-pool", action="store_true")
@@ -316,7 +318,12 @@ def main() -> None:
     for step in range(1, args.steps + 1):
         model.train()
         d_loss = torch.tensor(0.0, device=device)
-        if args.discriminator_steps or args.lambda_da or args.output_swd_k:
+        if (
+            args.discriminator_steps
+            or args.lambda_da
+            or args.output_swd_k
+            or args.feature_mean_k
+        ):
             sampled_mc = draw(mc_domain, args.domain_batch)
             sampled_exp = draw(exp_train, args.domain_batch)
             dx, dm, _ = make_batch(sampled_mc + sampled_exp, device)
@@ -326,7 +333,7 @@ def main() -> None:
                     torch.ones(args.domain_batch, dtype=torch.long, device=device),
                 ]
             )
-            if args.discriminator_steps:
+            if args.discriminator_steps and not args.fresh_discriminator_batches:
                 with torch.no_grad():
                     _, detached_hidden = model.encoder(dx, dm)
                     if model.signal_weighted_domain_pooling:
@@ -348,6 +355,20 @@ def main() -> None:
                     )
                     d_loss.backward()
                     opt_dom.step()
+            elif args.discriminator_steps:
+                for _ in range(args.discriminator_steps):
+                    fresh_mc = draw(mc_domain, args.domain_batch)
+                    fresh_exp = draw(exp_train, args.domain_batch)
+                    fx, fm, _ = make_batch(fresh_mc + fresh_exp, device)
+                    with torch.no_grad():
+                        _, detached_hidden = model.encoder(fx, fm)
+                        detached_features = pool_hidden(detached_hidden, fm).detach()
+                    opt_dom.zero_grad(set_to_none=True)
+                    d_loss = F.cross_entropy(
+                        model.domain_classifier(detached_features), dy
+                    )
+                    d_loss.backward()
+                    opt_dom.step()
 
         for param in model.domain_classifier.parameters():
             param.requires_grad_(False)
@@ -361,11 +382,29 @@ def main() -> None:
             _, domain_logits = model(dx, dm)
             adv_loss = F.cross_entropy(domain_logits, dy)
         swd_loss = torch.tensor(0.0, device=device)
-        if args.output_swd_k:
+        mean_loss = torch.tensor(0.0, device=device)
+        if args.output_swd_k or args.feature_mean_k:
             _, domain_hidden = model.encoder(dx, dm)
-            domain_scores = torch.softmax(model.main_head(domain_hidden), -1)[:, :, 1]
-            swd_loss = score_wasserstein_1d(domain_scores, dm, args.domain_batch)
-        (cls_loss + args.lambda_da * adv_loss + args.output_swd_k * swd_loss).backward()
+            if args.output_swd_k:
+                domain_scores = torch.softmax(model.main_head(domain_hidden), -1)[
+                    :, :, 1
+                ]
+                swd_loss = score_wasserstein_1d(domain_scores, dm, args.domain_batch)
+            if args.feature_mean_k:
+                pooled = pool_hidden(domain_hidden, dm)
+                mean_loss = torch.mean(
+                    (
+                        pooled[: args.domain_batch].mean(0)
+                        - pooled[args.domain_batch :].mean(0)
+                    )
+                    ** 2
+                )
+        (
+            cls_loss
+            + args.lambda_da * adv_loss
+            + args.output_swd_k * swd_loss
+            + args.feature_mean_k * mean_loss
+        ).backward()
         torch.nn.utils.clip_grad_norm_(encoder_params, 5.0)
         opt_enc.step()
         for param in model.domain_classifier.parameters():
@@ -378,6 +417,7 @@ def main() -> None:
                 float(d_loss.detach()),
                 float(adv_loss.detach()),
                 float(swd_loss.detach()),
+                float(mean_loss.detach()),
                 flush=True,
             )
         if step % args.eval_every == 0 or step == args.steps:
