@@ -1,0 +1,33 @@
+{
+  "protocol": {
+    "n": 5000,
+    "mc_test_offset": 5000,
+    "exp_test_offset": 0
+  },
+  "models": {
+    "base": {
+      "probe_auc": 0.9096184799999999,
+      "domain_head_auc": 0.49671930000000003,
+      "mc_hit_auc": 0.9983100324585963,
+      "mc_hit_ap": 0.9837691224004803,
+      "mc_hit_precision_p0p5": 0.9375394321766561,
+      "mc_hit_recall_p0p5": 0.9478048261932603,
+      "w1_all_hits": 0.0073244850835367855,
+      "n_mc_pass": 1039,
+      "n_exp_pass": 655,
+      "w1_predicted_2s8h": 0.05784002528963346
+    },
+    "selected": {
+      "probe_auc": 0.8832351199999999,
+      "domain_head_auc": 0.5411406799999999,
+      "mc_hit_auc": 0.9980812569528019,
+      "mc_hit_ap": 0.9821961096704704,
+      "mc_hit_precision_p0p5": 0.9466469463583564,
+      "mc_hit_recall_p0p5": 0.9298749158428121,
+      "w1_all_hits": 0.005986287723917405,
+      "n_mc_pass": 983,
+      "n_exp_pass": 608,
+      "w1_predicted_2s8h": 0.04574429422104804
+    }
+  }
+}

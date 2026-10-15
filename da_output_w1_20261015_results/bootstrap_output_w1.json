@@ -1,0 +1,42 @@
+{
+  "first": {
+    "n_fixed_mc": 965,
+    "n_fixed_exp": 600,
+    "probe_auc": {
+      "base": 0.9096184799999999,
+      "selected": 0.8832351199999999
+    },
+    "w1_fixed": {
+      "base": 0.06029813773274351,
+      "selected": 0.045316119854495074
+    },
+    "probe_auc_delta_selected_minus_base_ci95": [
+      -0.030717332999999937,
+      -0.022973298999999937
+    ],
+    "w1_fixed_delta_selected_minus_base_ci95": [
+      -0.01711060569193875,
+      -0.0132532440594912
+    ]
+  },
+  "second": {
+    "n_fixed_mc": 970,
+    "n_fixed_exp": 573,
+    "probe_auc": {
+      "base": 0.90816876,
+      "selected": 0.88132856
+    },
+    "w1_fixed": {
+      "base": 0.07797346074010504,
+      "selected": 0.05900892430141269
+    },
+    "probe_auc_delta_selected_minus_base_ci95": [
+      -0.03126354100000005,
+      -0.022617021999999914
+    ],
+    "w1_fixed_delta_selected_minus_base_ci95": [
+      -0.021430264526735285,
+      -0.016473799810915388
+    ]
+  }
+}

@@ -42,6 +42,7 @@ class Encoder(nn.Module):
         return_hidden: bool = False,
         return_hiddens_by_layers: bool = False,
         head_bias: bool = False,
+        proper_key_padding_mask: bool = False,
         **kwargs,
     ) -> None:
         super().__init__()
@@ -53,6 +54,9 @@ class Encoder(nn.Module):
         self.return_hidden = return_hidden
         self.return_hiddens_by_layers = return_hiddens_by_layers
         self.return_only_cls_token = return_only_cls_token
+        # Keep the historical 0/1 additive mask for old checkpoints unless
+        # explicitly requested: Transformer expects bool (or 0/-inf float).
+        self.proper_key_padding_mask = proper_key_padding_mask
 
         self.first_layer = nn.Linear(in_features, hidden_size)
 
@@ -77,14 +81,18 @@ class Encoder(nn.Module):
     def forward(
         self, x: Tensor, mask: Tensor
     ) -> Tensor | tuple[Tensor, Tensor] | tuple[Tensor, list[Tensor]]:
-        mask = (~mask).float()
+        mask = ~mask if self.proper_key_padding_mask else (~mask).float()
         x = self.first_layer(x)
 
         if self.class_token is not None:
             batch_size = x.shape[0]
             cls_tokens = self.class_token.expand(batch_size, -1, -1)
             x = torch.cat([cls_tokens, x], dim=1)
-            cls_mask = torch.ones(batch_size, 1, dtype=torch.float32, device=mask.device)
+            cls_mask = (
+                torch.zeros(batch_size, 1, dtype=torch.bool, device=mask.device)
+                if self.proper_key_padding_mask
+                else torch.ones(batch_size, 1, dtype=torch.float32, device=mask.device)
+            )
             mask = torch.cat([cls_mask, mask], dim=1)
 
         hiddens_by_layer: list[Tensor] = []
@@ -192,6 +200,8 @@ class EncoderDomainAdaptation(nn.Module):
         domain_classifier_hidden_size: int = 128,
         domain_classifier_layers: int = 2,
         gradient_reversal_alpha: float = 1.0,
+        masked_domain_pooling: bool = False,
+        signal_weighted_domain_pooling: bool = False,
         uncertainty_head_hidden_size: int | None = None,
         uncertainty_head_out_size: int | None = None,
         aggregate_output: bool = True,
@@ -206,6 +216,8 @@ class EncoderDomainAdaptation(nn.Module):
         self.main_head = nn.Linear(self.encoder.hidden_size, self.encoder.out_size)
         self.aggregate_output = aggregate_output
         self.return_hidden = return_hidden
+        self.masked_domain_pooling = masked_domain_pooling
+        self.signal_weighted_domain_pooling = signal_weighted_domain_pooling
 
         self.uncertainty_head: nn.Module | None = None
         if uncertainty_head_hidden_size is not None and uncertainty_head_out_size is not None:
@@ -272,7 +284,17 @@ class EncoderDomainAdaptation(nn.Module):
                 uncertainty_output = uncertainty_output.mean(1)
             output = torch.cat([output, uncertainty_output], dim=-1)
 
-        reversed_features = self.gradient_reversal(hidden_states.mean(1))
+        if self.signal_weighted_domain_pooling:
+            signal_score = torch.softmax(self.main_head(hidden_states).detach(), dim=-1)[:, :, 1]
+            weights = mask.to(hidden_states.dtype) * signal_score
+            weights = weights.unsqueeze(-1)
+            pooled = (hidden_states * weights).sum(1) / weights.sum(1).clamp_min(1e-6)
+        elif self.masked_domain_pooling:
+            weights = mask.unsqueeze(-1).to(hidden_states.dtype)
+            pooled = (hidden_states * weights).sum(1) / weights.sum(1).clamp_min(1)
+        else:
+            pooled = hidden_states.mean(1)
+        reversed_features = self.gradient_reversal(pooled)
         domain_output = self.domain_classifier(reversed_features)
 
         if return_hidden_states:
